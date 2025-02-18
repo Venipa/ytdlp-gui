@@ -13,19 +13,22 @@ import { autoUpdater } from 'electron-updater'
 import trayIconAsset from '~/resources/menuIcon_16.png?asset'
 // @ts-ignore
 import builderConfig from '../../electron-builder.yml'
-import { attachAutoUpdaterIPC, checkLicense } from './license'
+import { attachAutoUpdaterIPC } from './license'
 import { trpcIpcHandler } from './trpc'
 import { createUrlOfPage, loadUrlOfWindow } from './trpc/dialog.utils'
 import { pushWindowState } from './trpc/window.api'
+import { ytdl } from './trpc/ytdlp.core'
 if (isDevelopmentOrDebug) Logger.enableProductionMode()
 const log = new Logger('App')
 const trayIcon = !platform.isWindows ? (platform.isMacOS ? trayIconAsset : iconWin) : iconWin
 
+/**
+ * required for clipboard monitoring for instant download feature
+ */
 if (platform.isMacOS && !systemPreferences.isTrustedAccessibilityClient(true)) {
   logger.warn('Missing trusted accessibility access, requesting...')
 }
 async function createWindow() {
-  await checkLicense()
   // Create the browser window.
   const tray = new Tray(trayIcon)
   const trayMenu = new Menu()
@@ -50,10 +53,10 @@ async function createWindow() {
     index: mbIndex.path,
     loadUrlOptions: mbIndex.options as any,
     browserWindow: {
-      width: 600,
+      width: 800,
       height: 600,
       minHeight: 600,
-      minWidth: 600,
+      minWidth: 800,
       movable: false,
       resizable: false,
       maximizable: false,
@@ -84,8 +87,12 @@ async function createWindow() {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
+  let isReady = false
   mb.on('ready', async () => {
-    if (isDevelopmentOrDebug) mainWindow.webContents.openDevTools({ mode: 'detach' })
+    isReady = true
+    if (isDevelopmentOrDebug) {
+      mainWindow.webContents.openDevTools({ mode: 'detach' })
+    }
     app.setAccessibilitySupportEnabled(true)
   })
   mb.tray.setImage(trayIcon)
@@ -94,13 +101,16 @@ async function createWindow() {
   // Load the remote URL for development or the local html file for production.
   await loadUrlOfWindow(mainWindow, '/')
   attachAutoUpdaterIPC(mainWindow)
+  if (!isProduction) {
+    mainWindow.setAlwaysOnTop(true)
+  }
   return mb
 }
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   app.commandLine.appendSwitch('disable-backgrounding-occluded-windows', 'true')
   // Set app user model id for windows
   const appUserId = builderConfig.appId.split('.', 2).join('.')
@@ -118,6 +128,8 @@ app.whenReady().then(() => {
       pushWindowState()
     })
   })
+
+  ytdl.initialize() // init asynchronously
 
   createWindow()
 

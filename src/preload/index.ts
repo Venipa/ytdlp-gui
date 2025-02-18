@@ -4,12 +4,8 @@ import { IpcRendererEvent, contextBridge, ipcRenderer } from 'electron'
 import { ELECTRON_TRPC_CHANNEL } from 'electron-trpc/main'
 import { version } from '~/package.json'
 import { } from './index.d'
-import Unlock from './license'
-import { SoundSetOptions, SoundSetPlayer } from './player'
 // Custom APIs for renderer
 const api = {
-  createSoundSetPlayer: (options: SoundSetOptions = {} as SoundSetOptions) =>
-    new SoundSetPlayer(options),
   version,
   platform,
   on: (eventName: string, handle: (ev: IpcRendererEvent, ...args: any[]) => void) =>
@@ -33,7 +29,6 @@ const api = {
     }
   }
 } satisfies typeof window.api
-const license = new Unlock()
 
 const electronTRPC = {
   sendMessage: (operation) => ipcRenderer.send(ELECTRON_TRPC_CHANNEL, operation),
@@ -48,7 +43,6 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
     contextBridge.exposeInMainWorld('electronTRPC', electronTRPC)
-    contextBridge.exposeInMainWorld('license', license)
   } catch (error) {
     console.error(error)
   }
@@ -59,10 +53,6 @@ if (process.contextIsolated) {
   window.api = api
   // @ts-ignore (define in dts)
   window.electronTRPC = electronTRPC
-  // @ts-ignore (define in dts)
-  window.license = license
 }
 
-process.on('loaded', async () => {
-  license.init()
-})
+process.on('loaded', async () => {})

@@ -12,7 +12,10 @@ export const publicProcedure = t.procedure.use(async ({ ctx, path, type, next })
   const log = new Logger(path).child(type)
   ctx.log = log
   ctx.path = path
-  return next({ ctx })
+  console.log("executing", path, type)
+  return next({ ctx }).finally(() => {
+    log.debug("executed")
+  })
 })
 
 /**

@@ -30,7 +30,7 @@
  * If you want to process logs through other outputs than console, you can add LogOutput functions to Logger.outputs.
  */
 
-import { isProduction } from "./config"
+import { isProduction } from './config'
 
 /**
  * The possible log levels.
@@ -111,11 +111,14 @@ export class Logger {
       const log = this.source ? [`[${this.source}]`].concat(objects) : objects
 
       func.apply(console, log)
-      Logger.outputs.forEach((output) => output.apply(output, ([this.source, level] as any).concat(objects)))
+      Logger.outputs.forEach((output) =>
+        output.apply(output, ([this.source, level] as any).concat(objects))
+      )
     }
   }
 }
 
 export const createLogger = (name?: string) => new Logger(name)
-if (isProduction) Logger.enableProductionMode();
-export const logger = createLogger("App");
+if (isProduction) Logger.enableProductionMode()
+else console.log('App is in dev mode.')
+export const logger = createLogger('App')

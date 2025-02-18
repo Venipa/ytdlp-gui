@@ -1,6 +1,7 @@
 import secureStore from '@main/secureStore'
+import { shell } from 'electron'
 import { z } from 'zod'
-import { mainProcedure, router } from './trpc'
+import { mainProcedure, publicProcedure, router } from './trpc'
 export const internalRouter = router({
   getAll: mainProcedure.query(() => secureStore.getAll()),
   set: mainProcedure
@@ -31,5 +32,8 @@ export const internalRouter = router({
     }),
   getJson: mainProcedure.input(z.string()).query(({ input: key }) => {
     return secureStore.get(key)
+  }),
+  openPath: publicProcedure.input(z.string()).mutation(async ({ input: filePath }) => {
+    await shell.openPath(filePath)
   })
 } as const)

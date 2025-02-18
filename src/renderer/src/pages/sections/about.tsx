@@ -3,7 +3,7 @@ import { QTooltip } from '@renderer/components/ui/tooltip'
 import config, { NodeEnv } from '@shared/config'
 import { formatDistanceToNow, isValid } from 'date-fns'
 import { DotIcon } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { toast } from 'sonner'
 import Logo from '../../components/app/logo'
 
@@ -12,7 +12,6 @@ export const meta = {
   index: 99
 }
 export default function AboutTab() {
-  const [state] = useState(() => window.license)
   const lastCommitDate = useMemo(
     () =>
       !config.git?.committer?.date ||
@@ -40,8 +39,6 @@ export default function AboutTab() {
         <div className="flex flex-col">
           <div>About {config.title}</div>
           <div className="text-xs pt-0.5 whitespace-nowrap text-muted-foreground flex items-center flex-wrap gap-x-2">
-            <span>{state.activated ? "Activated" : "Trial"}</span>
-            <DotIcon className="size-4 -mx-2" />
             <ClickableText onClick={() => buildInfo && navigator.clipboard.writeText(buildInfo).then(() => toast('Copied build info'))}>
               {buildInfo}
             </ClickableText>

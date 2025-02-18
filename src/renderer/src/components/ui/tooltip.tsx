@@ -33,17 +33,11 @@ const QTooltip = React.forwardRef<
     React.PropsWithChildren<{ content: string | React.ReactNode }>
 >(({ className, children, content, asChild, ...props }, ref) => {
   return (
-    <Tooltip {...props}>
-      <TooltipTrigger disabled={!content} asChild={asChild}>
+    <Tooltip delayDuration={350} {...props}>
+      <TooltipTrigger disabled={!content} asChild={asChild} className='cursor-auto'>
         {children}
       </TooltipTrigger>
-      <TooltipContent
-        side="bottom"
-        align="center"
-        sideOffset={4}
-        updatePositionStrategy="optimized"
-        ref={ref}
-      >
+      <TooltipContent align="center" sideOffset={4} updatePositionStrategy="optimized" ref={ref} className='bg-white dark:bg-background-2 border border-muted dark:border-muted/60 shadow-md p-2.5 text-primary'>
         {typeof content === 'string' ? <div>{content}</div> : content}
       </TooltipContent>
     </Tooltip>

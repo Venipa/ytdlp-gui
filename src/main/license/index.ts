@@ -1,37 +1,5 @@
 import { BrowserWindow, dialog } from 'electron'
 import { autoUpdater } from 'electron-updater'
-import Unlock from './unlock'
-
-export async function checkLicense(win?: BrowserWindow) {
-  const unlock = new Unlock(
-    {
-      api: {
-        productId: import.meta.env.MAIN_VITE_ANYSTACK_PRODUCT_ID,
-        key: import.meta.env.MAIN_VITE_ANYSTACK_API_KEY
-      },
-      license: {
-        requireEmail: true,
-        checkIn: {
-          value: 24,
-          unit: 'hours'
-        },
-        trial: {
-          enabled: true,
-          value: 7,
-          unit: 'days'
-        }
-      }
-    },
-    autoUpdater,
-    false
-  )
-  await unlock.ifAuthorized(win)
-  if (win) {
-    const sendInfo = () =>
-      win.webContents.send('license-config', [unlock.config, unlock.storeInstance.store])
-    win.webContents.on('did-finish-load', sendInfo)
-  }
-}
 export function attachAutoUpdaterIPC(win: BrowserWindow) {
   autoUpdater.on('update-available', (info) => win.webContents.send('update-available', info))
   autoUpdater.on('download-progress', (info) =>

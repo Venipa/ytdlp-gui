@@ -1,13 +1,10 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { platform } from '@electron-toolkit/utils'
 import type { ProgressInfo, UpdateDownloadedEvent, UpdateInfo } from 'electron-updater'
-import type Unlock from './license'
-import type { SoundSetOptions, SoundSetPlayer } from './player'
 declare global {
   interface Window {
     electron: ElectronAPI
     api: {
-      createSoundSetPlayer(options?: SoundSetOptions): SoundSetPlayer
       version: string
       platform: typeof platform
       on(eventName: string, handle: (ev: IpcRendererEvent, ...args: any[]) => void): void
@@ -20,6 +17,5 @@ declare global {
         checking(handle: (dateStartedChecking: string) => void): void
       }
     }
-    license: Unlock
   }
 }

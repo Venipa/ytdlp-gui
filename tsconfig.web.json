@@ -5,6 +5,7 @@
     "src/renderer/src/**/*",
     "src/renderer/src/**/*.tsx",
     "src/preload/*.d.ts",
+    "src/shared/*.d.ts",
     "src/shared/**/*.ts",
     "src/main/trpc/trpc.ts"
   ],

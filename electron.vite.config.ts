@@ -23,7 +23,9 @@ const externalizedEsmDeps = [
   '@faker-js/faker',
   '@trpc-limiter/memory',
   'got',
-  'encryption.js'
+  'encryption.js',
+  'filenamify',
+  'yt-dlp-wrap'
 ]
 const isMac = !!process.env.ACTION_RUNNER?.startsWith('macos-')
 

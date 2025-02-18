@@ -1,15 +1,19 @@
 import ClickableText from '@renderer/components/ui/clickable-text'
 import { Tab, TabNavbar } from '@renderer/components/ui/responsive-tabs'
 import { ScrollArea } from '@renderer/components/ui/scroll-area'
-import { Slider } from '@renderer/components/ui/slider'
 import SuspenseLoader from '@renderer/components/ui/suspense-loader'
 import { cn } from '@renderer/lib/utils'
 import config, { NodeEnv } from '@shared/config'
-import { Volume2Icon } from 'lucide-react'
-import { createElement, HTMLProps, ReactElement, Suspense, useMemo, useState } from 'react'
+import {
+  createElement,
+  Fragment,
+  HTMLProps,
+  ReactElement,
+  Suspense,
+  useMemo,
+  useState
+} from 'react'
 import { toast } from 'sonner'
-import { useDebounceCallback } from 'usehooks-ts'
-import { useTone } from './components/tone-context'
 type Element = <T extends HTMLProps<HTMLDivElement> = HTMLProps<HTMLDivElement>>(
   props?: T
 ) => ReactElement<T, any>
@@ -20,6 +24,7 @@ type Module = {
     icon?: Element
     index?: number
     show?: boolean
+    customLayout?: boolean
   }
 }
 const SECTIONTABS = import.meta.glob<Module>(`./sections/*.tsx`, { eager: true })
@@ -30,18 +35,24 @@ const sectionTabs = sectionValues
   .sort((a, b) => a.index - b.index)
 const getSectionContentByTitle = (title: string) =>
   sectionValues.find((d) => d.meta.title === title)?.default
+const getSectionMetaByTitle = (title: string) =>
+  sectionValues.find((d) => d.meta.title === title)?.meta
 export default function SettingsWindow() {
   const [selectedTab, setSelectedTab] = useState<string>(sectionTabs[0].title)
   const selectedContent = useMemo(
     () => (selectedTab && createElement(getSectionContentByTitle(selectedTab) as any)) || null,
     [selectedTab]
   )
-  const { selected: tone, setVolume } = useTone()
+  const selectedMeta = useMemo(
+    () => (selectedTab && getSectionMetaByTitle(selectedTab) as any) || null,
+    [selectedTab]
+  )
   const buildInfo = useMemo(() => config.git?.shortHash && `${config.git.shortHash}`, [])
   const appVersion = useMemo(() => `v${window.api.version}`, [])
-  const handleVolumeChange = useDebounceCallback(([newVolume]: [number]) => {
-    setVolume(newVolume)
-  }, 100)
+  const ContentLayout: any = useMemo(
+    () => (selectedMeta?.customLayout ? Fragment : ScrollArea),
+    [selectedMeta]
+  )
   return (
     <div className={cn('absolute inset-0 flex flex-col px-0 h-full')}>
       <div className="grid grid-cols-[148px_1fr] flex-shrink-0 h-full flex-auto -mt-6">
@@ -62,27 +73,13 @@ export default function SettingsWindow() {
               </Tab>
             )
           })}
-          <div className="flex-auto flex flex-col items-end justify-end group">
-            <div className="flex flex-col gap-4 justify-end mr-2 mb-2 py-4">
-              <Slider
-                min={0}
-                max={100}
-                step={1}
-                defaultValue={[tone?.volume ?? 15]}
-                onValueChange={handleVolumeChange}
-                orientation={'vertical'}
-                className="h-[100px] opacity-0 group-hover:opacity-100"
-              ></Slider>
-              <Volume2Icon className="text-muted-foreground size-5 opacity-50 group-hover:opacity-100" />
-            </div>
-          </div>
-
-          <div className="flex flex-col text-xs text-muted-foreground px-2 items-end">
+          <div className="flex-auto"></div>
+          <div className="flex flex-col text-xs text-muted-foreground px-2 items-end flex-shrink-0">
             <div>{config.appInfo.name}</div>
             <ClickableText
               onClick={() =>
                 navigator.clipboard
-                  .writeText(appVersion + (buildInfo && ` b${buildInfo}` || ''))
+                  .writeText(appVersion + ((buildInfo && ` b${buildInfo}`) || ''))
                   .then(() => toast('Copied app version'))
               }
             >
@@ -91,7 +88,9 @@ export default function SettingsWindow() {
             {buildInfo && (
               <ClickableText
                 onClick={() =>
-                  navigator.clipboard.writeText(buildInfo).then(() => toast('Copied build identifier'))
+                  navigator.clipboard
+                    .writeText(buildInfo)
+                    .then(() => toast('Copied build identifier'))
                 }
               >
                 {buildInfo}
@@ -100,13 +99,13 @@ export default function SettingsWindow() {
             <span>{NodeEnv}</span>
           </div>
         </TabNavbar>
-        <ScrollArea className="px-6 pt-16 relative">
+        <ContentLayout className="px-6 pt-16 relative">
           {selectedContent ? (
             <Suspense fallback={<SuspenseLoader />}>{selectedContent}</Suspense>
           ) : (
             <div className="flex flex-col items-center justify-center h-20">Nothing here ?.?</div>
           )}
-        </ScrollArea>
+        </ContentLayout>
       </div>
     </div>
   )

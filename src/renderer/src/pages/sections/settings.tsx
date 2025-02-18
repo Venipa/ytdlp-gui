@@ -6,7 +6,7 @@ export const meta = {
   title: 'Settings',
   icon: LucideCog,
   index: 10,
-  show: false
+  show: true
 }
 const Icon = meta.icon
 export default function SettingsTab() {
