@@ -143,6 +143,9 @@ importers:
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.0
+      clipboard-event:
+        specifier: ^1.6.0
+        version: 1.6.0
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -2664,6 +2667,9 @@ packages:
 
   client-only@0.0.1:
     resolution: {integrity: sha512-IV3Ou0jSMzZrd3pZ48nLkT9DA7Ag1pnPzaiQhpW7c3RbcqqzvzzVu+L8gfqMp/8IM2MQtSiqaCxrrcfu8I8rMA==}
+
+  clipboard-event@1.6.0:
+    resolution: {integrity: sha512-a69QYimd43xM+5hcHkucs0V/QoiZz1fqEFRTnewOITVQOtypRLbCx76Q91Djn6h7O24817dQw44sFUxRYWIuYA==}
 
   cliui@8.0.1:
     resolution: {integrity: sha512-BSeNnyus75C4//NQ9gQt1/csTXyo/8Sb+afLAkzAptFuMsod9HFokGNudZpi/oQV73hnVK+sR+5PVRMd+Dr7YQ==}
@@ -8020,6 +8026,8 @@ snapshots:
     optional: true
 
   client-only@0.0.1: {}
+
+  clipboard-event@1.6.0: {}
 
   cliui@8.0.1:
     dependencies:

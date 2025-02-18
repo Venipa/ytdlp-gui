@@ -67,6 +67,7 @@
     "build-url-ts": "^6.1.8",
     "calver": "^24.1.0",
     "class-variance-authority": "^0.7.0",
+    "clipboard-event": "^1.6.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
     "crypto-js": "^4.2.0",
