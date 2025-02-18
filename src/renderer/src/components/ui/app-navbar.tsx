@@ -35,7 +35,7 @@ export default function AppNavBar({
     <TooltipProvider delayDuration={100}>
       <WindowControlBar
         title={configState?.title || <Spinner />}
-        state={windowState as any}
+        state={{...windowState, title: ""} as any}
         className={cn('h-10 px-1.5', className)}
         {...{ onMinimize, onMaximize, onClose: isQuitRoute ? close : onClose }}
         {...props}

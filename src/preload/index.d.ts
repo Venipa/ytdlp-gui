@@ -15,6 +15,7 @@ declare global {
         available(handle: (_info: UpdateInfo) => void): void
         downloaded(handle: (_info: UpdateDownloadedEvent) => void): void
         checking(handle: (dateStartedChecking: string) => void): void
+        checkForUpdates(): Promise<void>;
       }
     }
   }

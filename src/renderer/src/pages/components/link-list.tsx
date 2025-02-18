@@ -12,7 +12,6 @@ import {
   LucideArrowDownToDot,
   LucideCheck,
   LucideFolderOpen,
-  LucidePause,
   LucideRedo2,
   LucideSave,
   LucideSquare,
@@ -37,19 +36,22 @@ export function LinkListItem({
   const error = useMemo(() => ytderror, [ytderror])
   const [status, setDownloadStatus] = useState<YTDLDownloadStatus>()
   const { mutateAsync: openPath } = trpc.internals.openPath.useMutation()
+  const { mutateAsync: retryFromId } = trpc.ytdl.retry.useMutation()
+  const { mutateAsync: cancelFromId } = trpc.ytdl.cancel.useMutation()
   const filesize = useMemo(() => prettyBytes(fsize), [fsize])
   trpc.ytdl.onIdDownload.useSubscription(id, {
     onData(data) {
       if (data) setDownloadStatus(data as any)
 
-      log.debug('onIdDownload', data)
+      console.log('onIdDownload', data)
     }
   })
   const completed = useMemo(() => state === 'completed', [state, status])
   const cancelled = useMemo(() => state === 'cancelled', [state, status])
   const downloading = useMemo(() => state === 'downloading', [state, status])
+  const processingMeta = useMemo(() => state === 'fetching_meta', [state, status])
   return (
-    <div className="h-16 rounded-md hover:bg-muted/20 grid grid-cols-[40px_1fr_minmax(100px,_auto)] gap-2 items-center relative cursor-default group/item flex-shrink-0 select-none">
+    <div className="h-16 rounded-md hover:bg-muted/60 grid grid-cols-[40px_1fr_minmax(100px,_auto)] gap-2 items-center relative cursor-default group/item flex-shrink-0 select-none">
       <div className="flex flex-col size-10 items-center justify-center">
         {error ? (
           <QTooltip content={'An error occurred while downloading.'}>
@@ -113,7 +115,9 @@ export function LinkListItem({
             <>
               <div className="flex items-center gap-1">
                 <LucideSave className="size-3 flex-shrink-0" />
-                <span className="truncate group-hover/item:max-w-fit max-w-[200px]">{filepath}</span>
+                <span className="truncate group-hover/item:max-w-fit max-w-[200px]">
+                  {filepath}
+                </span>
               </div>
             </>
           )}
@@ -121,13 +125,23 @@ export function LinkListItem({
       </div>
       <div className="flex justify-end items-center gap-2 px-2 opacity-20 group-hover/item:opacity-100">
         {(error || cancelled) && (
-          <Button variant={'ghost'} size={'icon'} className="px-2.5">
+          <Button
+            variant={'ghost'}
+            size={'icon'}
+            className="px-2.5"
+            onClick={() => retryFromId(id)}
+          >
             <LucideRedo2 className="stroke-[3px]" />
           </Button>
         )}
-        {downloading && (
-          <Button variant={'ghost'} size={'icon'} className="px-2.5">
-            <LucidePause className="fill-current stroke-none" />
+        {(downloading || processingMeta) && (
+          <Button
+            variant={'ghost'}
+            size={'icon'}
+            className="px-2.5"
+            onClick={() => cancelFromId(id)}
+          >
+            <LucideSquare className="fill-current stroke-none" />
           </Button>
         )}
         {completed && filepath && (
@@ -135,7 +149,7 @@ export function LinkListItem({
             variant={'ghost'}
             size={'icon'}
             className="px-2.5"
-            onClick={() => openPath(filepath)}
+            onClick={() => openPath({ path: filepath, openParent: true })}
           >
             <LucideFolderOpen className="fill-current stroke-none" />
           </Button>
@@ -149,13 +163,13 @@ export function LinkListItem({
             <LucideTrash className="fill-current stroke-none" />
           </Button>
         )}
-        {!completed && (
+        {(error || cancelled) && (
           <Button
             variant={'ghost'}
             size={'icon'}
             className="px-2.5 text-red-500 hover:text-red-400 opacity-0 group-hover/item:opacity-100"
           >
-            <LucideX className="fill-current stroke-none" />
+            <LucideX className="stroke-current" />
           </Button>
         )}
       </div>

@@ -16,7 +16,8 @@ const store = createYmlStore<AppStore>('app-settings', {
     },
     features: {
       clipboardMonitor: true
-    }
+    },
+    beta: false
   }
 })
 

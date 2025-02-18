@@ -26,6 +26,9 @@ const api = {
     },
     checking(handle) {
       ipcRenderer.on('update-checking', (_ev, data) => handle(data))
+    },
+    checkForUpdates() {
+      return ipcRenderer.invoke('update-check')
     }
   }
 } satisfies typeof window.api

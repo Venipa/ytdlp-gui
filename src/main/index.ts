@@ -1,7 +1,16 @@
 import { electronApp, optimizer, platform } from '@electron-toolkit/utils'
 import { isDevelopmentOrDebug, isProduction } from '@shared/config'
 import { Logger, logger } from '@shared/logger'
-import { BrowserWindow, Menu, MenuItem, Tray, app, shell, systemPreferences } from 'electron'
+import {
+  BrowserWindow,
+  Menu,
+  MenuItem,
+  Tray,
+  app,
+  screen,
+  shell,
+  systemPreferences
+} from 'electron'
 import { menubar } from 'menubar'
 import { join } from 'path'
 // @ts-ignore
@@ -12,14 +21,16 @@ import icon from '~/resources/icon-24x24.png?asset'
 import { autoUpdater } from 'electron-updater'
 import trayIconAsset from '~/resources/menuIcon_16.png?asset'
 // @ts-ignore
+import { clamp } from 'lodash'
 import builderConfig from '../../electron-builder.yml'
 import { ClipboardMonitor } from './lib/clipboardMonitor'
 import { attachAutoUpdaterIPC } from './license'
 import { appStore } from './stores/app.store'
+import { runMigrate } from './stores/queue-database'
 import { trpcIpcHandler } from './trpc'
 import { createUrlOfPage, loadUrlOfWindow } from './trpc/dialog.utils'
 import { pushWindowState } from './trpc/window.api'
-import { ytdl } from './trpc/ytdlp.core'
+import { checkBrokenLinks, ytdl } from './trpc/ytdlp.core'
 import { ytdlpEvents } from './trpc/ytdlp.ee'
 if (isDevelopmentOrDebug) Logger.enableProductionMode()
 const log = new Logger('App')
@@ -47,6 +58,7 @@ async function createWindow() {
   tray.on('right-click', () => trayMenu.popup())
   tray.setContextMenu(trayMenu)
   const mbIndex = createUrlOfPage('/')
+  const sizings = screen.getPrimaryDisplay()
   const mb = menubar({
     icon: trayIcon,
     showDockIcon: false,
@@ -60,8 +72,10 @@ async function createWindow() {
       height: 600,
       minHeight: 600,
       minWidth: 800,
+      maxWidth: clamp(sizings.bounds.width, 800, clamp(1280, 800, sizings.bounds.width)),
+      maxHeight: clamp(sizings.bounds.height, 600, clamp(1080, 600, sizings.bounds.height)),
       movable: false,
-      resizable: false,
+      resizable: true,
       maximizable: false,
       minimizable: false,
       show: false,
@@ -131,7 +145,8 @@ app.whenReady().then(async () => {
       pushWindowState()
     })
   })
-
+  await runMigrate()
+  await checkBrokenLinks()
   ytdl.initialize() // init asynchronously
 
   createWindow().finally(() => {

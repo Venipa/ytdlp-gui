@@ -69,8 +69,11 @@ export const settingsRouter = router({
         code: 'CONFLICT',
         message: 'Folder Path already exists in ' + config.title
       })
-    appStore.set('download.paths', [...appStore.store.download.paths, folderPath])
-    settingsChangeEmitter.emit(handleKey, { key: 'download.paths' })
+    appStore.set('download', {
+      paths: [...appStore.store.download.paths, folderPath],
+      selected: folderPath
+    })
+    settingsChangeEmitter.emit(handleKey, { key: 'download' })
   }),
   deleteDownloadPath: publicProcedure
     .input(

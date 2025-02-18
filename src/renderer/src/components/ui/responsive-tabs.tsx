@@ -85,7 +85,7 @@ function TabNavbar({
     <TabContext.Provider value={contextValue}>
       <nav
         className={cn(
-          `relative flex ${isMobile ? 'items-stretch' : isVertical ? 'flex-col items-stretch pb-10' : 'items-center'} border-border ${isMobile && !isVertical ? '' : isVertical ? 'border-r h-full pr-2 mr-2' : 'border-b'}`,
+          `relative flex select-none ${isMobile ? 'items-stretch' : isVertical ? 'flex-col items-stretch pb-10' : 'items-center'} border-border ${isMobile && !isVertical ? '' : isVertical ? 'border-r h-full pr-2 mr-2' : 'border-b'}`,
           className
         )}
       >

@@ -8,4 +8,5 @@ export interface AppStore {
   features: {
     clipboardMonitor: boolean
   }
+  beta: boolean
 }

@@ -1,6 +1,13 @@
 'use client'
 
-import { ChevronsUpDown, LucideCheck, LucideFolder, LucideFolderOpen, LucidePlus, LucideX } from 'lucide-react'
+import {
+  ChevronsUpDown,
+  LucideCheck,
+  LucideFolder,
+  LucideFolderOpen,
+  LucidePlus,
+  LucideX
+} from 'lucide-react'
 import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -94,7 +101,7 @@ export default function SelectDownloadBox({
                   }}
                   className="group/commandItem text-xs"
                 >
-                  {p}
+                  <span className='truncate'>{p}</span>
                   <div className="flex items-center gap-1 ml-auto">
                     <LucideCheck
                       className={cn(
@@ -108,10 +115,10 @@ export default function SelectDownloadBox({
                       onClick={(ev) => {
                         ev.preventDefault()
                         ev.stopPropagation()
-                        openPath(p)
+                        openPath({ path: p })
                       }}
                     >
-                      <LucideFolderOpen className='stroke-none fill-current' />
+                      <LucideFolderOpen className="stroke-none fill-current" />
                     </Button>
                     {settings.download.paths?.length > 1 && (
                       <Button

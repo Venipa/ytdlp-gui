@@ -1,5 +1,7 @@
 import secureStore from '@main/secureStore'
+import { TRPCError } from '@trpc/server'
 import { shell } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import { z } from 'zod'
 import { mainProcedure, publicProcedure, router } from './trpc'
 export const internalRouter = router({
@@ -33,7 +35,24 @@ export const internalRouter = router({
   getJson: mainProcedure.input(z.string()).query(({ input: key }) => {
     return secureStore.get(key)
   }),
-  openPath: publicProcedure.input(z.string()).mutation(async ({ input: filePath }) => {
-    await shell.openPath(filePath)
+  openPath: publicProcedure
+    .input(
+      z.object({
+        path: z.string(),
+        openParent: z.boolean().default(false)
+      })
+    )
+    .mutation(async ({ input: { path: filePath, openParent } }) => {
+      shell.showItemInFolder(filePath)
+    }),
+  checkUpdate: publicProcedure.mutation(() => {
+    return autoUpdater.checkForUpdatesAndNotify()
+  }),
+  quitAndInstallUpdate: publicProcedure.mutation(() => {
+    try {
+      return autoUpdater.quitAndInstall()
+    } catch (ex: any) {
+      throw new TRPCError({ message: ex.message, code: 'INTERNAL_SERVER_ERROR' })
+    }
   })
 } as const)

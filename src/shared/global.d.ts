@@ -16,7 +16,7 @@ declare module 'ytdlp-desktop/types' {
     | { percent: number; error: any }
 
     export interface YTDLItem {
-      id: string
+      id: number
       state: string;
       title: string
       filesize: number

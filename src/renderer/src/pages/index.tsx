@@ -14,6 +14,7 @@ import {
   useState
 } from 'react'
 import { toast } from 'sonner'
+import StatusBar from './components/status-bar'
 type Element = <T extends HTMLProps<HTMLDivElement> = HTMLProps<HTMLDivElement>>(
   props?: T
 ) => ReactElement<T, any>
@@ -44,7 +45,7 @@ export default function SettingsWindow() {
     [selectedTab]
   )
   const selectedMeta = useMemo(
-    () => (selectedTab && getSectionMetaByTitle(selectedTab) as any) || null,
+    () => (selectedTab && (getSectionMetaByTitle(selectedTab) as any)) || null,
     [selectedTab]
   )
   const buildInfo = useMemo(() => config.git?.shortHash && `${config.git.shortHash}`, [])
@@ -55,57 +56,60 @@ export default function SettingsWindow() {
   )
   return (
     <div className={cn('absolute inset-0 flex flex-col px-0 h-full')}>
-      <div className="grid grid-cols-[148px_1fr] flex-shrink-0 h-full flex-auto -mt-6">
-        <TabNavbar
-          defaultTab={selectedTab}
-          onValueChange={setSelectedTab}
-          orientation="vertical"
-          indicatorPosition="right"
-          className="h-full bg-background-2 pt-24 pb-6 relative"
-        >
-          {sectionTabs.map(({ title, icon: Icon }) => {
-            return (
-              <Tab value={title!} key={title}>
-                <div className="flex items-center flex-row-reverse gap-x-2">
-                  {Icon && <Icon className="size-4" />}
-                  <div>{title}</div>
-                </div>
-              </Tab>
-            )
-          })}
-          <div className="flex-auto"></div>
-          <div className="flex flex-col text-xs text-muted-foreground px-2 items-end flex-shrink-0">
-            <div>{config.appInfo.name}</div>
-            <ClickableText
-              onClick={() =>
-                navigator.clipboard
-                  .writeText(appVersion + ((buildInfo && ` b${buildInfo}`) || ''))
-                  .then(() => toast('Copied app version'))
-              }
-            >
-              {appVersion}
-            </ClickableText>
-            {buildInfo && (
+      <div className="flex flex-col flex-shrink-0 h-full flex-auto -mt-6">
+        <div className="grid grid-cols-[148px_1fr] h-full flex-auto">
+          <TabNavbar
+            defaultTab={selectedTab}
+            onValueChange={setSelectedTab}
+            orientation="vertical"
+            indicatorPosition="right"
+            className="h-full bg-background-2 pt-24 pb-6 relative"
+          >
+            {sectionTabs.map(({ title, icon: Icon }) => {
+              return (
+                <Tab value={title!} key={title}>
+                  <div className="flex items-center flex-row-reverse gap-x-2">
+                    {Icon && <Icon className="size-4" />}
+                    <div>{title}</div>
+                  </div>
+                </Tab>
+              )
+            })}
+            <div className="flex-auto"></div>
+            <div className="flex flex-col text-xs text-muted-foreground px-2 items-end flex-shrink-0">
+              <div>{config.appInfo.name}</div>
               <ClickableText
                 onClick={() =>
                   navigator.clipboard
-                    .writeText(buildInfo)
-                    .then(() => toast('Copied build identifier'))
+                    .writeText(appVersion + ((buildInfo && ` b${buildInfo}`) || ''))
+                    .then(() => toast('Copied app version'))
                 }
               >
-                {buildInfo}
+                {appVersion}
               </ClickableText>
+              {buildInfo && (
+                <ClickableText
+                  onClick={() =>
+                    navigator.clipboard
+                      .writeText(buildInfo)
+                      .then(() => toast('Copied build identifier'))
+                  }
+                >
+                  {buildInfo}
+                </ClickableText>
+              )}
+              <span>{NodeEnv}</span>
+            </div>
+          </TabNavbar>
+          <ContentLayout className="px-6 pt-16 relative">
+            {selectedContent ? (
+              <Suspense fallback={<SuspenseLoader />}>{selectedContent}</Suspense>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-20">Nothing here ?.?</div>
             )}
-            <span>{NodeEnv}</span>
-          </div>
-        </TabNavbar>
-        <ContentLayout className="px-6 pt-16 relative">
-          {selectedContent ? (
-            <Suspense fallback={<SuspenseLoader />}>{selectedContent}</Suspense>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-20">Nothing here ?.?</div>
-          )}
-        </ContentLayout>
+          </ContentLayout>
+        </div>
+        <StatusBar />
       </div>
     </div>
   )
