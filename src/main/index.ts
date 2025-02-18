@@ -16,12 +16,13 @@ import { join } from 'path'
 // @ts-ignore
 import iconWin from '~/resources/icon.ico?asset'
 // @ts-ignore
-import icon from '~/resources/icon-24x24.png?asset'
+import icon from '~/resources/24x24.png?asset'
 // @ts-ignore
 import { autoUpdater } from 'electron-updater'
 import trayIconAsset from '~/resources/menuIcon_16.png?asset'
 // @ts-ignore
 import { clamp } from 'lodash'
+// @ts-ignore
 import builderConfig from '../../electron-builder.yml'
 import { ClipboardMonitor } from './lib/clipboardMonitor'
 import { attachAutoUpdaterIPC } from './license'

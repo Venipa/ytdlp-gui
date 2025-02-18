@@ -22,14 +22,13 @@ enum YTDLP_STATE {
 }
 export class YTDLP {
   private _state: YTDLP_STATE = YTDLP_STATE.NONE
-  private _ytd: YTDLWrapper
+  private _ytd: YTDLWrapper = new YTDLWrapper();
   get state() {
     return this._state
   }
   constructor() {}
   async initialize() {
     log.info("initializing...")
-    this._ytd = new YTDLWrapper()
     const ytdVersion = await this._ytd.getVersion()
     log.debug({ ytdVersion })
     await this.checkUpdates()

@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { blob, int, sqliteTable, text } from 'drizzle-orm/sqlite-core'
-import { VideoInfo } from 'yt-dlp-wrap/types'
+import type { VideoInfo } from 'yt-dlp-wrap/types'
 
 export const downloads = sqliteTable('downloads', {
   id: int({ mode: 'number' }).primaryKey({ autoIncrement: true }),
@@ -19,14 +19,4 @@ export const downloads = sqliteTable('downloads', {
     .notNull()
     .default(sql`(current_timestamp)`)
 
-  // id: string
-  // state: string;
-  // title: string
-  // filesize: number
-  // type: string
-  // source: string
-  // url: string
-  // filepath: string
-  // retryCount: number
-  // error?: any
 })

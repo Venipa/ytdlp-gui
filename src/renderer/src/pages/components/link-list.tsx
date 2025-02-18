@@ -32,7 +32,7 @@ export function LinkListItem({
   title,
   filepath,
   url
-}: YTDLItem) {
+}: YTDLItem & { key: any }) {
   const error = useMemo(() => ytderror, [ytderror])
   const [status, setDownloadStatus] = useState<YTDLDownloadStatus>()
   const { mutateAsync: openPath } = trpc.internals.openPath.useMutation()
@@ -42,8 +42,6 @@ export function LinkListItem({
   trpc.ytdl.onIdDownload.useSubscription(id, {
     onData(data) {
       if (data) setDownloadStatus(data as any)
-
-      console.log('onIdDownload', data)
     }
   })
   const completed = useMemo(() => state === 'completed', [state, status])
@@ -179,11 +177,8 @@ export function LinkListItem({
 export default function LinkList() {
   const {
     data: items,
-    isFetching,
-    refetch
-  } = trpc.ytdl.list.useQuery(undefined, {
-    initialData: [] as YTDLItem[]
-  })
+    isFetching
+  } = trpc.ytdl.list.useQuery(undefined)
   const {
     ytdl: { list }
   } = trpc.useUtils()
@@ -194,7 +189,7 @@ export default function LinkList() {
           if (!state) state = []
           data.forEach((item) => {
             const idx = state.findIndex((d) => d.id === item.id)
-            if (idx !== -1) state.splice(idx, 1, item)
+            if (idx !== -1) state.splice(idx, 1, item as any)
             else [item, ...state]
           })
           logger.debug('listSync', { state })
@@ -204,7 +199,6 @@ export default function LinkList() {
       }
     }
   })
-  logger.debug({ items })
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2 mx-2">
@@ -213,8 +207,8 @@ export default function LinkList() {
       <ScrollArea className="h-[300px] border border-muted rounded-lg relative">
         {isFetching && <SuspenseLoader className="absolute bg-background inset-0" />}
         <div className="flex flex-col gap-2 py-2.5 px-2 h-full">
-          {items.map((d) => (
-            <LinkListItem key={d.id} {...d} />
+          {items?.map((d) => (
+            <LinkListItem key={d.id} {...d as any} />
           ))}
         </div>
       </ScrollArea>
