@@ -52,8 +52,8 @@ jobs:
         run: |
           pnpm run release
         env:
-          MAIN_VITE_ANYSTACK_API_KEY: ${{ secrets.ANYSTACK_API_KEY }}
-          MAIN_VITE_ANYSTACK_PRODUCT_ID: ${{ secrets.ANYSTACK_PRODUCT_ID }}
+          # MAIN_VITE_ANYSTACK_API_KEY: ${{ secrets.ANYSTACK_API_KEY }}
+          # MAIN_VITE_ANYSTACK_PRODUCT_ID: ${{ secrets.ANYSTACK_PRODUCT_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ACTION_RUNNER: ${{ matrix.os }}
           VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
