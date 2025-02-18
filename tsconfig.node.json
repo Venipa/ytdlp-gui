@@ -1,0 +1,42 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "include": [
+    "src/env.d.ts",
+    "src/main/global.d.ts",
+    "electron.vite.config.*",
+    "src/vite-plugins/*.ts",
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/shared/**/*.ts"
+  ],
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "composite": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "Bundler",
+    "skipLibCheck": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "allowUnusedLabels": true,
+    "types": [
+      "electron-vite/node",
+      "./src/main/global.d.ts"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@main/*": [
+        "./src/main/*"
+      ],
+      "@preload/*": [
+        "./src/preload/*"
+      ],
+      "@shared/*": [
+        "./src/shared/*"
+      ],
+      "~/*": [
+        "./*"
+      ],
+    }
+  }
+}

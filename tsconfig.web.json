@@ -1,0 +1,42 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
+  "include": [
+    "src/env.d.ts",
+    "src/renderer/src/**/*",
+    "src/renderer/src/**/*.tsx",
+    "src/preload/*.d.ts",
+    "src/shared/**/*.ts",
+    "src/main/trpc/trpc.ts"
+  ],
+  "exclude": ["src/main/worker/**/*.ts"],
+  "compilerOptions": {
+    "composite": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "allowSyntheticDefaultImports": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "allowUnusedLabels": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@shared/*": [
+        "./src/shared/*"
+      ],
+      "@main/*": [
+        "./src/main/*"
+      ],
+      "@renderer/*": [
+        "./src/renderer/src/*"
+      ],
+      "@/*": [
+        "./src/renderer/src/*"
+      ],
+      "~/*": [
+        "*"
+      ],
+    },
+    "types": [
+      "./node_modules/styled-jsx/global.d.ts"
+    ]
+  }
+}

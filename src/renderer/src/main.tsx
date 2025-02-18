@@ -1,0 +1,14 @@
+import 'non.geist'
+import 'non.geist/mono'
+import './assets/main.scss'
+
+import { Logger } from '@shared/logger'
+import { createRoot } from 'react-dom/client'
+import { Routes } from './routes'
+if (import.meta.env.PROD) Logger.enableProductionMode()
+const htmlElement = document.getElementsByTagName('html')![0]
+const container = document.getElementById('root')!
+import.meta.env.DEV && htmlElement.classList.add('dark')
+container.classList.add(...'flex flex-col flex-auto h-full'.split(' '))
+
+createRoot(container).render(<Routes />)
