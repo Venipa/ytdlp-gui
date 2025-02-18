@@ -142,11 +142,11 @@ app.whenReady().then(async () => {
         ytdlpEvents.emit('add', value)
       }
     })
-    appStore.onDidChange("features", (features) => {
+    appStore.onDidChange('features', (features) => {
       if (features?.clipboardMonitor) clipboardWatcher.start()
-        else clipboardWatcher.stop();
+      else clipboardWatcher.stop()
     })
-    if (appStore.store.features?.clipboardMonitor) clipboardWatcher.start();
+    if (appStore.store.features?.clipboardMonitor) clipboardWatcher.start()
   })
 
   app.on('activate', function () {
