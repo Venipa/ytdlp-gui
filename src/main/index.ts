@@ -13,11 +13,14 @@ import { autoUpdater } from 'electron-updater'
 import trayIconAsset from '~/resources/menuIcon_16.png?asset'
 // @ts-ignore
 import builderConfig from '../../electron-builder.yml'
+import { ClipboardMonitor } from './lib/clipboardMonitor'
 import { attachAutoUpdaterIPC } from './license'
+import { appStore } from './stores/app.store'
 import { trpcIpcHandler } from './trpc'
 import { createUrlOfPage, loadUrlOfWindow } from './trpc/dialog.utils'
 import { pushWindowState } from './trpc/window.api'
 import { ytdl } from './trpc/ytdlp.core'
+import { ytdlpEvents } from './trpc/ytdlp.ee'
 if (isDevelopmentOrDebug) Logger.enableProductionMode()
 const log = new Logger('App')
 const trayIcon = !platform.isWindows ? (platform.isMacOS ? trayIconAsset : iconWin) : iconWin
@@ -131,7 +134,20 @@ app.whenReady().then(async () => {
 
   ytdl.initialize() // init asynchronously
 
-  createWindow()
+  createWindow().finally(() => {
+    const clipboardWatcher = new ClipboardMonitor({
+      distinct: true,
+      onHttpsText(value) {
+        log.debug('found https link in clipboard', { value })
+        ytdlpEvents.emit('add', value)
+      }
+    })
+    appStore.onDidChange("features", (features) => {
+      if (features?.clipboardMonitor) clipboardWatcher.start()
+        else clipboardWatcher.stop();
+    })
+    if (appStore.store.features?.clipboardMonitor) clipboardWatcher.start();
+  })
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
