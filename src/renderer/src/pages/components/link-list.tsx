@@ -175,10 +175,7 @@ export function LinkListItem({
   )
 }
 export default function LinkList() {
-  const {
-    data: items,
-    isFetching
-  } = trpc.ytdl.list.useQuery(undefined)
+  const { data: items, isFetching } = trpc.ytdl.list.useQuery(undefined)
   const {
     ytdl: { list }
   } = trpc.useUtils()
@@ -189,7 +186,9 @@ export default function LinkList() {
           if (!state) state = []
           data.forEach((item) => {
             const idx = state.findIndex((d) => d.id === item.id)
-            if (idx !== -1) state.splice(idx, 1, item as any)
+            if (item.state === 'deleted' && idx !== -1) {
+              state.splice(idx, 1)
+            } else if (idx !== -1) state.splice(idx, 1, item as any)
             else [item, ...state]
           })
           logger.debug('listSync', { state })
@@ -207,9 +206,7 @@ export default function LinkList() {
       <ScrollArea className="h-[300px] border border-muted rounded-lg relative">
         {isFetching && <SuspenseLoader className="absolute bg-background inset-0" />}
         <div className="flex flex-col gap-2 py-2.5 px-2 h-full">
-          {items?.map((d) => (
-            <LinkListItem key={d.id} {...d as any} />
-          ))}
+          {items?.map((d) => <LinkListItem key={d.id} {...(d as any)} />)}
         </div>
       </ScrollArea>
     </div>

@@ -142,14 +142,23 @@ const handleYtdlMedia = async (url: string) => {
     })
     .returning()
   ytdlpEvents.emit('list', [dbFile])
-  const deleteEntry = () => db.delete(downloads).where(eq(downloads.id, dbFile.id))
+  const deleteEntry = () =>
+    db
+      .delete(downloads)
+      .where(eq(downloads.id, dbFile.id))
+      .then((s) => {
+        if (s.rowsAffected === 1) {
+          dbFile.state = 'deleted'
+          ytdlpEvents.emit('list', [dbFile])
+        }
+      })
   if (controller.signal.aborted) {
-    await deleteEntry();
+    await deleteEntry()
     throw new TRPCError({ code: 'CLIENT_CLOSED_REQUEST', message: 'Video fetch aborted' })
   }
   const videoInfo: VideoInfo = await ytdl.ytdlp.getVideoInfo(url)
   if (!videoInfo) {
-    await deleteEntry();
+    await deleteEntry()
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Video not found' })
   }
   ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'done' })
