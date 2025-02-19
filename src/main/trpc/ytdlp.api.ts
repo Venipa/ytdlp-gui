@@ -1,5 +1,7 @@
 import { db } from '@main/stores/queue-database'
 import { downloads } from '@main/stores/queue-database.schema'
+import { logger } from '@shared/logger'
+import { resulter } from '@shared/promises/helper'
 import { TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import { desc, eq } from 'drizzle-orm'
@@ -13,6 +15,7 @@ import { z } from 'zod'
 import { publicProcedure, router } from './trpc'
 import { ytdl } from './ytdlp.core'
 import { ytdlpEvents } from './ytdlp.ee'
+const log = logger.child('ytdlp.api')
 export const ytdlpRouter = router({
   state: publicProcedure.query(() => ytdl.state.toString()),
   checkUpdates: publicProcedure.mutation(() => ytdl.checkUpdates()),
@@ -156,10 +159,16 @@ const handleYtdlMedia = async (url: string) => {
     await deleteEntry()
     throw new TRPCError({ code: 'CLIENT_CLOSED_REQUEST', message: 'Video fetch aborted' })
   }
-  const videoInfo: VideoInfo = await ytdl.ytdlp.getVideoInfo(url)
-  if (!videoInfo) {
+  const { value: videoInfo, error: videoInfoError } = await resulter<VideoInfo>(
+    ytdl.ytdlp.getVideoInfo(url)
+  )
+  if (videoInfoError || !videoInfo) {
+    if (videoInfoError) log.error("getVideoInfo", videoInfoError)
     await deleteEntry()
-    throw new TRPCError({ code: 'NOT_FOUND', message: 'Video not found' })
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'URL not supported or video not found'
+    })
   }
   ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'done' })
   const filepath = path.join(

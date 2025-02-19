@@ -28,14 +28,14 @@ const externalizedEsmDeps = [
   'yt-dlp-wrap'
 ]
 const isMac = !!process.env.ACTION_RUNNER?.startsWith('macos-')
-
+const isProduction = process.env.NODE_ENV === "production";
 export default defineConfig({
   main: {
     ...resolveOptions,
     plugins: [
       externalizeDepsPlugin({ exclude: [...externalizedEsmDeps] }),
       ViteYaml(),
-      ...((!isMac && [bytecodePlugin({ transformArrowFunctions: false })]) || [])
+      ...((!isMac && isProduction && [bytecodePlugin({ transformArrowFunctions: false })]) || [])
     ],
     build: {
       rollupOptions: {
@@ -53,7 +53,7 @@ export default defineConfig({
     plugins: [
       externalizeDepsPlugin({ exclude: [...externalizedEsmDeps] }),
       ViteYaml(),
-      ...((!isMac && [bytecodePlugin({ transformArrowFunctions: false })]) || [])
+      ...((!isMac && isProduction && [bytecodePlugin({ transformArrowFunctions: false })]) || [])
     ]
   },
   renderer: {

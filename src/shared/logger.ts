@@ -31,6 +31,7 @@
  */
 
 
+
 /**
  * The possible log levels.
  * LogLevel.Off is never emitted and only used with Logger.level property to disable logs.
@@ -118,6 +119,7 @@ export class Logger {
 }
 
 export const createLogger = (name?: string) => new Logger(name)
-// if (isProduction) Logger.enableProductionMode()
-// else console.log('App is in dev mode.')
+if (import.meta.env.PROD) Logger.enableProductionMode()
+else console.log('App is in dev mode.')
 export const logger = createLogger('App')
+logger.debug("init logger");
