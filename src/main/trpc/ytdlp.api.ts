@@ -123,6 +123,7 @@ export const ytdlpRouter = router({
 const handleYtdlMedia = async (url: string) => {
   if (typeof url !== 'string' || !/^https/gi.test(url)) return
 
+  const controller = new AbortController()
   ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'progressing' })
   let [dbFile] = await db
     .insert(downloads)
@@ -141,8 +142,16 @@ const handleYtdlMedia = async (url: string) => {
     })
     .returning()
   ytdlpEvents.emit('list', [dbFile])
+  const deleteEntry = () => db.delete(downloads).where(eq(downloads.id, dbFile.id))
+  if (controller.signal.aborted) {
+    await deleteEntry();
+    throw new TRPCError({ code: 'CLIENT_CLOSED_REQUEST', message: 'Video fetch aborted' })
+  }
   const videoInfo: VideoInfo = await ytdl.ytdlp.getVideoInfo(url)
-  if (!videoInfo) throw new TRPCError({ code: 'NOT_FOUND', message: 'Video not found' })
+  if (!videoInfo) {
+    await deleteEntry();
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Video not found' })
+  }
   ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'done' })
   const filepath = path.join(
     ytdl.currentDownloadPath,
@@ -159,7 +168,6 @@ const handleYtdlMedia = async (url: string) => {
     .where(eq(downloads.id, dbFile.id))
     .returning()
     .then(([newDbFile]) => newDbFile)
-  const controller = new AbortController()
 
   const stream = ytdl.ytdlp.exec(
     [url, '-f', 'best[ext=mp4]', '-o', filepath, '--no-mtime'],

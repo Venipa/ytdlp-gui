@@ -2,6 +2,10 @@ import { BrowserWindow, dialog } from 'electron'
 import { autoUpdater } from 'electron-updater'
 export function attachAutoUpdaterIPC(win: BrowserWindow) {
   autoUpdater.on('update-available', (info) => win.webContents.send('update-available', info))
+  autoUpdater.on('update-not-available', (info) => {
+    win.webContents.send('update-available', false)
+    win.webContents.send('update-checking', false)
+  })
   autoUpdater.on('download-progress', (info) =>
     win.webContents.send('update-download-progress', info)
   )

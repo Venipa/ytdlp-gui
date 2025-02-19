@@ -46,7 +46,7 @@ export default function StatusBar() {
         </div>
       </div>
       <div className="flex items-center gap-2 justify-end">
-        {updateChecking ? (
+        {updateChecking && !updateAvailable ? (
           <div className="animate-pulse">Checking for updates...</div>
         ) : updateDone ? (
           <ClickableText onClick={() => quitAndUpdate()}>
