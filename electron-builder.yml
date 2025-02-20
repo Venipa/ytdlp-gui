@@ -20,7 +20,7 @@ asarUnpack:
   - resources/**
 win:
   executableName: ytdlp-desktop
-  artifactName: ${name}-${version}-setup.${ext}
+  artifactName: ytdlp-desktop-${version}-setup.${ext}
   compression: maximum
   target:
     - target: nsis
@@ -37,8 +37,6 @@ nsis:
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
