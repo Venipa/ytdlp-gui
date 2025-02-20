@@ -33,9 +33,8 @@ import { createUrlOfPage, loadUrlOfWindow } from './trpc/dialog.utils'
 import { pushWindowState } from './trpc/window.api'
 import { checkBrokenLinks, ytdl } from './trpc/ytdlp.core'
 import { ytdlpEvents } from './trpc/ytdlp.ee'
-if (isDevelopmentOrDebug) Logger.enableProductionMode()
 const log = new Logger('App')
-const trayIcon = !platform.isWindows ? (platform.isMacOS ? trayIconAsset : iconWin) : iconWin
+const trayIcon = !platform.isWindows ? (platform.isMacOS ? trayIconAsset : iconWin) : icon
 
 /**
  * required for clipboard monitoring for instant download feature

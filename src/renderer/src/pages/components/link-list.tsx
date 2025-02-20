@@ -1,7 +1,6 @@
 import { Button } from '@renderer/components/ui/button'
 import ClickableText from '@renderer/components/ui/clickable-text'
 import { ProgressCircle } from '@renderer/components/ui/progress-circle'
-import { ScrollArea } from '@renderer/components/ui/scroll-area'
 import { Spinner } from '@renderer/components/ui/spinner'
 import SuspenseLoader from '@renderer/components/ui/suspense-loader'
 import { QTooltip, Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
@@ -20,6 +19,7 @@ import {
 } from 'lucide-react'
 import prettyBytes from 'pretty-bytes'
 import { useMemo, useState } from 'react'
+import { VList } from 'virtua'
 import { YTDLDownloadStatus, YTDLItem } from 'ytdlp-desktop/types'
 const log = createLogger('LinkListItem')
 export function LinkListItem({
@@ -203,12 +203,14 @@ export default function LinkList() {
       <div className="flex items-center gap-2 mx-2">
         <h1 className="text-xs text-muted-foreground">Download list</h1>
       </div>
-      <ScrollArea className="h-[300px] border border-muted rounded-lg relative">
+      <VList className="h-[300px] border border-muted rounded-lg relative flex flex-col py-2.5 px-2" style={{height: 300}}>
         {isFetching && <SuspenseLoader className="absolute bg-background inset-0" />}
-        <div className="flex flex-col gap-2 py-2.5 px-2 h-full">
-          {items?.map((d) => <LinkListItem key={d.id} {...(d as any)} />)}
-        </div>
-      </ScrollArea>
+        {items?.map((d) => (
+          <div className="h-20" key={d.id}>
+            <LinkListItem {...(d as any)} />
+          </div>
+        ))}
+      </VList>
     </div>
   )
 }
