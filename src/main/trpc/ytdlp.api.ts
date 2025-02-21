@@ -1,11 +1,11 @@
 import { db } from '@main/stores/queue-database'
+import { queries } from '@main/stores/queue-database.helpers'
 import { downloads } from '@main/stores/queue-database.schema'
 import { logger } from '@shared/logger'
 import { resulter } from '@shared/promises/helper'
 import { TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
-import { desc, eq } from 'drizzle-orm'
-import filenamify from 'filenamify'
+import { desc } from 'drizzle-orm'
 import { statSync } from 'fs'
 import { omit } from 'lodash'
 import path from 'path'
@@ -13,7 +13,7 @@ import type { VideoInfo } from 'yt-dlp-wrap/types'
 import { YTDLDownloadStatus, YTDLItem, YTDLStatus } from 'ytdlp-desktop/types'
 import { z } from 'zod'
 import { publicProcedure, router } from './trpc'
-import { ytdl } from './ytdlp.core'
+import { MAX_STREAM_CONCURRENT_FRAGMENTS, ytdl, YTDLP_CACHE_PATH } from './ytdlp.core'
 import { ytdlpEvents } from './ytdlp.ee'
 const log = logger.child('ytdlp.api')
 export const ytdlpRouter = router({
@@ -83,9 +83,9 @@ export const ytdlpRouter = router({
     const items = await db.select().from(downloads).all()
     return items.reduce(
       (acc, r) => {
-        acc.overallCount++
+        if (r.state === 'completed') acc.overallCount++
         const type = r.type?.toLowerCase()
-        if (type) acc.count[type]++
+        if (type && r.state === 'completed') acc.count[type]++
         if (r.state) acc.state[r.state.toLowerCase()]++
         if (r.filesize) {
           acc.overallUsage += r.filesize
@@ -128,42 +128,50 @@ const handleYtdlMedia = async (url: string) => {
 
   const controller = new AbortController()
   ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'progressing' })
-  let [dbFile] = await db
-    .insert(downloads)
-    .values({
-      metaId: '',
-      meta: {} as any,
-      filepath: '',
-      filesize: 0,
-      source: new URL(url).hostname,
-      state: 'fetching_meta',
-      title: url,
-      type: 'video',
-      url,
-      error: null,
-      retryCount: 0
-    })
-    .returning()
+  let [dbFile] = await queries.downloads.createDownload({
+    metaId: '',
+    meta: {} as any,
+    filepath: '',
+    filesize: 0,
+    source: new URL(url).hostname,
+    state: 'fetching_meta',
+    title: url,
+    type: null,
+    url,
+    error: null,
+    retryCount: 0
+  })
   ytdlpEvents.emit('list', [dbFile])
   const deleteEntry = () =>
-    db
-      .delete(downloads)
-      .where(eq(downloads.id, dbFile.id))
-      .then((s) => {
-        if (s.rowsAffected === 1) {
-          dbFile.state = 'deleted'
-          ytdlpEvents.emit('list', [dbFile])
-        }
-      })
+    queries.downloads.deleteDownload(dbFile.id).then((s) => {
+      if (s.rowsAffected === 1) {
+        dbFile.state = 'deleted'
+        ytdlpEvents.emit('list', [dbFile])
+
+        ytdlpEvents.emit('status', {
+          id: dbFile.id,
+          action: 'download',
+          data: null,
+          state: 'deleted'
+        })
+        ytdl
+      }
+    })
+  const updateEntry = () =>
+    queries.downloads.updateDownload(dbFile.id, dbFile).then(([s]) => {
+      ytdlpEvents.emit('list', [s])
+      dbFile = s
+      return s
+    })
   if (controller.signal.aborted) {
     await deleteEntry()
     throw new TRPCError({ code: 'CLIENT_CLOSED_REQUEST', message: 'Video fetch aborted' })
   }
   const { value: videoInfo, error: videoInfoError } = await resulter<VideoInfo>(
-    ytdl.ytdlp.getVideoInfo(url)
+    ytdl.ytdlp.getVideoInfo([url, '--restrict-filenames'])
   )
   if (videoInfoError || !videoInfo) {
-    if (videoInfoError) log.error("getVideoInfo", videoInfoError)
+    if (videoInfoError) log.error('getVideoInfo', videoInfoError)
     await deleteEntry()
     throw new TRPCError({
       code: 'NOT_FOUND',
@@ -171,24 +179,29 @@ const handleYtdlMedia = async (url: string) => {
     })
   }
   ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'done' })
-  const filepath = path.join(
-    ytdl.currentDownloadPath,
-    `${filenamify(videoInfo.title)}${videoInfo.id ? `_(${videoInfo.id})` : ''}.mp4`
-  )
+  const filepath = path.join(ytdl.currentDownloadPath, videoInfo.filename)
   dbFile.meta = omit(videoInfo, ['formats']) as any
   dbFile.metaId = videoInfo.id
   dbFile.filepath = filepath
   dbFile.title = videoInfo.title
   dbFile.state = 'downloading'
-  dbFile = await db
-    .update(downloads)
-    .set(omit(dbFile, 'id'))
-    .where(eq(downloads.id, dbFile.id))
-    .returning()
-    .then(([newDbFile]) => newDbFile)
+  dbFile.filesize = videoInfo.filesize_approx ?? videoInfo.filesize ?? 0
+  dbFile.type = videoInfo._type?.toLowerCase() ?? 'video'
+  await updateEntry()
 
   const stream = ytdl.ytdlp.exec(
-    [url, '-f', 'best[ext=mp4]', '-o', filepath, '--no-mtime'],
+    [
+      url,
+      '-f',
+      'best',
+      '-o',
+      filepath,
+      '--no-mtime',
+      '--concurrent-fragments',
+      String(MAX_STREAM_CONCURRENT_FRAGMENTS),
+      '--cache-dir',
+      YTDLP_CACHE_PATH
+    ],
     {},
     controller.signal
   )
@@ -197,21 +210,15 @@ const handleYtdlMedia = async (url: string) => {
     if (id && id === dbFile.id) {
       controller.abort('cancelled by user')
       dbFile.state = 'cancelled'
-      await db
-        .update(downloads)
-        .set(omit(dbFile, 'id'))
-        .where(eq(downloads.id, dbFile.id))
-        .returning()
-        .then(([newDbFile]) => {
-          ytdlpEvents.emit('list', [newDbFile])
-          ytdlpEvents.emit('status', {
-            id: newDbFile.id,
-            action: 'download',
-            data: videoInfo,
-            state: 'cancelled'
-          })
-          ytdlpEvents.emit('download', { id: newDbFile.id, percent: 100 })
-        })
+      await updateEntry()
+      ytdlpEvents.emit('list', [dbFile])
+      ytdlpEvents.emit('status', {
+        id: dbFile.id,
+        action: 'download',
+        data: videoInfo,
+        state: 'cancelled'
+      })
+      ytdlpEvents.emit('download', { id: dbFile.id, percent: 100 })
 
       ytdlpEvents.off('cancel', cancel)
     }
@@ -253,12 +260,7 @@ const handleYtdlMedia = async (url: string) => {
     dbFile.state = 'completed'
   }
   ytdlpEvents.emit('list', [dbFile])
-  return await db
-    .update(downloads)
-    .set(omit(dbFile, 'id'))
-    .where(eq(downloads.id, dbFile.id))
-    .returning()
-    .then(([newDbFile]) => newDbFile)
+  return await updateEntry()
 }
 ytdlpEvents.on('add', handleYtdlMedia)
 process.on('exit', () => {

@@ -10,11 +10,11 @@ import {
   DotIcon,
   LucideArrowDownToDot,
   LucideCheck,
+  LucideFileX,
   LucideFolderOpen,
   LucideRedo2,
   LucideSave,
   LucideSquare,
-  LucideTrash,
   LucideX
 } from 'lucide-react'
 import prettyBytes from 'pretty-bytes'
@@ -49,7 +49,10 @@ export function LinkListItem({
   const downloading = useMemo(() => state === 'downloading', [state, status])
   const processingMeta = useMemo(() => state === 'fetching_meta', [state, status])
   return (
-    <div className="h-16 rounded-md hover:bg-muted/60 grid grid-cols-[40px_1fr_minmax(100px,_auto)] gap-2 items-center relative cursor-default group/item flex-shrink-0 select-none">
+    <div
+      className="h-16 rounded-md hover:bg-muted/60 grid grid-cols-[40px_1fr_minmax(100px,_auto)] gap-2 items-center relative cursor-default group/item flex-shrink-0 select-none"
+      onDoubleClick={() => filepath && openPath({ path: filepath })}
+    >
       <div className="flex flex-col size-10 items-center justify-center">
         {error ? (
           <QTooltip content={'An error occurred while downloading.'}>
@@ -90,7 +93,7 @@ export function LinkListItem({
       <div className="grid grid-rows-[20px_12px_16px] items-center">
         <div className="text-sm truncate">{title}</div>
         <div className="flex gap-2.5 items-center text-xs text-muted-foreground">
-          {completed && (
+          {!error && filesize && (
             <>
               <span>Filesize: {filesize}</span>
               <DotIcon className="size-2 -mx-2" />
@@ -127,7 +130,11 @@ export function LinkListItem({
             variant={'ghost'}
             size={'icon'}
             className="px-2.5"
-            onClick={() => retryFromId(id)}
+            onClick={(ev) => {
+              ev.stopPropagation();
+              ev.preventDefault();
+              retryFromId(id)
+            }}
           >
             <LucideRedo2 className="stroke-[3px]" />
           </Button>
@@ -137,7 +144,11 @@ export function LinkListItem({
             variant={'ghost'}
             size={'icon'}
             className="px-2.5"
-            onClick={() => cancelFromId(id)}
+            onClick={(ev) => {
+              ev.stopPropagation();
+              ev.preventDefault();
+              cancelFromId(id)
+            }}
           >
             <LucideSquare className="fill-current stroke-none" />
           </Button>
@@ -147,7 +158,11 @@ export function LinkListItem({
             variant={'ghost'}
             size={'icon'}
             className="px-2.5"
-            onClick={() => openPath({ path: filepath, openParent: true })}
+            onClick={(ev) => {
+              ev.stopPropagation();
+              ev.preventDefault();
+              openPath({ path: filepath, openParent: true })
+            }}
           >
             <LucideFolderOpen className="fill-current stroke-none" />
           </Button>
@@ -156,9 +171,9 @@ export function LinkListItem({
           <Button
             variant={'ghost'}
             size={'icon'}
-            className="px-2.5 text-red-500 hover:text-red-400"
+            className="px-2.5 text-red-500 hover:text-red-400 opacity-0 group-hover/item:opacity-100"
           >
-            <LucideTrash className="fill-current stroke-none" />
+            <LucideFileX className="stroke-current" />
           </Button>
         )}
         {(error || cancelled) && (
@@ -203,10 +218,13 @@ export default function LinkList() {
       <div className="flex items-center gap-2 mx-2">
         <h1 className="text-xs text-muted-foreground">Download list</h1>
       </div>
-      <VList className="h-[300px] border border-muted rounded-lg relative flex flex-col py-2.5 px-2" style={{height: 300}}>
+      <VList
+        className="h-[300px] border border-muted rounded-lg relative flex flex-col py-2.5 px-2"
+        style={{ height: 300 }}
+      >
         {isFetching && <SuspenseLoader className="absolute bg-background inset-0" />}
         {items?.map((d) => (
-          <div className="h-20" key={d.id}>
+          <div className="h-[70px]" key={d.id}>
             <LinkListItem {...(d as any)} />
           </div>
         ))}

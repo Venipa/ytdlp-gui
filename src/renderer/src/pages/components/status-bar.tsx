@@ -1,4 +1,5 @@
 import ClickableText from '@renderer/components/ui/clickable-text'
+import { Spinner } from '@renderer/components/ui/spinner'
 import { useIPC } from '@renderer/hooks/use-ipc'
 import { trpc } from '@renderer/lib/trpc-link'
 import { DotIcon } from 'lucide-react'
@@ -23,6 +24,10 @@ export default function StatusBar() {
   const [updateProgress] = useIPC('update-download-progress')
   const [updateDone] = useIPC('update-download-done')
   const latestYtdlpStatus = useMemo(() => status[0], [status])
+  const noStateOrInvalidStatus = useMemo(
+    () => !latestYtdlpStatus || ['done', 'deleted'].includes(latestYtdlpStatus.state),
+    [latestYtdlpStatus]
+  )
   return (
     <div className="grid items-center grid-cols-[200px_1fr_200px] h-10 flex-shrink-0 overflow-hidden border-t border-t-border flex-auto text-xs text-muted-foreground px-4 select-none">
       <div className="flex gap-1 items-center">
@@ -56,8 +61,13 @@ export default function StatusBar() {
           <div>Downloading... {String(updateProgress.percent).padStart(3, ' ')}%</div>
         ) : updateAvailable ? (
           <div>Update Available, preparing...</div>
-        ) : !latestYtdlpStatus ? (
+        ) : noStateOrInvalidStatus ? (
           <div>YTDLP: {settings.ytdlp?.version ?? '...'}</div>
+        ) : latestYtdlpStatus.state === 'progressing' ? (
+          <div className="flex items-center gap-1">
+            <span>YTDLP:</span>
+            <Spinner size={'xs'} />
+          </div>
         ) : (
           <div>YTDLP: {latestYtdlpStatus.state}</div>
         )}

@@ -95,6 +95,7 @@ const spinnerVariants = cva('spinner relative block box-border p-0 m-0', {
   variants: {
     size: {
       default: 'size-5',
+      xs: 'size-3',
       sm: 'size-4',
       lg: 'size-6',
       xl: 'size-10'
