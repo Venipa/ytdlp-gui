@@ -197,6 +197,7 @@ export default class YTDLWrapper {
                 return await YTDLWrapper.processMessageToFile(message, filePath);
             }
         }
+        throw new Error("Invalid url")
     }
 
     static getGithubReleases(page = 1, perPage = 1): Promise<any> {
