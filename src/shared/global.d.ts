@@ -27,6 +27,11 @@ declare module 'ytdlp-desktop/types' {
     retryCount: number
     error?: any
   }
+  export interface YTDLCookie {
+    domain: string
+    cookie: string
+    type: string
+  }
 }
 
 declare module 'yt-dlp-wrap/types' {
@@ -198,7 +203,6 @@ declare module 'yt-dlp-wrap/types' {
     _version: Version
   }
 
-
   export enum VideoAcodec {
     Mp4A402 = 'mp4a.40.2',
     None = 'none',
@@ -286,8 +290,6 @@ declare module 'yt-dlp-wrap/types' {
     url: string
     duration: number
   }
-
-
 
   export enum VideoLanguage {
     En = 'en'

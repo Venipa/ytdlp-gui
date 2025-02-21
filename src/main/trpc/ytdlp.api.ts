@@ -1,4 +1,5 @@
 import { platform } from '@electron-toolkit/utils'
+import { appStore } from '@main/stores/app.store'
 import { db } from '@main/stores/queue-database'
 import { queries } from '@main/stores/queue-database.helpers'
 import { downloads } from '@main/stores/queue-database.schema'
@@ -8,7 +9,7 @@ import { TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import { desc } from 'drizzle-orm'
 import { statSync } from 'fs'
-import { omit } from 'lodash'
+import { omit, uniq } from 'lodash'
 import path from 'path'
 import type { VideoInfo } from 'yt-dlp-wrap/types'
 import { YTDLDownloadStatus, YTDLItem, YTDLStatus } from 'ytdlp-desktop/types'
@@ -169,7 +170,10 @@ const handleYtdlMedia = async (url: string) => {
     throw new TRPCError({ code: 'CLIENT_CLOSED_REQUEST', message: 'Video fetch aborted' })
   }
   const { value: videoInfo, error: videoInfoError } = await resulter<VideoInfo>(
-    ytdl.ytdlp.getVideoInfo([url, platform.isWindows ? '--windows-filenames' : '--restrict-filenames'])
+    ytdl.ytdlp.getVideoInfo([
+      url,
+      platform.isWindows ? '--windows-filenames' : '--restrict-filenames'
+    ])
   )
   if (videoInfoError || !videoInfo) {
     if (videoInfoError) log.error('getVideoInfo', videoInfoError)
@@ -179,6 +183,7 @@ const handleYtdlMedia = async (url: string) => {
       message: 'URL not supported or video not found'
     })
   }
+  const settings = appStore.store.ytdlp
   ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'done' })
   const filepath = path.join(ytdl.currentDownloadPath, videoInfo.filename)
   dbFile.meta = omit(videoInfo, ['formats']) as any
@@ -189,23 +194,20 @@ const handleYtdlMedia = async (url: string) => {
   dbFile.filesize = videoInfo.filesize_approx ?? videoInfo.filesize ?? 0
   dbFile.type = videoInfo._type?.toLowerCase() ?? 'video'
   await updateEntry()
-
-  const stream = ytdl.ytdlp.exec(
-    [
-      url,
-      '-f',
-      'best',
-      '-o',
-      filepath,
-      '--no-mtime',
-      '--concurrent-fragments',
-      String(MAX_STREAM_CONCURRENT_FRAGMENTS),
-      '--cache-dir',
-      YTDLP_CACHE_PATH
-    ],
-    {},
-    controller.signal
-  )
+  const execArgs = [
+    url,
+    '-f',
+    'best',
+    '-o',
+    filepath,
+    '--concurrent-fragments',
+    String(MAX_STREAM_CONCURRENT_FRAGMENTS),
+    '--cache-dir',
+    YTDLP_CACHE_PATH
+  ]
+  if (settings.flags?.nomtime) execArgs.push('--no-mtime')
+  if (settings.flags?.custom) execArgs.push(...settings.flags.custom.split(' '))
+  const stream = ytdl.ytdlp.exec(uniq(execArgs), {}, controller.signal)
 
   async function cancel(id: any) {
     if (id && id === dbFile.id) {

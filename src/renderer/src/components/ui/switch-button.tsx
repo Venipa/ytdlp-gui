@@ -4,7 +4,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import * as React from 'react'
 
 const checkboxVariants = cva(
-  'group flex items-start space-x-3 rounded-lg p-4 transition-colors cursor-pointer select-none',
+  'group flex items-start gap-3 rounded-lg p-4 transition-colors cursor-pointer select-none',
   {
     variants: {
       variant: {

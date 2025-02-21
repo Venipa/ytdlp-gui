@@ -48,6 +48,7 @@ export default function ClickableText({
         }
         onClick?.(ev)
       }}
+      draggable={false}
       {...props}
     >
       {children}

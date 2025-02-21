@@ -9,7 +9,7 @@ export interface AppLicense {
 const defaultDownloadsPath = app.getPath('downloads')
 const store = createYmlStore<AppStore>('app-settings', {
   defaults: {
-    ytdlp: { checkForUpdate: true } as any,
+    ytdlp: { checkForUpdate: true, flags: { nomtime: true } } as AppStore['ytdlp'],
     download: {
       paths: [defaultDownloadsPath],
       selected: defaultDownloadsPath

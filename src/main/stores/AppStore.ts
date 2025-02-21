@@ -3,6 +3,10 @@ export interface AppStore {
     path: string
     version: string
     checkForUpdate: boolean
+    flags: {
+      nomtime: boolean
+      custom: string
+    }
   }
   download: { paths: string[]; selected: string }
   features: {
