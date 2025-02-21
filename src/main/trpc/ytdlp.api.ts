@@ -1,3 +1,4 @@
+import { platform } from '@electron-toolkit/utils'
 import { db } from '@main/stores/queue-database'
 import { queries } from '@main/stores/queue-database.helpers'
 import { downloads } from '@main/stores/queue-database.schema'
@@ -168,7 +169,7 @@ const handleYtdlMedia = async (url: string) => {
     throw new TRPCError({ code: 'CLIENT_CLOSED_REQUEST', message: 'Video fetch aborted' })
   }
   const { value: videoInfo, error: videoInfoError } = await resulter<VideoInfo>(
-    ytdl.ytdlp.getVideoInfo([url, '--restrict-filenames'])
+    ytdl.ytdlp.getVideoInfo([url, platform.isWindows ? '--windows-filenames' : '--restrict-filenames'])
   )
   if (videoInfoError || !videoInfo) {
     if (videoInfoError) log.error('getVideoInfo', videoInfoError)
