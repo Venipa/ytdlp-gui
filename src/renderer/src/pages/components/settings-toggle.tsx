@@ -3,7 +3,7 @@ import { get } from 'lodash'
 import { PropsWithChildren, useMemo } from 'react'
 import { useApp } from './app-context'
 
-type SettingsToggleProps = PropsWithChildren<{ name: string; onChange?: (value: boolean) => void }>
+type SettingsToggleProps = PropsWithChildren<{ name: string; onChange?: (value: boolean) => void, [key: string]: any }>
 export default function SettingsToggle({ name: key, children, ...props }: SettingsToggleProps) {
   const { settings, setSetting } = useApp()
   const settingsValue = useMemo(() => get(settings, key), [key, settings])
@@ -18,6 +18,7 @@ export default function SettingsToggle({ name: key, children, ...props }: Settin
           return newValue
         })
       }
+      {...props}
     >
       {children}
     </SwitchButton>

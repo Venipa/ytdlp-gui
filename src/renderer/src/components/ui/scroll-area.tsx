@@ -30,7 +30,7 @@ const ScrollArea = React.forwardRef<
         style={{ opacity: showScrollBlur }}
       ></motion.div>
       <ScrollAreaPrimitive.Viewport
-        className="h-full w-full rounded-[inherit] pb-12"
+        className="h-full w-full rounded-[inherit] pb-6"
         ref={scrollRef as any}
       >
         {children}

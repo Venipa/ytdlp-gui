@@ -24,6 +24,7 @@ import trayIconAsset from '~/resources/menuIcon_16.png?asset'
 import { clamp } from 'lodash'
 // @ts-ignore
 import builderConfig from '../../electron-builder.yml'
+import { executableIsAvailable } from './lib/bin.utils'
 import { ClipboardMonitor } from './lib/clipboardMonitor'
 import { attachAutoUpdaterIPC } from './license'
 import { appStore } from './stores/app.store'
@@ -160,6 +161,12 @@ app.whenReady().then(async () => {
     appStore.onDidChange('features', (features) => {
       if (features?.clipboardMonitor) clipboardWatcher.start()
       else clipboardWatcher.stop()
+    })
+    appStore.onDidChange('ytdlp.useGlobal', (useGlobal) => {
+      if (useGlobal) {
+        const newPath = executableIsAvailable('yt-dlp')
+        ytdl.ytdlp.setBinaryPath(newPath ?? ytdl.currentDownloadPath)
+      } else ytdl.ytdlp.setBinaryPath(ytdl.currentDownloadPath)
     })
     if (appStore.store.features?.clipboardMonitor) clipboardWatcher.start()
   })

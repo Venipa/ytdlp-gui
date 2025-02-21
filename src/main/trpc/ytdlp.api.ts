@@ -127,7 +127,7 @@ export const ytdlpRouter = router({
 } as const)
 const handleYtdlMedia = async (url: string) => {
   if (typeof url !== 'string' || !/^https/gi.test(url)) return
-
+  if (!ytdl.currentDownloadPath) throw new TRPCError({code: "NOT_FOUND", message: "YTDLP has not been found, make sure the app is running with sufficient permission."})
   const controller = new AbortController()
   ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'progressing' })
   let [dbFile] = await queries.downloads.createDownload({

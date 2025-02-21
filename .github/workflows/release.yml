@@ -48,6 +48,13 @@ jobs:
         run: |
           # yarn config set ignore-engines true
           pnpm i --frozen-lockfile
+
+      - if: matrix.os == 'macos-13'
+        name: Upload release source maps to sentry
+        run: |
+          # rebuild libsql deps for macos
+          pnpm rebuild
+
       - name: Build Electron release
         run: |
           pnpm run release

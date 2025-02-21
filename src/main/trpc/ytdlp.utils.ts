@@ -1,4 +1,6 @@
 import { platform as appPlatform } from '@electron-toolkit/utils'
+import { executableIsAvailable } from '@main/lib/bin.utils'
+import YTDLWrapper from '@main/lib/ytdlp-wrapper'
 import { appStore } from '@main/stores/app.store'
 import { Endpoints } from '@octokit/types'
 import { Logger } from '@shared/logger'
@@ -6,7 +8,6 @@ import { nt as calvNewerThan } from 'calver'
 import { app } from 'electron'
 import { platform } from 'os'
 import path from 'path'
-import YTDLWrapper from 'yt-dlp-wrap'
 const YTDLP_PLATFORM = platform()
 const ytdlpPath = app.getPath('userData')
 const log = new Logger('YTDLP')
@@ -22,21 +23,26 @@ enum YTDLP_STATE {
 }
 export class YTDLP {
   private _state: YTDLP_STATE = YTDLP_STATE.NONE
-  private _ytd: YTDLWrapper = new YTDLWrapper();
+  private _ytd: YTDLWrapper = new YTDLWrapper()
   get state() {
     return this._state
   }
   constructor() {}
   async initialize() {
-    log.info("initializing...")
+    log.info('initializing...')
     const ytdVersion = await this._ytd.getVersion()
     log.debug({ ytdVersion })
-    await this.checkUpdates()
+    if (appPlatform.isWindows) appStore.store.ytdlp.useGlobal = false
+    const ytdlpPath = appStore.store.ytdlp.useGlobal && executableIsAvailable('yt-dlp')
+    if (!ytdlpPath) await this.checkUpdates()
+    else {
+      this._ytd.setBinaryPath(ytdlpPath)
+    }
   }
   async checkUpdates(forceLatestUpdate?: boolean) {
     this._state = YTDLP_STATE.UPDATE_CHECKING
     const currentYtdlp = appStore.get('ytdlp')
-    log.info("checking for ytdlp updates...")
+    log.info('checking for ytdlp updates...')
     const latestRelease =
       ((forceLatestUpdate || currentYtdlp.checkForUpdate) &&
         (await YTDLWrapper.getGithubReleases(1, 1).then(([grelease]: [GithubRelease]) => {
@@ -69,19 +75,14 @@ export class YTDLP {
           log.error('failed to download update...\n', err)
         })
     }
-    if (appStore.store.ytdlp?.path)
-      this.ytdlp.setBinaryPath(appStore.store.ytdlp.path)
+    if (appStore.store.ytdlp?.path) this.ytdlp.setBinaryPath(appStore.store.ytdlp.path)
     this._state = YTDLP_STATE.READY
   }
   private async downloadUpdate(
     release: GithubRelease & { version: string }
   ): Promise<{ version: string; path: string }> {
     const newYtdlPath = path.join(ytdlpPath, appPlatform.isWindows ? 'ytdlp.exe' : 'ytdlp')
-    await YTDLWrapper.downloadFromGithub(
-      path.join(ytdlpPath, appPlatform.isWindows ? 'ytdlp.exe' : 'ytdlp'),
-      release.version,
-      YTDLP_PLATFORM
-    )
+    await YTDLWrapper.downloadFromGithub(newYtdlPath, release.version, YTDLP_PLATFORM)
     return { version: release.version, path: newYtdlPath }
   }
   get ytdlp() {

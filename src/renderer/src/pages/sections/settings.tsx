@@ -53,9 +53,22 @@ export default function SettingsTab() {
               </SettingsToggle>
             </div>
           </GroupSection>
-          <GroupSection title="Advanced Flags">
+          <GroupSection title="YTDLP Settings">
             <div className="flex flex-col gap-6">
               <div className="flex flex-col gap-2">
+                {(
+                  <SettingsToggle name="ytdlp.useGlobal" disabled={window.api.platform.isWindows}>
+                    <div className="flex flex-col gap-2 text-pretty">
+                      <span className="font-bold">Use machine installed yt-dlp</span>
+                      <span className="text-muted-foreground leading-4 align-middle">
+                        This only works if you've already installed yt-dlp globally.
+                      </span>
+                      <span className="text-yellow-400 text-xs">
+                        (only supported for: MacOS, Linux)
+                      </span>
+                    </div>
+                  </SettingsToggle>
+                )}
                 <SettingsToggle name="ytdlp.flags.mtime">
                   <div className="flex flex-col gap-2 text-pretty">
                     <span className="font-bold">--no-mtime</span>

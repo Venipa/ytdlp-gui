@@ -116,7 +116,6 @@
     "vaul": "^1.1.0",
     "virtua": "^0.40.0",
     "yaml": "^2.6.0",
-    "yt-dlp-wrap": "^2.3.12",
     "zod": "^3.23.8"
   },
   "devDependencies": {

@@ -26,6 +26,7 @@ interface CheckboxProps
   checked?: boolean
   defaultChecked?: boolean
   onCheckedChange?: (checked: boolean) => void
+  disabled?: boolean
 }
 
 const Checkbox = React.forwardRef<HTMLDivElement, CheckboxProps>(
@@ -52,7 +53,10 @@ const Checkbox = React.forwardRef<HTMLDivElement, CheckboxProps>(
       <div
         ref={ref}
         onClick={handleClick}
-        className={cn(checkboxVariants({ variant, className }))}
+        className={cn(
+          checkboxVariants({ variant, className }),
+          props.disabled && 'pointer-events-none opacity-60'
+        )}
         {...props}
       >
         <div className="space-y-1 leading-none flex-auto">
@@ -71,6 +75,7 @@ const Checkbox = React.forwardRef<HTMLDivElement, CheckboxProps>(
             'transition-colors pointer-events-none flex-shrink-0',
             variant === 'primary' && 'text-primary border-primary'
           )}
+          disabled={props.disabled}
         />
       </div>
     )
