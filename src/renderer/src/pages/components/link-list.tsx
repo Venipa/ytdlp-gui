@@ -1,4 +1,5 @@
 import { Button } from '@renderer/components/ui/button'
+import ButtonLoading from '@renderer/components/ui/ButtonLoading'
 import ClickableText from '@renderer/components/ui/clickable-text'
 import { ProgressCircle } from '@renderer/components/ui/progress-circle'
 import { Sheet, SheetContent, SheetTrigger } from '@renderer/components/ui/sheet'
@@ -38,6 +39,7 @@ export function LinkListItem({
   const { mutateAsync: openPath } = trpc.internals.openPath.useMutation()
   const { mutateAsync: retryFromId } = trpc.ytdl.retry.useMutation()
   const { mutateAsync: cancelFromId } = trpc.ytdl.cancel.useMutation()
+  const { mutateAsync: deleteFromId, isLoading: deleteLoading } = trpc.ytdl.delete.useMutation()
   const filesize = useMemo(() => prettyBytes(fsize), [fsize])
   trpc.ytdl.onIdDownload.useSubscription(id, {
     onData(data) {
@@ -162,22 +164,28 @@ export function LinkListItem({
           </Button>
         )}
         {completed && (
-          <Button
+          <ButtonLoading
             variant={'ghost'}
             size={'sm'}
             className="px-2 text-red-500 hover:text-red-400 opacity-0 group-hover/item:opacity-100"
+            onClick={() => deleteFromId(id)}
+            loading={deleteLoading}
+            fixWidth
           >
             <LucideFileX className="stroke-current" />
-          </Button>
+          </ButtonLoading>
         )}
         {(error || cancelled) && (
-          <Button
+          <ButtonLoading
             variant={'ghost'}
             size={'sm'}
             className="px-2 text-red-500 hover:text-red-400 opacity-0 group-hover/item:opacity-100"
+            onClick={() => deleteFromId(id)}
+            loading={deleteLoading}
+            fixWidth
           >
             <LucideX className="stroke-current" />
-          </Button>
+          </ButtonLoading>
         )}
       </div>
     </div>

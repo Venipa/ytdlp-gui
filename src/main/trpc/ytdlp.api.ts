@@ -55,6 +55,15 @@ export const ytdlpRouter = router({
     if (!dbFile) throw new TRPCError({ code: 'NOT_FOUND', message: 'id not found in database' })
     ytdlpEvents.emit('add', dbFile.url)
   }),
+  delete: publicProcedure.input(z.number()).mutation(async ({ input: id }) => {
+    const result = await queries.downloads.deleteDownload(id)
+    if (!result.rowsAffected)
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'id not found in database' })
+    ytdlpEvents.emit('list', [{
+      id: id,
+      state: 'deleted'
+    }])
+  }),
   onDownload: publicProcedure.subscription(() => {
     return observable<YTDLDownloadStatus>((emit) => {
       function onStatusChange(data: any) {
@@ -127,7 +136,11 @@ export const ytdlpRouter = router({
 } as const)
 const handleYtdlMedia = async (url: string) => {
   if (typeof url !== 'string' || !/^https/gi.test(url)) return
-  if (!ytdl.currentDownloadPath) throw new TRPCError({code: "NOT_FOUND", message: "YTDLP has not been found, make sure the app is running with sufficient permission."})
+  if (!ytdl.currentDownloadPath)
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'YTDLP has not been found, make sure the app is running with sufficient permission.'
+    })
   const controller = new AbortController()
   ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'progressing' })
   let [dbFile] = await queries.downloads.createDownload({
@@ -156,7 +169,6 @@ const handleYtdlMedia = async (url: string) => {
           data: null,
           state: 'deleted'
         })
-        ytdl
       }
     })
   const updateEntry = () =>
