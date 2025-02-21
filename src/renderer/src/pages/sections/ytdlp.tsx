@@ -1,7 +1,6 @@
 import { LucideHardDriveDownload } from 'lucide-react'
 import AddLink from '../components/add-link'
 import LinkList from '../components/link-list'
-import SelectDownloadBox from '../components/select-download-path'
 
 export const meta = {
   title: 'Downloads',
@@ -22,10 +21,6 @@ export default function YTDLPTab() {
         </div>
           <div className="flex flex-col gap-6">
             <LinkList />
-            <div className="grid grid-cols-[1fr_240px] justify-end place-items-end justify-items-end">
-              <div></div>
-              <SelectDownloadBox></SelectDownloadBox>
-            </div>
             <AddLink />
           </div>
       </div>

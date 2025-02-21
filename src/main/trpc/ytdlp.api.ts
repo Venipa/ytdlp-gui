@@ -4,7 +4,7 @@ import { db } from '@main/stores/queue-database'
 import { queries } from '@main/stores/queue-database.helpers'
 import { downloads } from '@main/stores/queue-database.schema'
 import { logger } from '@shared/logger'
-import { resulter } from '@shared/promises/helper'
+import { queuePromiseStack, resulter } from '@shared/promises/helper'
 import { TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import { desc } from 'drizzle-orm'
@@ -24,11 +24,14 @@ export const ytdlpRouter = router({
   downloadMedia: publicProcedure
     .input(
       z.object({
-        url: z.string().url()
+        url: z.string().url().array()
       })
     )
     .mutation(async ({ input: { url }, ctx }) => {
-      return await handleYtdlMedia(url)
+      return await queuePromiseStack(
+        url.map((u) => () => handleYtdlMedia(u)),
+        MAX_STREAM_CONCURRENT_FRAGMENTS
+      )
     }),
   cancel: publicProcedure
     .input(z.union([z.string(), z.number()]))
@@ -59,10 +62,12 @@ export const ytdlpRouter = router({
     const result = await queries.downloads.deleteDownload(id)
     if (!result.rowsAffected)
       throw new TRPCError({ code: 'NOT_FOUND', message: 'id not found in database' })
-    ytdlpEvents.emit('list', [{
-      id: id,
-      state: 'deleted'
-    }])
+    ytdlpEvents.emit('list', [
+      {
+        id: id,
+        state: 'deleted'
+      }
+    ])
   }),
   onDownload: publicProcedure.subscription(() => {
     return observable<YTDLDownloadStatus>((emit) => {
@@ -87,6 +92,72 @@ export const ytdlpRouter = router({
 
       return () => {
         ytdlpEvents.off('download', onStatusChange)
+      }
+    })
+  }),
+  onAutoAdd: publicProcedure.subscription(() => {
+    return observable<string>((emit) => {
+      async function onAutoAddHandle(url: string) {
+        if (
+          !url ||
+          (
+            await queries.downloads.findDownloadByUrl(url, [
+              'completed',
+              'fetching_meta',
+              'downloading'
+            ])
+          ).length
+        ) {
+          ytdlpEvents.emit('toast', { message: 'File already downloaded.', type: 'error' })
+          return
+        }
+        ytdlpEvents.emit('autoAddCapture', url)
+        const { value: videoInfo, error: videoInfoError } = await resulter<VideoInfo>(
+          ytdl.ytdlp.getVideoInfo([
+            url,
+            platform.isWindows ? '--windows-filenames' : '--restrict-filenames'
+          ])
+        )
+        if (videoInfoError || !videoInfo?.url) return
+        emit.next(url)
+      }
+
+      ytdlpEvents.on('autoAdd', onAutoAddHandle)
+
+      return () => {
+        ytdlpEvents.off('autoAdd', onAutoAddHandle)
+      }
+    })
+  }),
+  onAutoAddCapture: publicProcedure.subscription(() => {
+    return observable<{ url: string }>((emit) => {
+      async function onAutoAddCaptureHandle(url: string) {
+        emit.next({ url: new URL(url).toString() })
+      }
+
+      ytdlpEvents.on('autoAddCapture', onAutoAddCaptureHandle)
+
+      return () => {
+        ytdlpEvents.off('autoAddCapture', onAutoAddCaptureHandle)
+      }
+    })
+  }),
+  onToast: publicProcedure.subscription(() => {
+    return observable<string[]>((emit) => {
+      async function onToastRelay(
+        data: string | { message: string; type?: string; description?: string }
+      ) {
+        emit.next(
+          typeof data === 'string'
+            ? [data]
+            : ([data.message, data.description, data.type] as string[])
+        )
+      }
+
+      ytdlpEvents.on('toast', onToastRelay)
+
+      return () => {
+        ytdlpEvents.off('toast', onToastRelay)
       }
     })
   }),

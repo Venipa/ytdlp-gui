@@ -70,7 +70,7 @@ async function createWindow() {
     loadUrlOptions: mbIndex.options as any,
     browserWindow: {
       width: 800,
-      height: 600,
+      height: 768,
       minHeight: 600,
       minWidth: 800,
       maxWidth: clamp(sizings.bounds.width, 800, clamp(1280, 800, sizings.bounds.width)),
@@ -150,12 +150,17 @@ app.whenReady().then(async () => {
   await checkBrokenLinks()
   ytdl.initialize() // init asynchronously
 
-  createWindow().finally(() => {
+  createWindow().then((w) => {
+    const isWindowFocused = () => w.window!.isFocused()
     const clipboardWatcher = new ClipboardMonitor({
       distinct: true,
       onHttpsText(value) {
         log.debug('found https link in clipboard', { value })
-        ytdlpEvents.emit('add', value)
+        if (isWindowFocused()) return
+        if (appStore.store.features.clipboardMonitor) {
+          if (appStore.store.features.clipboardMonitorAutoAdd) ytdlpEvents.emit('add', value)
+          else ytdlpEvents.emit('autoAdd', value)
+        }
       }
     })
     appStore.onDidChange('features', (features) => {

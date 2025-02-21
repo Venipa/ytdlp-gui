@@ -23,14 +23,14 @@ export default function AppProviders({ children }: PropsWithChildren) {
         <Suspense fallback={<SuspenseLoader />}>
           <trpc.Provider client={trpcClient} queryClient={queryClient as any}>
             <QueryClientProvider client={queryClient}>
-              <AppContextProvider value={{ selected: null } as any}>
-                <YTDLContextProvider value={{} as any}>
-                  <JotaiProvider>
+              <JotaiProvider>
+                <AppContextProvider value={{ selected: null } as any}>
+                  <YTDLContextProvider value={{} as any}>
                     {children}
                     <YTLDPObserver />
-                  </JotaiProvider>
-                </YTDLContextProvider>
-              </AppContextProvider>
+                  </YTDLContextProvider>
+                </AppContextProvider>
+              </JotaiProvider>
             </QueryClientProvider>
           </trpc.Provider>
         </Suspense>

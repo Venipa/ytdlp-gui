@@ -5,7 +5,7 @@ import { ProgressCircle } from '@renderer/components/ui/progress-circle'
 import { Sheet, SheetContent, SheetTrigger } from '@renderer/components/ui/sheet'
 import { Spinner } from '@renderer/components/ui/spinner'
 import SuspenseLoader from '@renderer/components/ui/suspense-loader'
-import { QTooltip, Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
+import { QTooltip } from '@renderer/components/ui/tooltip'
 import { trpc } from '@renderer/lib/trpc-link'
 import { createLogger, logger } from '@shared/logger'
 import {
@@ -68,8 +68,7 @@ export function LinkListItem({
             <LucideCheck className="stroke-[4px]" />
           </div>
         ) : downloading && status ? (
-          <Tooltip delayDuration={500}>
-            <TooltipTrigger className="cursor-default">
+          <QTooltip className='cursor-default' content={"Download Progress"} side='right'>
               <div className="flex flex-col items-center justify-center size-10 relative">
                 <ProgressCircle
                   min={0}
@@ -82,9 +81,7 @@ export function LinkListItem({
                 />
                 <LucideArrowDownToDot className="absolute size-3.5 text-secondary-foreground animate-pulse" />
               </div>
-            </TooltipTrigger>
-            <TooltipContent side="right">Download Progress</TooltipContent>
-          </Tooltip>
+          </QTooltip>
         ) : (
           <Spinner />
         )}
