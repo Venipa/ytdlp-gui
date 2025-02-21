@@ -24,7 +24,7 @@ export default function AboutTab() {
     []
   )
   return (
-    <div className="p-2 flex flex-col space-y-4">
+    <div className="p-2 pt-16 flex flex-col space-y-4">
       <div className="flex items-center space-x-6 group">
         <QTooltip content="Open website" asChild>
           <a

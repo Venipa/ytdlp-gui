@@ -3,8 +3,8 @@
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { cn, sn } from '@/lib/utils'
-import { motion } from 'framer-motion'
 import { ChevronDown } from 'lucide-react'
+import { motion } from 'motion/react'
 import React, { createContext, HTMLProps, useContext, useEffect, useRef, useState } from 'react'
 
 type Orientation = 'horizontal' | 'vertical'
@@ -85,7 +85,7 @@ function TabNavbar({
     <TabContext.Provider value={contextValue}>
       <nav
         className={cn(
-          `relative flex select-none ${isMobile ? 'items-stretch' : isVertical ? 'flex-col items-stretch pb-10' : 'items-center'} border-border ${isMobile && !isVertical ? '' : isVertical ? 'border-r h-full pr-2 mr-2' : 'border-b'}`,
+          `relative flex select-none ${isMobile ? 'items-stretch' : isVertical ? 'flex-col items-stretch pb-10' : 'items-center'} border-border ${isMobile && !isVertical ? '' : isVertical ? 'border-r h-full pr-2' : 'border-b'}`,
           className
         )}
       >
@@ -225,3 +225,4 @@ function ActiveTabIndicator() {
 
 // Export individual components for flexibility
 export { Tab, TabNavbar }
+

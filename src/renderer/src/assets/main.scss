@@ -98,22 +98,41 @@
   .divider {
     @apply h-4 w-px bg-muted;
   }
+
   .app-background {
     @apply dark:bg-black bg-white;
   }
+
   .drag {
     @apply select-none;
     -webkit-app-region: drag;
   }
 }
 
-input, button, textarea, svg, a, select, div, span, kbd {
+@layer utilities {
+
+  .mask-to-t {
+    mask-image: linear-gradient(to top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 90%)
+  }
+}
+
+input,
+button,
+textarea,
+svg,
+a,
+select,
+div,
+span,
+kbd {
   @apply antialiased;
 
-  &:focus, &:focus-visible {
+  &:focus,
+  &:focus-visible {
     outline: none;
   }
 }
+
 body[data-scroll-locked="1"] #root {
   @apply overflow-hidden;
 }

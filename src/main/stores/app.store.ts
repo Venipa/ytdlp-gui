@@ -15,7 +15,8 @@ const store = createYmlStore<AppStore>('app-settings', {
       selected: defaultDownloadsPath
     },
     features: {
-      clipboardMonitor: true
+      clipboardMonitor: true,
+      clipboardMonitorAutoAdd: true
     },
     beta: false
   }

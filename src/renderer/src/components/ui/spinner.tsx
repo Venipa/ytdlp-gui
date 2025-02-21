@@ -1,6 +1,6 @@
 import { cn } from '@renderer/lib/utils'
 import { cva, VariantProps } from 'class-variance-authority'
-import { HTMLMotionProps } from 'framer-motion'
+import { HTMLMotionProps } from "motion/react"
 import React from 'react'
 import { Appear } from './routes/animated-content'
 
@@ -121,3 +121,4 @@ const Spinner = React.forwardRef<HTMLDivElement, SpinnerProps>(
 
 Spinner.displayName = 'Spinner'
 export { Spinner }
+

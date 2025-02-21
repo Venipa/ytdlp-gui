@@ -10,8 +10,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { AnimatePresence, motion } from "framer-motion"
 import { ChevronDown, X } from "lucide-react"
+import { AnimatePresence, motion } from "motion/react"
 import { createContext, useContext, useEffect } from "react"
 import { useForm, useFormContext } from "react-hook-form"
 import * as z from "zod"

@@ -11,7 +11,7 @@ import { ThemeToggle } from '../app/theme-toggle'
 import { Separator } from './separator'
 import { Spinner } from './spinner'
 import { QTooltip, TooltipProvider } from './tooltip'
-const quitPaths = ["/license"]
+const quitPaths: string[] = []
 export default function AppNavBar({
   className,
   ...props

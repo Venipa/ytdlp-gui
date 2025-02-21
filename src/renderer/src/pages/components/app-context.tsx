@@ -1,6 +1,8 @@
 import { AppStore } from '@main/stores/AppStore'
 import { trpc } from '@renderer/lib/trpc-link'
 import { Context, createContext, Provider, useContext, useMemo } from 'react'
+import { toast } from 'sonner'
+import { useDebounceCallback } from 'usehooks-ts'
 type AppContext = {
   settings: AppStore & Record<string, any>
   setSetting<T = any>(key: string, value: any): Promise<T>
@@ -15,17 +17,23 @@ const AppContextProvider: Provider<AppContext> = (({ value, ...props }) => {
   const [settings] = trpc.settings.index.useSuspenseQuery(undefined)
   trpc.settings.onChange.useSubscription(undefined, {
     onData(data) {
-      console.log("settings", {newData: data})
+      console.log('settings', { newData: data })
       utils.settings.index.setData(undefined, data)
+      utils.settings.index.invalidate()
     }
   })
   const getSetting = useMemo(
     () => (key?: string) => (!key ? utils.internals.getAll.fetch() : utils.settings.key.fetch(key)),
     [utils.internals.get]
   )
+  const onUpdateCallback = useDebounceCallback((res) => {
+    toast.success('Settings have been saved.')
+    return res
+  }, 1000)
   const { mutateAsync: _setSetting } = trpc.settings.update.useMutation()
   const setSetting = useMemo(
-    () => (key: string, value: any) => _setSetting({ key, value }) as Promise<any>,
+    () => (key: string, value: any) =>
+      _setSetting({ key, value }).then(onUpdateCallback) as Promise<any>,
     []
   )
 

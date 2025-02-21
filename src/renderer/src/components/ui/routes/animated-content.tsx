@@ -1,4 +1,4 @@
-import { HTMLMotionProps, motion } from 'framer-motion'
+import { HTMLMotionProps, motion } from "motion/react"
 import { forwardRef, ReactNode } from 'react'
 
 export const AnimatedContent = forwardRef<HTMLDivElement, HTMLMotionProps<'div'>>(

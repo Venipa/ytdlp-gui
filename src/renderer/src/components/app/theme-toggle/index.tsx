@@ -1,8 +1,8 @@
 'use client'
 
 import { cva, type VariantProps } from 'class-variance-authority'
-import { motion } from 'framer-motion'
 import { Laptop, Moon, Sun } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useTheme } from 'next-themes'
 import * as React from 'react'
 

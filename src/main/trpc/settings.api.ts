@@ -53,7 +53,7 @@ export const settingsRouter = router({
       ctx.log.debug({ key, value })
       appStore.set(key, value)
       settingsChangeEmitter.emit(handleKey, { key })
-      return true
+      return { key, value }
     }),
   addDownloadPath: publicProcedure.mutation(async ({ ctx: { window } }) => {
     const folder = await dialog.showOpenDialog(window, {

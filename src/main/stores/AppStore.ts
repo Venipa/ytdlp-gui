@@ -6,7 +6,8 @@ export interface AppStore {
   }
   download: { paths: string[]; selected: string }
   features: {
-    clipboardMonitor: boolean
+    clipboardMonitor: boolean,
+    clipboardMonitorAutoAdd: boolean
   }
   beta: boolean
 }

@@ -50,20 +50,20 @@ export default function SettingsWindow() {
   )
   const buildInfo = useMemo(() => config.git?.shortHash && `${config.git.shortHash}`, [])
   const appVersion = useMemo(() => `v${window.api.version}`, [])
-  const ContentLayout: any = useMemo(
-    () => (selectedMeta?.customLayout ? Fragment : ScrollArea),
+  const ContentLayout: typeof ScrollArea = useMemo(
+    () => (selectedMeta?.customLayout ? Fragment as any : ScrollArea),
     [selectedMeta]
   )
   return (
     <div className={cn('absolute inset-0 flex flex-col px-0 h-full')}>
-      <div className="flex flex-col flex-shrink-0 h-full flex-auto -mt-6">
-        <div className="grid grid-cols-[148px_1fr] h-full flex-auto">
+      <div className="flex flex-col flex-shrink-0 h-full flex-auto">
+        <div className="grid grid-cols-[148px_1fr] h-full flex-auto overflow-hidden">
           <TabNavbar
             defaultTab={selectedTab}
             onValueChange={setSelectedTab}
             orientation="vertical"
             indicatorPosition="right"
-            className="h-full bg-background-2 pt-24 pb-6 relative"
+            className="h-full bg-background-2 pt-16 pb-6 relative"
           >
             {sectionTabs.map(({ title, icon: Icon }) => {
               return (
@@ -101,7 +101,10 @@ export default function SettingsWindow() {
               <span>{NodeEnv}</span>
             </div>
           </TabNavbar>
-          <ContentLayout className="px-6 pt-16 relative">
+          <ContentLayout
+            className="relative h-full px-6"
+
+          >
             {selectedContent ? (
               <Suspense fallback={<SuspenseLoader />}>{selectedContent}</Suspense>
             ) : (
