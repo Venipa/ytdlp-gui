@@ -50,7 +50,7 @@ jobs:
           pnpm i --frozen-lockfile
 
       - if: matrix.os == 'macos-13'
-        name: Upload release source maps to sentry
+        name: rebuild deps for macos
         run: |
           # rebuild libsql deps for macos
           pnpm rebuild
