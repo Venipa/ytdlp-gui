@@ -2,7 +2,7 @@
 
 A [yt-dlp](https://github.com/yt-dlp/yt-dlp) desktop app
 
-![ytdlp-desktop_p89mf0Rneq](https://github.com/user-attachments/assets/92030b34-f7d3-47e6-9638-f796c363c3ef)
+![image](https://github.com/user-attachments/assets/c66f46c9-862e-4202-ba8c-8420de08a765)
 
 
 ## Project Setup
