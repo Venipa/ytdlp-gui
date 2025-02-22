@@ -45,7 +45,7 @@ type SettingsToggleProps = {
   onChange?: (value: any) => void
   title: any
   hint?: any
-} & InputProps &
+} & Omit<InputProps, "title"> &
   VariantProps<typeof inputVariants>
 export default forwardRef<HTMLInputElement, SettingsToggleProps>(function SettingsInput(
   { className, name: key, title: placeholder, hint, ...props },
