@@ -3,7 +3,7 @@ import { Label } from '@renderer/components/ui/label'
 import { cn } from '@renderer/lib/utils'
 import { cva, VariantProps } from 'class-variance-authority'
 import { clamp, get } from 'lodash'
-import { forwardRef, ReactNode, useEffect, useMemo, useState } from 'react'
+import { forwardRef, useEffect, useMemo, useState } from 'react'
 import { useDebounceValue } from 'usehooks-ts'
 import { useApp } from './app-context'
 const inputVariants = cva('', {
@@ -43,8 +43,8 @@ const inputLabelVariants = cva('relative', {
 type SettingsToggleProps = {
   name: string
   onChange?: (value: any) => void
-  title: string | ReactNode
-  hint?: string | ReactNode
+  title: any
+  hint?: any
 } & InputProps &
   VariantProps<typeof inputVariants>
 export default forwardRef<HTMLInputElement, SettingsToggleProps>(function SettingsInput(
