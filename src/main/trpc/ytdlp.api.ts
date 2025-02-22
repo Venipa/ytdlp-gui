@@ -9,7 +9,7 @@ import { TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import { desc } from 'drizzle-orm'
 import { statSync } from 'fs'
-import { omit, uniq } from 'lodash'
+import { clamp, omit, uniq } from 'lodash'
 import path from 'path'
 import type { VideoInfo } from 'yt-dlp-wrap/types'
 import { YTDLDownloadStatus, YTDLItem, YTDLStatus } from 'ytdlp-desktop/types'
@@ -17,6 +17,7 @@ import { z } from 'zod'
 import { publicProcedure, router } from './trpc'
 import {
   MAX_PARALLEL_DOWNLOADS,
+  MAX_PARALLEL_TASKS,
   MAX_STREAM_CONCURRENT_FRAGMENTS,
   ytdl,
   YTDLP_CACHE_PATH
@@ -41,7 +42,7 @@ export const ytdlpRouter = router({
               return Promise.reject(err)
             })
         ),
-        MAX_PARALLEL_DOWNLOADS
+        clamp(appStore.store.features.concurrentDownloads ?? MAX_PARALLEL_DOWNLOADS, 1, MAX_PARALLEL_TASKS)
       )
     }),
   cancel: publicProcedure

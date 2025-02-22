@@ -1,5 +1,5 @@
 import { SwitchButton } from '@renderer/components/ui/switch-button'
-import { get } from 'lodash'
+import { get } from 'lodash-es'
 import { PropsWithChildren, useMemo } from 'react'
 import { useApp } from './app-context'
 
