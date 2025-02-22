@@ -2,6 +2,7 @@ import ClickableText from '@renderer/components/ui/clickable-text'
 import { trpc } from '@renderer/lib/trpc-link'
 import { logger } from '@shared/logger'
 import { LucideCog } from 'lucide-react'
+import { ReactNode } from 'react'
 import GroupSection from '../components/group-section'
 import SettingsInput from '../components/settings-input'
 import SettingsToggle from '../components/settings-toggle'
@@ -34,7 +35,7 @@ export default function SettingsTab() {
 
           <GroupSection title="Download">
             <div className="flex flex-col gap-2">
-              <SettingsInput name="features.concurrentDownloads" type='number' variant={"horizontal"} min={1} max={window.api.maxParallelism} title={"Max concurrent downloads"} hint={<div className='text-muted-foreground text-xs'>{`Recommended: 2`}</div>} />
+              <SettingsInput name="features.concurrentDownloads" type='number' variant={"horizontal"} min={1} max={window.api.maxParallelism} title={"Max concurrent downloads"} hint={<div className='text-muted-foreground text-xs'>{`Recommended: 2`}</div> as ReactNode} />
             </div>
           </GroupSection>
           <GroupSection title="Clipboard Monitor">
