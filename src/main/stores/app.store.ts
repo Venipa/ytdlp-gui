@@ -1,3 +1,4 @@
+import { MAX_PARALLEL_DOWNLOADS } from '@main/trpc/ytdlp.core'
 import { createYmlStore } from '@shared/electron/store/createYmlStore'
 import { PathsOf } from '@shared/electron/store/inferKey'
 import { app } from 'electron'
@@ -16,7 +17,8 @@ const store = createYmlStore<AppStore>('app-settings', {
     },
     features: {
       clipboardMonitor: true,
-      clipboardMonitorAutoAdd: true
+      clipboardMonitorAutoAdd: true,
+      concurrentDownloads: MAX_PARALLEL_DOWNLOADS
     },
     beta: false
   }

@@ -15,7 +15,12 @@ import type { VideoInfo } from 'yt-dlp-wrap/types'
 import { YTDLDownloadStatus, YTDLItem, YTDLStatus } from 'ytdlp-desktop/types'
 import { z } from 'zod'
 import { publicProcedure, router } from './trpc'
-import { MAX_STREAM_CONCURRENT_FRAGMENTS, ytdl, YTDLP_CACHE_PATH } from './ytdlp.core'
+import {
+  MAX_PARALLEL_DOWNLOADS,
+  MAX_STREAM_CONCURRENT_FRAGMENTS,
+  ytdl,
+  YTDLP_CACHE_PATH
+} from './ytdlp.core'
 import { ytdlpEvents } from './ytdlp.ee'
 const log = logger.child('ytdlp.api')
 export const ytdlpRouter = router({
@@ -29,8 +34,14 @@ export const ytdlpRouter = router({
     )
     .mutation(async ({ input: { url }, ctx }) => {
       return await queuePromiseStack(
-        url.map((u) => () => handleYtdlMedia(u)),
-        MAX_STREAM_CONCURRENT_FRAGMENTS
+        url.map(
+          (u) => () =>
+            handleYtdlMedia(u).catch((err) => {
+              log.error('failed to download media', err)
+              return Promise.reject(err)
+            })
+        ),
+        MAX_PARALLEL_DOWNLOADS
       )
     }),
   cancel: publicProcedure

@@ -56,24 +56,30 @@ export const settingsRouter = router({
       return { key, value }
     }),
   addDownloadPath: publicProcedure.mutation(async ({ ctx: { window } }) => {
+    window.setAlwaysOnTop(true)
     const folder = await dialog.showOpenDialog(window, {
       properties: ['openDirectory'],
       title: 'Select new download path to ' + config.title,
       defaultPath: appStore.store.download.selected || app.getPath('downloads')
     })
-    if (!folder || folder.canceled || !folder.filePaths.length)
+    if (!folder || folder.canceled || !folder.filePaths.length) {
+      window.setAlwaysOnTop(false)
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Missing or Invalid Folder Path' })
+    }
     const folderPath = folder.filePaths[0]
-    if (appStore.store.download.paths.find((d) => d.toLowerCase() === folderPath.toLowerCase()))
+    if (appStore.store.download.paths.find((d) => d.toLowerCase() === folderPath.toLowerCase())) {
+      window.setAlwaysOnTop(false)
       throw new TRPCError({
         code: 'CONFLICT',
         message: 'Folder Path already exists in ' + config.title
       })
+    }
     appStore.set('download', {
       paths: [...appStore.store.download.paths, folderPath],
       selected: folderPath
     })
     settingsChangeEmitter.emit(handleKey, { key: 'download' })
+    window.setAlwaysOnTop(false)
   }),
   deleteDownloadPath: publicProcedure
     .input(

@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import { useLinkStore } from './add-link.store'
 import { useApp } from './app-context'
 import SelectDownloadBox from './select-download-path'
-const httpsRegex = /^http(s?)/gi
+const httpsRegex = /^https?/i
 export default function AddLink({ showDownloadPath }: { showDownloadPath?: boolean }) {
   const { settings, setSetting } = useApp()
   const { mutateAsync: queueDownloadFromUrl, isLoading } = trpc.ytdl.downloadMedia.useMutation({
@@ -64,7 +64,13 @@ export default function AddLink({ showDownloadPath }: { showDownloadPath?: boole
         <Button
           disabled={isLoading || !mediaUrl}
           onClick={() => {
-            queueDownloadFromUrl({ url: mediaUrl.replace('\r', '').split('\n').filter(s => s && httpsRegex.test(s)) })
+            if (!mediaUrl) return
+            const queueUrls = [...mediaUrl.split('\n').filter((s) => {
+              logger.debug({regexTestSource: s})
+              return s && httpsRegex.test(s)
+            })]
+            logger.debug('download requested for ', { url: queueUrls, mediaUrl })
+            queueDownloadFromUrl({ url: queueUrls })
             setMediaUrl('')
           }}
         >

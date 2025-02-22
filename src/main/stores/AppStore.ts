@@ -13,6 +13,7 @@ export interface AppStore {
   features: {
     clipboardMonitor: boolean,
     clipboardMonitorAutoAdd: boolean
+    concurrentDownloads: number
   }
   beta: boolean
 }

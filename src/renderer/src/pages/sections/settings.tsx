@@ -32,6 +32,11 @@ export default function SettingsTab() {
             <span>Sign up for Beta releases.</span>
           </SettingsToggle>
 
+          <GroupSection title="Download">
+            <div className="flex flex-col gap-2">
+              <SettingsInput name="features.concurrentDownloads" type='number' variant={"horizontal"} min={1} max={window.api.maxParallelism} title={"Max concurrent downloads"} hint={<div className='text-muted-foreground text-xs'>{`Recommended: 2`}</div>} />
+            </div>
+          </GroupSection>
           <GroupSection title="Clipboard Monitor">
             <div className="flex flex-col gap-2">
               <SettingsToggle name="features.clipboardMonitor">

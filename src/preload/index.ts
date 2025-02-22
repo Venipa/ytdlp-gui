@@ -2,12 +2,14 @@ import { electronAPI } from '@electron-toolkit/preload'
 import platform from '@main/lib/platform'
 import { IpcRendererEvent, contextBridge, ipcRenderer } from 'electron'
 import { ELECTRON_TRPC_CHANNEL } from 'electron-trpc/main'
+import { availableParallelism } from 'node:os'
 import { version } from '~/package.json'
 import { } from './index.d'
 // Custom APIs for renderer
 const api = {
   version,
   platform,
+  maxParallelism: availableParallelism(),
   on: (eventName: string, handle: (ev: IpcRendererEvent, ...args: any[]) => void) =>
     ipcRenderer.on(eventName, handle),
   off: (eventName: string, handle: any) => ipcRenderer.off(eventName, handle),

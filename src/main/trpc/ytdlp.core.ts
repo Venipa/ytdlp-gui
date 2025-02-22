@@ -19,5 +19,6 @@ export const checkBrokenLinks = async () => {
 }
 
 export const MAX_PARALLEL_TASKS = availableParallelism()
+export const MAX_PARALLEL_DOWNLOADS = 2;
 export const MAX_STREAM_CONCURRENT_FRAGMENTS = clamp(MAX_PARALLEL_TASKS, 1, 6)
 export const YTDLP_CACHE_PATH = path.join(app.getPath('userData'), 'ytdlp_cache')

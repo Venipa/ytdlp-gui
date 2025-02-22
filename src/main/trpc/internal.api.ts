@@ -2,6 +2,7 @@ import secureStore from '@main/secureStore'
 import { TRPCError } from '@trpc/server'
 import { shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
+import { dirname } from 'node:path'
 import { z } from 'zod'
 import { mainProcedure, publicProcedure, router } from './trpc'
 export const internalRouter = router({
@@ -43,7 +44,8 @@ export const internalRouter = router({
       })
     )
     .mutation(async ({ input: { path: filePath, openParent } }) => {
-      shell.showItemInFolder(filePath)
+      if (openParent) shell.openPath(dirname(filePath))
+        else shell.showItemInFolder(filePath)
     }),
   checkUpdate: publicProcedure.mutation(() => {
     return autoUpdater.checkForUpdatesAndNotify()
