@@ -9,8 +9,20 @@ export interface AppLicense {
 }
 const defaultDownloadsPath = app.getPath('downloads')
 const store = createYmlStore<AppStore>('app-settings', {
+  migrations: [
+    {
+      version: 0,
+      hook(instance, currentVersion) {
+        instance.store.features.concurrentDownloads = MAX_PARALLEL_DOWNLOADS
+      }
+    }
+  ],
   defaults: {
-    ytdlp: { checkForUpdate: true, useGlobal: false, flags: { nomtime: true } } as AppStore['ytdlp'],
+    ytdlp: {
+      checkForUpdate: true,
+      useGlobal: false,
+      flags: { nomtime: true }
+    } as AppStore['ytdlp'],
     download: {
       paths: [defaultDownloadsPath],
       selected: defaultDownloadsPath
