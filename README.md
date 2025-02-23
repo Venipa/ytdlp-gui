@@ -1,8 +1,10 @@
-# ytdlp-desktop
 
-A [yt-dlp](https://github.com/yt-dlp/yt-dlp) desktop app
+<h1 align="center">ytdlp-desktop</h1>
+<p align="center">A <a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a> desktop app</p>
+<p align="center">
+<img align="center" src="https://github.com/user-attachments/assets/cbefa75a-e650-4f3c-b215-782b06b1e0fd">
+</p>
 
-![image](https://github.com/user-attachments/assets/c66f46c9-862e-4202-ba8c-8420de08a765)
 
 
 ## Project Setup
