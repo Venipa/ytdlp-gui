@@ -25,7 +25,8 @@ const externalizedEsmDeps = [
   'got',
   'encryption.js',
   'filenamify',
-  'yt-dlp-wrap'
+  'yt-dlp-wrap',
+  'p-queue'
 ]
 const isMac = !!process.env.ACTION_RUNNER?.startsWith('macos-')
 const isProduction = process.env.NODE_ENV === "production";

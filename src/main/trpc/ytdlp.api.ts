@@ -1,28 +1,20 @@
-import { platform } from '@electron-toolkit/utils'
 import { appStore } from '@main/stores/app.store'
 import { db } from '@main/stores/queue-database'
-import { queries } from '@main/stores/queue-database.helpers'
+import { queries, SelectDownload } from '@main/stores/queue-database.helpers'
 import { downloads } from '@main/stores/queue-database.schema'
 import { logger } from '@shared/logger'
-import { queuePromiseStack, resulter } from '@shared/promises/helper'
 import { TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import { desc } from 'drizzle-orm'
 import { statSync } from 'fs'
-import { clamp, omit, uniq } from 'lodash'
+import { omit, uniq } from 'lodash'
 import path from 'path'
-import type { VideoInfo } from 'yt-dlp-wrap/types'
+import { VideoInfo } from 'yt-dlp-wrap/types'
 import { YTDLDownloadStatus, YTDLItem, YTDLStatus } from 'ytdlp-desktop/types'
 import { z } from 'zod'
 import { publicProcedure, router } from './trpc'
-import {
-  MAX_PARALLEL_DOWNLOADS,
-  MAX_PARALLEL_TASKS,
-  MAX_STREAM_CONCURRENT_FRAGMENTS,
-  ytdl,
-  YTDLP_CACHE_PATH
-} from './ytdlp.core'
-import { ytdlpEvents } from './ytdlp.ee'
+import { MAX_STREAM_CONCURRENT_FRAGMENTS, ytdl, YTDLP_CACHE_PATH } from './ytdlp.core'
+import { ytdlpDownloadQueue, ytdlpEvents } from './ytdlp.ee'
 const log = logger.child('ytdlp.api')
 export const ytdlpRouter = router({
   state: publicProcedure.query(() => ytdl.state.toString()),
@@ -34,16 +26,20 @@ export const ytdlpRouter = router({
       })
     )
     .mutation(async ({ input: { url }, ctx }) => {
-      return await queuePromiseStack(
-        url.map(
-          (u) => () =>
-            handleYtdlMedia(u).catch((err) => {
+      const files = await Promise.all(url.map((u) => queueYtdlMetaCheck(u).catch(() => null))).then(
+        (files) => files.filter((s) => !!s)
+      )
+      const asyncResult = ytdlpDownloadQueue.addAll(
+        files.map(
+          (f) => () =>
+            queueYtdlDownload(f.dbFile, f.videoInfo).catch((err) => {
               log.error('failed to download media', err)
               return Promise.reject(err)
             })
-        ),
-        clamp(appStore.store.features.concurrentDownloads ?? MAX_PARALLEL_DOWNLOADS, 1, MAX_PARALLEL_TASKS)
+        )
       )
+      if (ytdlpDownloadQueue.isPaused) ytdlpDownloadQueue.start()
+      return await asyncResult
     }),
   cancel: publicProcedure
     .input(z.union([z.string(), z.number()]))
@@ -124,12 +120,7 @@ export const ytdlpRouter = router({
           return
         }
         ytdlpEvents.emit('autoAddCapture', url)
-        const { value: videoInfo, error: videoInfoError } = await resulter<VideoInfo>(
-          ytdl.ytdlp.getVideoInfo([
-            url,
-            platform.isWindows ? '--windows-filenames' : '--restrict-filenames'
-          ])
-        )
+        const { value: videoInfo, error: videoInfoError } = await ytdl.getVideoInfo(url)
         if (videoInfoError || !videoInfo?.url) return
         emit.next(url)
       }
@@ -217,43 +208,64 @@ export const ytdlpRouter = router({
     })
   })
 } as const)
-const handleYtdlMedia = async (url: string) => {
-  if (typeof url !== 'string' || !/^https/gi.test(url)) return
-  if (!ytdl.currentDownloadPath)
-    throw new TRPCError({
-      code: 'NOT_FOUND',
-      message: 'YTDLP has not been found, make sure the app is running with sufficient permission.'
-    })
-  const controller = new AbortController()
+
+const deleteDownloadItem = (dbFile: SelectDownload) =>
+  queries.downloads.deleteDownload(dbFile.id).then((s) => {
+    if (s.rowsAffected === 1) {
+      dbFile.state = 'deleted'
+      ytdlpEvents.emit('list', [dbFile])
+
+      ytdlpEvents.emit('status', {
+        id: dbFile.id,
+        action: 'download',
+        data: null,
+        state: 'deleted'
+      })
+    }
+  })
+const queueYtdlMetaCheck = async (
+  url: string
+): Promise<{ dbFile: SelectDownload; videoInfo: VideoInfo }> => {
+  if (typeof url !== 'string' || !/^https/gi.test(url)) throw new Error('Invalid url format')
   ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'progressing' })
+  log.debug("meta", `added url ${url}`)
+  const existingDbFile = await queries.downloads.findDownloadByExactUrl(url)
   let [dbFile] = await queries.downloads.createDownload({
-    metaId: '',
-    meta: {} as any,
-    filepath: '',
-    filesize: 0,
+    metaId: existingDbFile?.metaId ?? '',
+    meta: existingDbFile?.meta ?? ({} as any),
+    filepath: existingDbFile?.filepath ?? '',
+    filesize: existingDbFile?.filesize ?? 0,
     source: new URL(url).hostname,
     state: 'fetching_meta',
-    title: url,
+    title: existingDbFile?.title ?? url,
     type: null,
     url,
     error: null,
     retryCount: 0
   })
   ytdlpEvents.emit('list', [dbFile])
-  const deleteEntry = () =>
-    queries.downloads.deleteDownload(dbFile.id).then((s) => {
-      if (s.rowsAffected === 1) {
-        dbFile.state = 'deleted'
-        ytdlpEvents.emit('list', [dbFile])
-
-        ytdlpEvents.emit('status', {
-          id: dbFile.id,
-          action: 'download',
-          data: null,
-          state: 'deleted'
-        })
-      }
+  if (!dbFile.meta) {
+    const { value: videoInfo, error: videoInfoError } = await ytdl.getVideoInfo(url)
+    if (videoInfoError || !videoInfo) {
+      if (videoInfoError) log.error('getVideoInfo', videoInfoError)
+      await deleteDownloadItem(dbFile)
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'URL not supported or video not found'
+      })
+    }
+    return { dbFile, videoInfo }
+  }
+  return { dbFile, videoInfo: dbFile.meta }
+}
+const queueYtdlDownload = async (dbFile: SelectDownload, videoInfo: VideoInfo) => {
+  if (!ytdl.currentDownloadPath)
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'YTDLP has not been found, make sure the app is running with sufficient permission.'
     })
+  const controller = new AbortController()
+  const deleteEntry = () => deleteDownloadItem(dbFile)
   const updateEntry = () =>
     queries.downloads.updateDownload(dbFile.id, dbFile).then(([s]) => {
       ytdlpEvents.emit('list', [s])
@@ -263,20 +275,6 @@ const handleYtdlMedia = async (url: string) => {
   if (controller.signal.aborted) {
     await deleteEntry()
     throw new TRPCError({ code: 'CLIENT_CLOSED_REQUEST', message: 'Video fetch aborted' })
-  }
-  const { value: videoInfo, error: videoInfoError } = await resulter<VideoInfo>(
-    ytdl.ytdlp.getVideoInfo([
-      url,
-      platform.isWindows ? '--windows-filenames' : '--restrict-filenames'
-    ])
-  )
-  if (videoInfoError || !videoInfo) {
-    if (videoInfoError) log.error('getVideoInfo', videoInfoError)
-    await deleteEntry()
-    throw new TRPCError({
-      code: 'NOT_FOUND',
-      message: 'URL not supported or video not found'
-    })
   }
   const settings = appStore.store.ytdlp
   ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'done' })
@@ -290,7 +288,7 @@ const handleYtdlMedia = async (url: string) => {
   dbFile.type = videoInfo._type?.toLowerCase() ?? 'video'
   await updateEntry()
   const execArgs = [
-    url,
+    dbFile.url,
     '-f',
     'best',
     '-o',
@@ -302,7 +300,7 @@ const handleYtdlMedia = async (url: string) => {
   ]
   if (settings.flags?.nomtime) execArgs.push('--no-mtime')
   if (settings.flags?.custom) execArgs.push(...settings.flags.custom.split(' '))
-  const stream = ytdl.ytdlp.exec(uniq(execArgs), {}, controller.signal)
+  const stream = ytdl.exec(uniq(execArgs), {}, controller.signal)
 
   async function cancel(id: any) {
     if (id && id === dbFile.id) {
@@ -360,7 +358,14 @@ const handleYtdlMedia = async (url: string) => {
   ytdlpEvents.emit('list', [dbFile])
   return await updateEntry()
 }
-ytdlpEvents.on('add', handleYtdlMedia)
+function handleYtAddEvent(url: string) {
+  queueYtdlMetaCheck(url).then(({ dbFile, videoInfo }) => {
+    const asyncResult = ytdlpDownloadQueue.add(() => queueYtdlDownload(dbFile, videoInfo))
+    if (ytdlpDownloadQueue.isPaused) ytdlpDownloadQueue.start()
+    return asyncResult
+  })
+}
+ytdlpEvents.on('add', handleYtAddEvent)
 process.on('exit', () => {
-  ytdlpEvents.off('add', handleYtdlMedia)
+  ytdlpEvents.off('add', handleYtAddEvent)
 })

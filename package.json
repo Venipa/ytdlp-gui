@@ -96,6 +96,7 @@
     "node-machine-id": "^1.1.12",
     "non.geist": "^1.0.4",
     "nuqs": "^2.0.4",
+    "p-queue": "^8.1.0",
     "pretty-bytes": "^6.1.1",
     "react-aria": "^3.35.1",
     "react-aria-components": "^1.4.1",

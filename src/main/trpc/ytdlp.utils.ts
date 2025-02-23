@@ -4,10 +4,12 @@ import YTDLWrapper from '@main/lib/ytdlp-wrapper'
 import { appStore } from '@main/stores/app.store'
 import { Endpoints } from '@octokit/types'
 import { Logger } from '@shared/logger'
+import { resulter } from '@shared/promises/helper'
 import { nt as calvNewerThan } from 'calver'
 import { app } from 'electron'
 import { platform } from 'os'
 import path from 'path'
+import { VideoInfo } from 'yt-dlp-wrap/types'
 const YTDLP_PLATFORM = platform()
 const ytdlpPath = app.getPath('userData')
 const log = new Logger('YTDLP')
@@ -85,6 +87,22 @@ export class YTDLP {
     await YTDLWrapper.downloadFromGithub(newYtdlPath, release.version, YTDLP_PLATFORM)
     return { version: release.version, path: newYtdlPath }
   }
+  async getVideoInfo(...args: string[]) {
+    const ignoreGenericUrls = ['--ies', 'default,-generic']
+    const platformFilenames = [
+      appPlatform.isWindows ? '--windows-filenames' : '--restrict-filenames'
+    ]
+
+    return await resulter<VideoInfo>(
+      this._ytd.getVideoInfo(
+        [...args]
+          .concat((args.includes('--ies') && ignoreGenericUrls) || '')
+          .concat((args.includes(platformFilenames[0]) && platformFilenames) || '')
+          .filter(Boolean)
+      )
+    )
+  }
+  readonly exec: typeof this._ytd.exec = this._ytd.exec.bind(this._ytd)
   get ytdlp() {
     return this._ytd
   }
