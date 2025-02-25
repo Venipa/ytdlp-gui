@@ -5,6 +5,7 @@
   "main": "./out/main/index.js",
   "author": "Venipa <admin@venipa.net>",
   "homepage": "https://venipa.net",
+  "repository": "https://github.com/Venipa/ytdlp-desktop",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
@@ -14,6 +15,7 @@
     "start": "electron-vite preview",
     "dev": "electron-vite dev --watch",
     "release": "npm run git:info && cross-env NODE_ENV=production npm run build && electron-builder",
+    "dev-release": "npm run git:info && cross-env NODE_ENV=development npm run build && electron-builder",
     "git:info": "node git-config.cjs",
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "npm run git:info && electron-builder install-app-deps",

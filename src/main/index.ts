@@ -26,7 +26,6 @@ import { clamp } from 'lodash'
 import builderConfig from '../../electron-builder.yml'
 import { executableIsAvailable } from './lib/bin.utils'
 import { ClipboardMonitor } from './lib/clipboardMonitor'
-import { attachAutoUpdaterIPC } from './license'
 import { appStore } from './stores/app.store'
 import { runMigrate } from './stores/queue-database'
 import { trpcIpcHandler } from './trpc'
@@ -34,6 +33,7 @@ import { createUrlOfPage, loadUrlOfWindow } from './trpc/dialog.utils'
 import { pushWindowState } from './trpc/window.api'
 import { checkBrokenLinks, ytdl } from './trpc/ytdlp.core'
 import { ytdlpEvents } from './trpc/ytdlp.ee'
+import { attachAutoUpdaterIPC } from './updater'
 const log = new Logger('App')
 const trayIcon = !platform.isWindows ? (platform.isMacOS ? trayIconAsset : iconWin) : icon
 

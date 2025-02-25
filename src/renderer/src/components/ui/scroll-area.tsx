@@ -4,37 +4,52 @@ import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area'
 import * as React from 'react'
 
 import { cn } from '@renderer/lib/utils'
+import { logger } from '@shared/logger'
 import { motion, useScroll, useTransform } from 'motion/react'
 
 const ScrollArea = React.forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>
->(({ className, children, ...props }, ref) => {
-  const scrollRef = React.useRef()
+  React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> & { plain?: boolean }
+>(({ className, children, plain, ...props }, ref) => {
+  const scrollRef = React.useRef<HTMLDivElement>()
   const { scrollY } = useScroll({
     container: scrollRef as any,
     layoutEffect: true,
     axis: 'y'
   })
-  const showScrollBlur = useTransform(scrollY, [0, 50], [0, 1])
+  const scrollHeight = React.useMemo(() => scrollRef.current?.scrollHeight ?? 50, [scrollRef])
+  const showStartScrollBlur = useTransform(scrollY, [0, 50], [0, 1])
+  const showEndScrollBlur = useTransform(scrollY, [0, scrollHeight - 50, scrollHeight], [1, 1, 0])
+  logger.debug('scroller', { showEndScrollBlur: showEndScrollBlur.get(), scrollHeight })
   return (
     <ScrollAreaPrimitive.Root
       ref={ref}
       className={cn('relative overflow-hidden', className)}
       {...props}
     >
-      <motion.div
-        className={cn(
-          'absolute top-0 inset-x-0 backdrop-blur-sm h-12 pointer-events-auto mask-to-t z-10'
-        )}
-        style={{ opacity: showScrollBlur }}
-      ></motion.div>
+      {!plain && (
+        <motion.div
+          className={cn(
+            'absolute top-0 inset-x-0 backdrop-blur-sm h-12 pointer-events-auto mask-to-t z-10'
+          )}
+          style={{ opacity: showStartScrollBlur }}
+        ></motion.div>
+      )}
       <ScrollAreaPrimitive.Viewport
         className="h-full w-full rounded-[inherit] pb-6"
         ref={scrollRef as any}
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
+
+      {!plain && (
+        <motion.div
+          className={cn(
+            'absolute bottom-0 inset-x-0 backdrop-blur-sm h-8 pointer-events-auto mask-to-b z-10'
+          )}
+          style={{ opacity: showEndScrollBlur }}
+        ></motion.div>
+      )}
       <ScrollBar />
       <ScrollAreaPrimitive.Corner />
     </ScrollAreaPrimitive.Root>

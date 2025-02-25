@@ -20,7 +20,7 @@ export function CookiesTabItem({ cookie }: CookiesTabItemProps) {
   const [open, setOpen] = useState(false)
   const Icon = useMemo(() => cookie.type === 'imported' ? LucideImport : CookieIcon, [cookie.type])
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={setOpen} modal>
       <SheetTrigger>
         <div className="h-8 border border-border rounded hover:bg-muted truncate grid grid-cols-[20px_1fr] gap-6 text-sm items-center px-4 cursor-pointer select-none group/cookie">
           <Icon className="size-4 self-center" />
@@ -36,7 +36,7 @@ export function CookiesTabItem({ cookie }: CookiesTabItemProps) {
           </div>
         </div>
       </SheetTrigger>
-      <SheetContent className="flex flex-col gap-6 sm:max-w-[85vw]">
+      <SheetContent className="flex flex-col gap-6 sm:max-w-[85vw]" side={"right"}>
         <h1 className="font-bold tracking-wide">Cookies</h1>
         <Textarea
           defaultValue={cookie.cookie}

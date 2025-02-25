@@ -45,10 +45,29 @@ export const internalRouter = router({
     )
     .mutation(async ({ input: { path: filePath, openParent } }) => {
       if (openParent) shell.openPath(dirname(filePath))
-        else shell.showItemInFolder(filePath)
+      else shell.showItemInFolder(filePath)
     }),
-  checkUpdate: publicProcedure.mutation(() => {
-    return autoUpdater.checkForUpdatesAndNotify()
+  openFile: publicProcedure
+    .input(
+      z.object({
+        path: z.string()
+      })
+    )
+    .mutation(async ({ input: { path: filePath } }) => {
+      await shell.openPath(filePath)
+    }),
+  checkUpdate: publicProcedure
+    .input(z.boolean().default(false))
+    .mutation(async ({ input: notifyIfUpdateAvailable }) => {
+      if (notifyIfUpdateAvailable) return await autoUpdater.checkForUpdatesAndNotify()
+      return await autoUpdater.checkForUpdates()
+    }),
+  downloadUpdate: publicProcedure.mutation(() => {
+    try {
+      return autoUpdater.downloadUpdate()
+    } catch (ex: any) {
+      throw new TRPCError({ message: ex.message, code: 'INTERNAL_SERVER_ERROR' })
+    }
   }),
   quitAndInstallUpdate: publicProcedure.mutation(() => {
     try {
