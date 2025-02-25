@@ -3,6 +3,7 @@ import { db } from '@main/stores/queue-database'
 import { queries, SelectDownload } from '@main/stores/queue-database.helpers'
 import { downloads } from '@main/stores/queue-database.schema'
 import { logger } from '@shared/logger'
+import { queuePromiseStack } from '@shared/promises/helper'
 import { TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import { desc } from 'drizzle-orm'
@@ -13,7 +14,12 @@ import { VideoInfo } from 'yt-dlp-wrap/types'
 import { YTDLDownloadStatus, YTDLItem, YTDLStatus } from 'ytdlp-desktop/types'
 import { z } from 'zod'
 import { publicProcedure, router } from './trpc'
-import { MAX_STREAM_CONCURRENT_FRAGMENTS, ytdl, YTDLP_CACHE_PATH } from './ytdlp.core'
+import {
+  MAX_PARALLEL_DOWNLOADS,
+  MAX_STREAM_CONCURRENT_FRAGMENTS,
+  ytdl,
+  YTDLP_CACHE_PATH
+} from './ytdlp.core'
 import { ytdlpDownloadQueue, ytdlpEvents } from './ytdlp.ee'
 const log = logger.child('ytdlp.api')
 export const ytdlpRouter = router({
@@ -26,9 +32,10 @@ export const ytdlpRouter = router({
       })
     )
     .mutation(async ({ input: { url }, ctx }) => {
-      const files = await Promise.all(url.map((u) => queueYtdlMetaCheck(u).catch(() => null))).then(
-        (files) => files.filter((s) => !!s)
-      )
+      const files = await queuePromiseStack(
+        url.map((u) => () => queueYtdlMetaCheck(u).catch(() => null)),
+        MAX_PARALLEL_DOWNLOADS
+      ).then((files) => files.filter((s) => !!s))
       const asyncResult = ytdlpDownloadQueue.addAll(
         files.map(
           (f) => () =>
@@ -228,7 +235,7 @@ const queueYtdlMetaCheck = async (
 ): Promise<{ dbFile: SelectDownload; videoInfo: VideoInfo }> => {
   if (typeof url !== 'string' || !/^https/gi.test(url)) throw new Error('Invalid url format')
   ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'progressing' })
-  log.debug("meta", `added url ${url}`)
+  log.debug('meta', `added url ${url}`)
   const existingDbFile = await queries.downloads.findDownloadByExactUrl(url)
   let [dbFile] = await queries.downloads.createDownload({
     metaId: existingDbFile?.metaId ?? '',
@@ -244,8 +251,9 @@ const queueYtdlMetaCheck = async (
     retryCount: 0
   })
   ytdlpEvents.emit('list', [dbFile])
-  if (!dbFile.meta) {
+  if (!dbFile.meta?.filename) {
     const { value: videoInfo, error: videoInfoError } = await ytdl.getVideoInfo(url)
+    log.debug('metadata', omit(videoInfo, 'thumbnails', 'formats'))
     if (videoInfoError || !videoInfo) {
       if (videoInfoError) log.error('getVideoInfo', videoInfoError)
       await deleteDownloadItem(dbFile)
@@ -254,6 +262,9 @@ const queueYtdlMetaCheck = async (
         message: 'URL not supported or video not found'
       })
     }
+    dbFile.meta = omit(videoInfo, 'formats', 'thumbnails') as VideoInfo
+    dbFile.metaId = videoInfo.id
+    dbFile = await queries.downloads.updateDownload(dbFile.id, dbFile)
     return { dbFile, videoInfo }
   }
   return { dbFile, videoInfo: dbFile.meta }
@@ -267,7 +278,7 @@ const queueYtdlDownload = async (dbFile: SelectDownload, videoInfo: VideoInfo) =
   const controller = new AbortController()
   const deleteEntry = () => deleteDownloadItem(dbFile)
   const updateEntry = () =>
-    queries.downloads.updateDownload(dbFile.id, dbFile).then(([s]) => {
+    queries.downloads.updateDownload(dbFile.id, dbFile).then((s) => {
       ytdlpEvents.emit('list', [s])
       dbFile = s
       return s
@@ -300,7 +311,7 @@ const queueYtdlDownload = async (dbFile: SelectDownload, videoInfo: VideoInfo) =
   ]
   if (settings.flags?.nomtime) execArgs.push('--no-mtime')
   if (settings.flags?.custom) execArgs.push(...settings.flags.custom.split(' '))
-  const stream = ytdl.exec(uniq(execArgs), {}, controller.signal)
+  const stream = ytdl.ytdlp.exec(uniq(execArgs), {}, controller.signal)
 
   async function cancel(id: any) {
     if (id && id === dbFile.id) {

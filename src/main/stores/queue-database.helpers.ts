@@ -39,7 +39,12 @@ function findDownloadByExactUrl(url: string) {
     .get()
 }
 function updateDownload(id: SelectDownload['id'], item: SelectDownload) {
-  return db.update(downloads).set(omit(item, 'id')).where(eq(downloads.id, id)).returning()
+  return db
+    .update(downloads)
+    .set(omit(item, 'id'))
+    .where(eq(downloads.id, id))
+    .returning()
+    .then(([s]) => s)
 }
 function deleteDownload(id: SelectDownload['id']) {
   return db.delete(downloads).where(eq(downloads.id, id))
