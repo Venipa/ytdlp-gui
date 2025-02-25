@@ -1,7 +1,9 @@
 import ClickableText from '@renderer/components/ui/clickable-text'
+import { Spinner } from '@renderer/components/ui/spinner'
 import { trpc } from '@renderer/lib/trpc-link'
 import { logger } from '@shared/logger'
 import { LucideCog } from 'lucide-react'
+import { toast } from 'sonner'
 import GroupSection from '../components/group-section'
 import SettingsInput from '../components/settings-input'
 import SettingsToggle from '../components/settings-toggle'
@@ -15,6 +17,22 @@ export const meta = {
 const Icon = meta.icon
 export default function SettingsTab() {
   const { mutateAsync: checkUpdate } = trpc.internals.checkUpdate.useMutation()
+  const { mutateAsync: checkYtdlUpdate, isLoading: ytdlLoading } =
+    trpc.ytdl.checkUpdates.useMutation()
+  const handleYtdlUpdate = async () => {
+    try {
+      const id = toast.loading('Checking for YTDLP updates...', { duration: 0 })
+      const { updated, currentVersion } = await checkYtdlUpdate()
+      if (updated)
+        toast.success('YTDLP has been updated to ' + currentVersion, { id, duration: 3000 })
+      else
+        toast.info(`YTDLP is already the newest version (${currentVersion})`, {
+          id,
+          duration: 3000
+        })
+    } finally {
+    }
+  }
   return (
     <div className="grid gap-8 p-2 h-full">
       <div className="grid gap-6 pt-10">
@@ -34,7 +52,17 @@ export default function SettingsTab() {
 
           <GroupSection title="Download">
             <div className="flex flex-col gap-2">
-              <SettingsInput name="features.concurrentDownloads" type='number' variant={"horizontal"} min={1} max={window.api.maxParallelism} title={"Max concurrent downloads"} hint={<div className='text-muted-foreground text-xs'>{`Recommended: 2`}</div> as any} />
+              <SettingsInput
+                name="features.concurrentDownloads"
+                type="number"
+                variant={'horizontal'}
+                min={1}
+                max={window.api.maxParallelism}
+                title={'Max concurrent downloads'}
+                hint={
+                  (<div className="text-muted-foreground text-xs">{`Recommended: 2`}</div>) as any
+                }
+              />
             </div>
           </GroupSection>
           <GroupSection title="Clipboard Monitor">
@@ -58,10 +86,24 @@ export default function SettingsTab() {
               </SettingsToggle>
             </div>
           </GroupSection>
-          <GroupSection title="YTDLP Settings">
+          <GroupSection
+            title="YTDLP"
+            titleRight={
+              <div className="flex self-start items-center mt-1.5 ml-auto">
+                {ytdlLoading ? (
+                  <div className="flex items-center gap-1">
+                    <Spinner size={'xs'} />
+                    <ClickableText>Checking...</ClickableText>
+                  </div>
+                ) : (
+                  <ClickableText onClick={handleYtdlUpdate}>Check for update</ClickableText>
+                )}
+              </div>
+            }
+          >
             <div className="flex flex-col gap-6">
               <div className="flex flex-col gap-2">
-                {(
+                {
                   <SettingsToggle name="ytdlp.useGlobal" disabled={window.api.platform.isWindows}>
                     <div className="flex flex-col gap-2 text-pretty">
                       <span className="font-bold">Use machine installed yt-dlp</span>
@@ -73,7 +115,7 @@ export default function SettingsTab() {
                       </span>
                     </div>
                   </SettingsToggle>
-                )}
+                }
                 <SettingsToggle name="ytdlp.flags.mtime">
                   <div className="flex flex-col gap-2 text-pretty">
                     <span className="font-bold">--no-mtime</span>

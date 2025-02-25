@@ -35,7 +35,7 @@ export default function AppNavBar({
     <TooltipProvider delayDuration={100}>
       <WindowControlBar
         title={configState?.title || <Spinner />}
-        state={{...windowState, title: ""} as any}
+        state={{ ...windowState, title: '' } as any}
         className={cn('h-10 px-1.5', className)}
         {...{ onMinimize, onMaximize, onClose: isQuitRoute ? close : onClose }}
         {...props}
@@ -43,7 +43,7 @@ export default function AppNavBar({
         {windowState && (
           <>
             <div className="flex items-center space-x-2 mr-2">
-              <QTooltip content="Theme">
+              <QTooltip content="Theme" align="center">
                 <ThemeToggle size="sm" />
               </QTooltip>
               {(props.variant !== 'transparent' && (

@@ -33,7 +33,7 @@ export function attachAutoUpdaterIPC(win: BrowserWindow) {
       })
       .then(({ response }) => {
         if (response === 0) autoUpdater.quitAndInstall()
-        else if (response === 1) autoUpdater.autoInstallOnAppQuit = true;
+        else if (response === 1) autoUpdater.autoInstallOnAppQuit = true
       })
   })
 }

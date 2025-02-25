@@ -1,4 +1,5 @@
 import ClickableText from '@renderer/components/ui/clickable-text'
+import { Appear } from '@renderer/components/ui/routes/animated-content'
 import { Spinner } from '@renderer/components/ui/spinner'
 import { useIPC } from '@renderer/hooks/use-ipc'
 import { trpc } from '@renderer/lib/trpc-link'
@@ -19,57 +20,70 @@ export default function StatusBar() {
     }
   })
   const diskUsage = useMemo(() => data && prettyBytes(data.completedUsage), [data])
-  const [updateAvailable] = useIPC('update-available')
-  const [updateChecking] = useIPC('update-checking')
-  const [updateProgress] = useIPC('update-download-progress')
-  const [updateDone] = useIPC('update-download-done')
+  const [updateAvailable, setUpdateAvailable] = useIPC('update-available')
+  const [updateChecking, setUpdateChecking] = useIPC('update-checking')
+  const [updateProgress, setUpdateProgress] = useIPC('update-download-progress')
+  const [updateDone, setUpdateDone] = useIPC('update-download-done')
   const latestYtdlpStatus = useMemo(() => status[0], [status])
   const noStateOrInvalidStatus = useMemo(
     () => !latestYtdlpStatus || ['done', 'deleted'].includes(latestYtdlpStatus.state),
     [latestYtdlpStatus]
   )
   return (
-    <div className="grid items-center grid-cols-[200px_1fr_200px] h-10 flex-shrink-0 overflow-hidden border-t border-t-border flex-auto text-xs text-muted-foreground px-4 select-none">
-      <div className="flex gap-1 items-center">
+    <div className="grid items-center grid-cols-[140px_200px_1fr] h-10 flex-shrink-0 overflow-hidden border-t border-t-border flex-auto text-xs text-muted-foreground px-4 select-none">
+      <Appear className="flex gap-1 items-center">
         <span>Disk usage:</span>
         <span>{diskUsage}</span>
-      </div>
+      </Appear>
       <div className="flex items-center gap-2">
-        <div className="flex gap-1 items-center">
+        <Appear className="flex gap-1 items-center">
           <span>Total:</span>
           <span>{data.overallCount}</span>
-        </div>
+        </Appear>
         <DotIcon className="size-2 text-muted-foreground" />
-        <div className="flex gap-1 items-center">
+        <Appear className="flex gap-1 items-center">
           <span>Videos:</span>
           <span>{data.count.video}</span>
-        </div>
+        </Appear>
         <DotIcon className="size-2 text-muted-foreground" />
-        <div className="flex gap-1 items-center">
+        <Appear className="flex gap-1 items-center">
           <span>Audios:</span>
           <span>{data.count.audio}</span>
-        </div>
+        </Appear>
       </div>
-      <div className="flex items-center gap-2 justify-end">
+      <div className="flex items-center gap-4 justify-end">
         {updateChecking && !updateAvailable ? (
-          <div className="animate-pulse">Checking for updates...</div>
+          <>
+            <Appear className="animate-pulse">Checking for updates...</Appear>
+            <div className="h-10 w-px bg-muted"></div>
+          </>
         ) : updateDone ? (
-          <ClickableText onClick={() => quitAndUpdate()}>
-            Restart required for update.
-          </ClickableText>
+          <>
+            <ClickableText onClick={() => quitAndUpdate()}>
+              Click to restart to install update.
+            </ClickableText>
+            <div className="h-10 w-px bg-muted"></div>
+          </>
         ) : updateProgress && !updateDone ? (
-          <div>Downloading... {String(updateProgress.percent).padStart(3, ' ')}%</div>
+          <>
+            <Appear>Downloading... {String(updateProgress.percent).padStart(3, ' ')}%</Appear>
+            <div className="h-10 w-px bg-muted"></div>
+          </>
         ) : updateAvailable ? (
-          <div>Update Available, preparing...</div>
-        ) : noStateOrInvalidStatus ? (
-          <div>YTDLP: {settings.ytdlp?.version ?? '...'}</div>
+          <>
+            <Appear>Update Available, preparing...</Appear>
+            <div className="h-10 w-px bg-muted"></div>
+          </>
+        ) : null}
+        {noStateOrInvalidStatus ? (
+          <Appear>YTDLP: {settings.ytdlp?.version ?? '...'}</Appear>
         ) : latestYtdlpStatus.state === 'progressing' ? (
-          <div className="flex items-center gap-1">
+          <Appear className="flex items-center gap-1">
             <span>YTDLP:</span>
             <Spinner size={'xs'} />
-          </div>
+          </Appear>
         ) : (
-          <div>YTDLP: {latestYtdlpStatus.state}</div>
+          <Appear>YTDLP: {latestYtdlpStatus.state}</Appear>
         )}
       </div>
     </div>

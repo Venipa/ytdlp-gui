@@ -11,7 +11,6 @@ export default forwardRef(function ButtonLoading(
   {
     children,
     loading: refLoading,
-    size,
     onClickWithLoading,
     fixWidth,
     ...props

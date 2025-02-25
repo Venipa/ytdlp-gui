@@ -2,7 +2,6 @@ import { Button } from '@renderer/components/ui/button'
 import ButtonLoading from '@renderer/components/ui/ButtonLoading'
 import ClickableText from '@renderer/components/ui/clickable-text'
 import { ProgressCircle } from '@renderer/components/ui/progress-circle'
-import { Sheet, SheetContent, SheetTrigger } from '@renderer/components/ui/sheet'
 import { Spinner } from '@renderer/components/ui/spinner'
 import SuspenseLoader from '@renderer/components/ui/suspense-loader'
 import { QTooltip } from '@renderer/components/ui/tooltip'
@@ -22,18 +21,10 @@ import prettyBytes from 'pretty-bytes'
 import { useMemo, useState } from 'react'
 import { VList } from 'virtua'
 import { YTDLDownloadStatus, YTDLItem } from 'ytdlp-desktop/types'
+import FileSheet from './file-sheet'
 const log = createLogger('LinkListItem')
-export function LinkListItem({
-  id,
-  error: ytderror,
-  state,
-  filesize: fsize,
-  type,
-  source,
-  title,
-  filepath,
-  url
-}: YTDLItem & { key: any }) {
+export function LinkListItem(props: YTDLItem & { key: any }) {
+  const { id, error: ytderror, state, filesize: fsize, type, source, title, filepath, url } = props
   const error = useMemo(() => ytderror, [ytderror])
   const [status, setDownloadStatus] = useState<YTDLDownloadStatus>()
   const { mutateAsync: openPath } = trpc.internals.openPath.useMutation()
@@ -54,7 +45,7 @@ export function LinkListItem({
     <div className="h-10 rounded-md hover:bg-muted/60 grid grid-cols-[40px_1fr_minmax(100px,_auto)] gap-2 items-center relative cursor-default group/item flex-shrink-0 select-none">
       <div className="flex flex-col size-10 items-center justify-center">
         {error ? (
-          <QTooltip side='right' content={'An error occurred while downloading.'}>
+          <QTooltip side="right" content={'An error occurred while downloading.'}>
             <div className="size-4 p-1 flex flex-col items-center justify-center border-2 border-destructive/40 bg-destructive rounded-full">
               <LucideX className="stroke-[4px] stroke-destructive-foreground" />
             </div>
@@ -68,56 +59,49 @@ export function LinkListItem({
             <LucideCheck className="stroke-[4px]" />
           </div>
         ) : downloading && status ? (
-          <QTooltip className='cursor-default' content={"Download Progress"} side='right'>
-              <div className="flex flex-col items-center justify-center size-10 relative">
-                <ProgressCircle
-                  min={0}
-                  max={100}
-                  value={status.percent ?? 0}
-                  className="h-6"
-                  gaugePrimaryColor="rgb(225 225 225)"
-                  gaugeSecondaryColor="rgba(120, 120, 120, 0.1)"
-                  showValue={false}
-                />
-                <LucideArrowDownToDot className="absolute size-3.5 text-secondary-foreground animate-pulse" />
-              </div>
+          <QTooltip className="cursor-default" content={'Download Progress'} side="right">
+            <div className="flex flex-col items-center justify-center size-10 relative">
+              <ProgressCircle
+                min={0}
+                max={100}
+                value={status.percent ?? 0}
+                className="h-6"
+                gaugePrimaryColor="rgb(225 225 225)"
+                gaugeSecondaryColor="rgba(120, 120, 120, 0.1)"
+                showValue={false}
+              />
+              <LucideArrowDownToDot className="absolute size-3.5 text-secondary-foreground animate-pulse" />
+            </div>
           </QTooltip>
         ) : (
           <Spinner />
         )}
       </div>
-      <Sheet modal>
-        <SheetTrigger asChild>
-          <div className="grid grid-rows-[20px_12px] items-center cursor-pointer">
-            <div className="text-sm truncate leading-none">{title}</div>
-            <div className="flex gap-2.5 items-center text-xs text-muted-foreground leading-none">
-              {!error && filesize && (
-                <>
-                  <span>Filesize: {filesize}</span>
-                  <DotIcon className="size-2 -mx-2" />
-                </>
-              )}
-              <span>Type: {type}</span>
-              <DotIcon className="size-2 -mx-2" />
-              {!url ? (
-                <span>Source: {source}</span>
-              ) : (
-                <ClickableText asChild>
-                  <a className="cursor-pointer" href={url} target="_blank">
-                    Source: {source}
-                  </a>
-                </ClickableText>
-              )}
-            </div>
+      <FileSheet item={props as any}>
+        <div className="grid grid-rows-[20px_12px] items-center cursor-pointer">
+          <div className="text-sm truncate leading-none">{title}</div>
+          <div className="flex gap-2.5 items-center text-xs text-muted-foreground leading-none">
+            {!error && filesize && (
+              <>
+                <span>Filesize: {filesize}</span>
+                <DotIcon className="size-2 -mx-2" />
+              </>
+            )}
+            <span>Type: {type}</span>
+            <DotIcon className="size-2 -mx-2" />
+            {!url ? (
+              <span>Source: {source}</span>
+            ) : (
+              <ClickableText asChild>
+                <a className="cursor-pointer" href={url} target="_blank">
+                  Source: {source}
+                </a>
+              </ClickableText>
+            )}
           </div>
-        </SheetTrigger>
-        <SheetContent>
-          <h1 className="text-lg font-semibold tracking-wider whitespace-pre-wrap mr-8 break-words line-clamp-2">
-            {title}
-          </h1>
-        </SheetContent>
-      </Sheet>
-      <div className="flex justify-end items-center gap-2 px-2 opacity-20 group-hover/item:opacity-100">
+        </div>
+      </FileSheet>
+      <div className="flex justify-end items-center gap-1 px-2 opacity-20 group-hover/item:opacity-100">
         {(error || cancelled) && (
           <Button
             variant={'ghost'}

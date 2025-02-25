@@ -55,15 +55,22 @@ export class YTDLP {
         }))) ||
       null
     log.debug('ytdlp version compare...', {
-      latest: latestRelease?.version ?? '-',
+      latest: latestRelease?.version,
       current: currentYtdlp.version,
-      config: currentYtdlp
+      config: currentYtdlp,
+      platform: YTDLP_PLATFORM
     })
+    let updated = false
+    let previousVersion = currentYtdlp?.version ?? '-'
     if (
       latestRelease &&
       (forceLatestUpdate ||
         !currentYtdlp?.version ||
-        !calvNewerThan(currentYtdlp.version, latestRelease.version))
+        (currentYtdlp.version !== latestRelease.version &&
+          !calvNewerThan(
+            currentYtdlp.version.replace(/\./g, '-'),
+            latestRelease.version.replace(/\./g, '-')
+          )))
     ) {
       log.debug('found new version of ytdlp, trying to download...', {
         tag_name: latestRelease.tag_name,
@@ -72,6 +79,8 @@ export class YTDLP {
       await this.downloadUpdate(latestRelease)
         .then(({ path, version }) => {
           appStore.set('ytdlp', { path, version, checkForUpdate: true })
+          log.debug('downloaded new ytdlp executable:', path, version)
+          updated = true
         })
         .catch((err) => {
           log.error('failed to download update...\n', err)
@@ -79,6 +88,11 @@ export class YTDLP {
     }
     if (appStore.store.ytdlp?.path) this.ytdlp.setBinaryPath(appStore.store.ytdlp.path)
     this._state = YTDLP_STATE.READY
+    return {
+      updated,
+      currentVersion: appStore.store.ytdlp.version,
+      previousVersion
+    }
   }
   private async downloadUpdate(
     release: GithubRelease & { version: string }
