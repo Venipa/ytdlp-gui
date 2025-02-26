@@ -1,4 +1,5 @@
 import secureStore from '@main/secureStore'
+import { checkForUpdates, setUpdateHandledByFrontend } from '@main/updater'
 import { TRPCError } from '@trpc/server'
 import { shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
@@ -56,22 +57,22 @@ export const internalRouter = router({
     .mutation(async ({ input: { path: filePath } }) => {
       await shell.openPath(filePath)
     }),
-  checkUpdate: publicProcedure
-    .input(z.boolean().default(false))
-    .mutation(async ({ input: notifyIfUpdateAvailable }) => {
-      if (notifyIfUpdateAvailable) return await autoUpdater.checkForUpdatesAndNotify()
-      return await autoUpdater.checkForUpdates()
-    }),
+  checkUpdate: publicProcedure.mutation(async () => {
+    return await checkForUpdates()
+  }),
   downloadUpdate: publicProcedure.mutation(() => {
     try {
-      return autoUpdater.downloadUpdate()
+      return autoUpdater.downloadUpdate().then((s) => {
+        setUpdateHandledByFrontend(true)
+        return s
+      })
     } catch (ex: any) {
       throw new TRPCError({ message: ex.message, code: 'INTERNAL_SERVER_ERROR' })
     }
   }),
   quitAndInstallUpdate: publicProcedure.mutation(() => {
     try {
-      return autoUpdater.quitAndInstall()
+      return autoUpdater.quitAndInstall(false, true)
     } catch (ex: any) {
       throw new TRPCError({ message: ex.message, code: 'INTERNAL_SERVER_ERROR' })
     }

@@ -1,7 +1,29 @@
-import { BrowserWindow, dialog } from 'electron'
+import { appStore } from '@main/stores/app.store'
+import { isProduction } from '@shared/config'
+import { app, BrowserWindow, dialog } from 'electron'
 import { autoUpdater } from 'electron-updater'
+import semver from 'semver'
+const [GITHUB_AUTHOR, GITHUB_REPOSITORY] = import.meta.env.VITE_GITHUB_REPOSITORY.split('/', 2)
+let updateQueuedInFrontend = false
+export const setUpdateHandledByFrontend = (value: boolean) => (updateQueuedInFrontend = value)
+export function isUpdateInRange(ver: string) {
+  if (!isProduction) return true
+  return semver.gtr(ver, app.getVersion(), {
+    includePrerelease: appStore.store.beta
+  })
+}
+export function checkForUpdates() {
+  return autoUpdater
+    .checkForUpdates()
+    .then((info) => (info && isUpdateInRange(info.updateInfo.version) && info) || null)
+}
+export function checkForUpdatesAndNotify() {}
 export function attachAutoUpdaterIPC(win: BrowserWindow) {
-  autoUpdater.on('update-available', (info) => win.webContents.send('update-available', info))
+  autoUpdater.on(
+    'update-available',
+    (info) =>
+      info && isUpdateInRange(info.version) && win.webContents.send('update-available', info)
+  )
   autoUpdater.on('update-not-available', (info) => {
     win.webContents.send('update-available', false)
     win.webContents.send('update-checking', false)
@@ -14,6 +36,7 @@ export function attachAutoUpdaterIPC(win: BrowserWindow) {
     win.webContents.send('update-checking', new Date().toISOString())
   )
   autoUpdater.signals.updateDownloaded(async (x) => {
+    if (updateQueuedInFrontend) return
     const releaseNotes = (
       typeof x.releaseNotes === 'string'
         ? x.releaseNotes
@@ -36,4 +59,11 @@ export function attachAutoUpdaterIPC(win: BrowserWindow) {
         else if (response === 1) autoUpdater.autoInstallOnAppQuit = true
       })
   })
+
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: GITHUB_AUTHOR,
+    repo: GITHUB_REPOSITORY
+  })
+  autoUpdater.autoDownload = false
 }

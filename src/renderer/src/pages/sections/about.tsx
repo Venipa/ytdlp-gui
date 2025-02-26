@@ -40,11 +40,11 @@ export default function AboutTab() {
         const updateNow = await new Promise<boolean>((resolve) => {
           toast.info('A new version has been found', {
             action: (
-              <div className="flex gap-1">
-                <Button className="h-6 px-1" onClick={() => resolve(true)}>
+              <div className="flex gap-1 ml-auto">
+                <Button className="h-6 px-2 text-xs" variant={"ghost"} onClick={() => resolve(true)}>
                   Update Now
                 </Button>
-                <Button className="h-6 px-1" onClick={() => resolve(false)}>
+                <Button className="h-6 px-2 text-xs" variant={"ghost"} onClick={() => resolve(false)}>
                   Later
                 </Button>
               </div>
@@ -56,6 +56,8 @@ export default function AboutTab() {
         if (updateNow) {
           toast.loading('Downloading update...', {
             id,
+            action: null,
+            description: null,
             dismissible: false,
             duration: 0
           })
@@ -64,7 +66,7 @@ export default function AboutTab() {
           })
           await quitAndInstallUpdate()
         } else {
-          toast.info('Update postponed.', { id, duration: 5000 })
+          toast.info('Update postponed.', { id, duration: 5000, description: null })
         }
       }
     } finally {
