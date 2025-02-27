@@ -2,8 +2,10 @@ import type { SelectDownload } from '@main/stores/queue-database.helpers'
 import { Button } from '@renderer/components/ui/button'
 import { ScrollArea } from '@renderer/components/ui/scroll-area'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@renderer/components/ui/sheet'
+import { TrimSubdomainRegex } from '@renderer/lib/regex'
 import { trpc } from '@renderer/lib/trpc-link'
 import { formatDistanceToNow } from 'date-fns'
+import { LucideGlobe } from 'lucide-react'
 import prettyBytes from 'pretty-bytes'
 import { PropsWithChildren, useMemo } from 'react'
 const isYTDomain = /^((www|music)\.)?youtube.com/
@@ -24,6 +26,11 @@ export default function FileSheet({
   const createdAt = useMemo(
     () => (created && formatDistanceToNow(new Date(created), { includeSeconds: false })) || null,
     [created]
+  )
+  const faviconUrl = useMemo(
+    () =>
+      source && `https://icons.duckduckgo.com/ip3/${source.replace(TrimSubdomainRegex, '')}.ico`,
+    [source]
   )
   return (
     <>
@@ -51,7 +58,7 @@ export default function FileSheet({
             </div>
             <div className="file-info-row">
               <span>Filesize</span>
-              <span>{filesize && prettyBytes(filesize) || '0B'}</span>
+              <span>{(filesize && prettyBytes(filesize)) || '0B'}</span>
             </div>
             <div className="file-info-row">
               <span>Type</span>
@@ -59,7 +66,18 @@ export default function FileSheet({
             </div>
             <div className="file-info-row">
               <span>Source</span>
-              <span>{source || '-'}</span>
+              <div className="flex items-center gap-1">
+                {(source && (
+                  <>
+                    {!faviconUrl ? (
+                      <LucideGlobe className="size-2.5" />
+                    ) : (
+                      <img src={faviconUrl} className="size-2.5" />
+                    )}
+                    <span>{source}</span>
+                  </>
+                )) || <span>-</span>}
+              </div>
             </div>
             <div className="file-info-row">
               <span>Uploader</span>
@@ -67,7 +85,7 @@ export default function FileSheet({
                 {meta?.uploader && meta?.uploader !== meta?.channel && (
                   <>
                     <span>{meta?.uploader || '-'}</span>
-                    <span className='bg-muted-foreground size-1 rounded-full'></span>
+                    <span className="bg-muted-foreground size-1 rounded-full"></span>
                   </>
                 )}
                 <span>{meta?.channel || '-'}</span>
@@ -104,7 +122,6 @@ export default function FileSheet({
           .file-info-row > span:nth-child(2) {
             @apply truncate pr-8;
           }
-
         `}
       </style>
     </>

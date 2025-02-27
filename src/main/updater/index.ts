@@ -3,7 +3,10 @@ import { isProduction } from '@shared/config'
 import { app, BrowserWindow, dialog } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import semver from 'semver'
-const [GITHUB_AUTHOR, GITHUB_REPOSITORY] = import.meta.env.VITE_GITHUB_REPOSITORY.split('/', 2)
+const [GITHUB_AUTHOR, GITHUB_REPOSITORY] = import.meta.env.VITE_GITHUB_REPOSITORY?.split(
+  '/',
+  2
+) ?? [null, null]
 let updateQueuedInFrontend = false
 export const setUpdateHandledByFrontend = (value: boolean) => (updateQueuedInFrontend = value)
 export function isUpdateInRange(ver: string) {
@@ -59,11 +62,11 @@ export function attachAutoUpdaterIPC(win: BrowserWindow) {
         else if (response === 1) autoUpdater.autoInstallOnAppQuit = true
       })
   })
-
-  autoUpdater.setFeedURL({
-    provider: 'github',
-    owner: GITHUB_AUTHOR,
-    repo: GITHUB_REPOSITORY
-  })
+  if (!import.meta.env.VITE_GITHUB_REPOSITORY)
+    autoUpdater.setFeedURL({
+      provider: 'github',
+      owner: GITHUB_AUTHOR,
+      repo: GITHUB_REPOSITORY
+    })
   autoUpdater.autoDownload = false
 }

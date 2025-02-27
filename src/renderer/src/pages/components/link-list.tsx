@@ -5,6 +5,7 @@ import { ProgressCircle } from '@renderer/components/ui/progress-circle'
 import { Spinner } from '@renderer/components/ui/spinner'
 import SuspenseLoader from '@renderer/components/ui/suspense-loader'
 import { QTooltip } from '@renderer/components/ui/tooltip'
+import { TrimSubdomainRegex } from '@renderer/lib/regex'
 import { trpc } from '@renderer/lib/trpc-link'
 import { createLogger, logger } from '@shared/logger'
 import {
@@ -13,6 +14,7 @@ import {
   LucideCheck,
   LucideFileX,
   LucideFolderOpen,
+  LucideGlobe,
   LucideRedo2,
   LucideSquare,
   LucideX
@@ -41,12 +43,17 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
   const cancelled = useMemo(() => state === 'cancelled', [state, status])
   const downloading = useMemo(() => state === 'downloading', [state, status])
   const processingMeta = useMemo(() => state === 'fetching_meta', [state, status])
+  const faviconUrl = useMemo(
+    () =>
+      source && `https://icons.duckduckgo.com/ip3/${source.replace(TrimSubdomainRegex, '')}.ico`,
+    [source]
+  )
   return (
     <div className="h-10 rounded-md hover:bg-muted/60 grid grid-cols-[40px_1fr_minmax(100px,_auto)] gap-2 items-center relative cursor-default group/item flex-shrink-0 select-none">
       <div className="flex flex-col size-10 items-center justify-center">
         {error ? (
           <QTooltip side="right" content={'An error occurred while downloading.'}>
-            <div className="size-4 p-1 flex flex-col items-center justify-center border-2 border-destructive/40 bg-destructive rounded-full">
+            <div className="size-5 p-1 flex flex-col items-center justify-center border-2 border-destructive/40 bg-destructive rounded-full">
               <LucideX className="stroke-[4px] stroke-destructive-foreground" />
             </div>
           </QTooltip>
@@ -80,21 +87,35 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
       <FileSheet item={props as any}>
         <div className="grid grid-rows-[20px_12px] items-center cursor-pointer">
           <div className="text-sm truncate leading-none">{title}</div>
-          <div className="flex gap-2.5 items-center text-xs text-muted-foreground leading-none">
+          <div className="flex gap-1 items-center text-xs text-muted-foreground leading-none">
             {!error && filesize && (
               <>
-                <span>Filesize: {filesize}</span>
-                <DotIcon className="size-2 -mx-2" />
+                <span className="w-[60px]">{filesize}</span>
+                <DotIcon className="size-2" />
               </>
             )}
-            <span>Type: {type}</span>
-            <DotIcon className="size-2 -mx-2" />
+            {(type && <span className="w-[60px] text-center">{type}</span>) || (
+              <span className="w-[60px] text-center">unknown</span>
+            )}
+            <DotIcon className="size-2" />
             {!url ? (
-              <span>Source: {source}</span>
+              <div className="flex cursor-pointer items-center gap-1">
+                {!faviconUrl ? (
+                  <LucideGlobe className="size-2.5" />
+                ) : (
+                  <img src={faviconUrl} className="size-2.5" />
+                )}
+                <span>{source}</span>
+              </div>
             ) : (
               <ClickableText asChild>
-                <a className="cursor-pointer" href={url} target="_blank">
-                  Source: {source}
+                <a className="cursor-pointer flex items-center gap-1" href={url} target="_blank">
+                  {!faviconUrl ? (
+                    <LucideGlobe className="size-2.5" />
+                  ) : (
+                    <img src={faviconUrl} className="size-2.5" />
+                  )}
+                  <span>{source}</span>
                 </a>
               </ClickableText>
             )}
