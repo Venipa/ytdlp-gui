@@ -4,6 +4,7 @@ appId: net.venipa.ytdlpgui
 productName: ytdlp-gui
 extraMetadata:
   name: YTDLP GUI
+  description: "YTDLP GUI App"
 directories:
   buildResources: build
 files:

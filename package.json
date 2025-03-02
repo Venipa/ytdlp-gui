@@ -1,6 +1,6 @@
 {
   "name": "ytdlp-gui",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "description": "venipa-electron-template",
   "main": "./out/main/index.js",
   "author": "Venipa <admin@venipa.net>",
@@ -134,8 +134,8 @@
     "autoprefixer": "^10.4.20",
     "cross-env": "^7.0.3",
     "drizzle-kit": "^0.30.4",
-    "electron": "^31.0.2",
-    "electron-builder": "^24.13.3",
+    "electron": "^31.7.2",
+    "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.34.3",

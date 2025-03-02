@@ -79,12 +79,15 @@ async function createWindow() {
     return { action: 'deny' }
   })
   let isReady = false
-  mainWindow.on('ready-to-show', async () => {
-    isReady = true
-    if (isDevelopmentOrDebug) {
-      mainWindow.webContents.openDevTools({ mode: 'detach' })
-    }
-    app.setAccessibilitySupportEnabled(true)
+  const readyPromise = new Promise<void>((resolve) => {
+    mainWindow.on('ready-to-show', async () => {
+      isReady = true
+      if (isDevelopmentOrDebug) {
+        mainWindow.webContents.openDevTools({ mode: 'detach' })
+      }
+      app.setAccessibilitySupportEnabled(true)
+      resolve()
+    })
   })
   tray.setImage(trayIcon)
   trpcIpcHandler.attachWindow(mainWindow)
@@ -93,9 +96,7 @@ async function createWindow() {
   // Load the remote URL for development or the local html file for production.
   await loadUrlOfWindow(mainWindow, '/')
   attachAutoUpdaterIPC(mainWindow)
-  if (!isProduction) {
-    mainWindow.setAlwaysOnTop(true)
-  }
+  await readyPromise
   mainWindow.show()
   return mainWindow
 }
@@ -104,6 +105,11 @@ async function createWindow() {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
   app.commandLine.appendSwitch('disable-backgrounding-occluded-windows', 'true')
+  if (platform.isWindows) {
+    app.commandLine.appendSwitch("enable-gpu-rasterization"); // performance feature flags
+    app.commandLine.appendSwitch("enable-zero-copy");
+    app.commandLine.appendSwitch("enable-features", "CanvasOopRasterization,EnableDrDc"); // Enables Display Compositor to use a new gpu thread. todo: testing
+  }
   // Set app user model id for windows
   const appUserId = builderConfig.appId.split('.', 2).join('.')
   log.debug({ appUserId })
