@@ -1,41 +1,31 @@
 import { electronApp, optimizer, platform } from '@electron-toolkit/utils'
 import { isDevelopmentOrDebug, isProduction } from '@shared/config'
 import { Logger, logger } from '@shared/logger'
-import {
-  BrowserWindow,
-  Menu,
-  MenuItem,
-  Tray,
-  app,
-  screen,
-  shell,
-  systemPreferences
-} from 'electron'
-import { menubar } from 'menubar'
+import { BrowserWindow, Menu, MenuItem, Tray, app, shell, systemPreferences } from 'electron'
 import { join } from 'path'
 // @ts-ignore
-import iconWin from '~/resources/icon.ico?asset'
+import iconWin from '~/build/icon.ico?asset'
 // @ts-ignore
-import icon from '~/resources/24x24.png?asset'
+import icon from '~/build/icon_24x24.png?asset'
 // @ts-ignore
 import { autoUpdater } from 'electron-updater'
-import trayIconAsset from '~/resources/menuIcon_16.png?asset'
 // @ts-ignore
-import { clamp } from 'lodash'
 // @ts-ignore
 import builderConfig from '../../electron-builder.yml'
 import { executableIsAvailable } from './lib/bin.utils'
 import { ClipboardMonitor } from './lib/clipboardMonitor'
+import { wrapWindowHandler } from './lib/windowUtils'
 import { appStore } from './stores/app.store'
 import { runMigrate } from './stores/queue-database'
 import { trpcIpcHandler } from './trpc'
-import { createUrlOfPage, loadUrlOfWindow } from './trpc/dialog.utils'
+import { loadUrlOfWindow } from './trpc/dialog.utils'
+import { pushLogToClient } from './trpc/events.ee'
 import { pushWindowState } from './trpc/window.api'
 import { checkBrokenLinks, ytdl } from './trpc/ytdlp.core'
 import { ytdlpEvents } from './trpc/ytdlp.ee'
 import { attachAutoUpdaterIPC } from './updater'
 const log = new Logger('App')
-const trayIcon = !platform.isWindows ? (platform.isMacOS ? trayIconAsset : iconWin) : icon
+const trayIcon = platform.isWindows ? iconWin : icon
 
 /**
  * required for clipboard monitoring for instant download feature
@@ -53,67 +43,51 @@ async function createWindow() {
   trayMenu.append(new MenuItem({ type: 'separator' }))
   trayMenu.append(new MenuItem({ label: 'Quit', click: () => app.quit() }))
   tray.setIgnoreDoubleClickEvents(true)
-  tray.on('click', (ev) => {
-    return
-  })
   tray.on('right-click', () => trayMenu.popup())
   tray.setContextMenu(trayMenu)
-  const mbIndex = createUrlOfPage('/')
-  const sizings = screen.getPrimaryDisplay()
-  const mb = menubar({
-    icon: trayIcon,
-    showDockIcon: false,
-    preloadWindow: true,
-    tray,
-    showOnRightClick: false,
-    index: mbIndex.path,
-    loadUrlOptions: mbIndex.options as any,
-    browserWindow: {
-      width: 800,
-      height: 768,
-      minHeight: 600,
-      minWidth: 800,
-      maxWidth: clamp(sizings.bounds.width, 800, clamp(1280, 800, sizings.bounds.width)),
-      maxHeight: clamp(sizings.bounds.height, 600, clamp(1080, 600, sizings.bounds.height)),
-      movable: false,
-      resizable: true,
-      maximizable: false,
-      minimizable: false,
-      show: false,
-      backgroundColor: '#09090B',
-      ...(process.platform === 'linux' ? { icon } : { icon: iconWin }),
-      webPreferences: {
-        preload: join(__dirname, '../preload/index.js'),
-        contextIsolation: false,
-        nodeIntegration: true,
-        sandbox: false,
-        devTools: isDevelopmentOrDebug,
-        additionalArguments: [`--app-path=${__dirname}`, `--app-version=${app.getVersion()}`]
-      },
-      frame: false
-    }
+  const [defaultWidth, defaultHeight] = [800, 600]
+  const mainWindow = new BrowserWindow({
+    width: defaultWidth + 160,
+    height: defaultHeight + 178,
+    minHeight: defaultHeight,
+    minWidth: defaultWidth,
+    movable: true,
+    minimizable: true,
+    maximizable: true,
+    resizable: true,
+    show: false,
+    backgroundColor: '#09090B',
+    ...(process.platform === 'linux' ? { icon } : { icon: iconWin }),
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: false,
+      nodeIntegration: true,
+      sandbox: false,
+      devTools: isDevelopmentOrDebug,
+      additionalArguments: [`--app-path=${__dirname}`, `--app-version=${app.getVersion()}`]
+    },
+    frame: false
   })
-  const mainWindow: BrowserWindow = await new Promise((resolve) =>
-    mb.once('before-load', () => {
-      trpcIpcHandler.attachWindow(mb.window!)
-      resolve(mb.window!)
-    })
-  )
+  tray.on('click', (ev) => {
+    mainWindow.show()
+    return
+  })
+  wrapWindowHandler(mainWindow, 'primary', { height: defaultHeight, width: defaultWidth })
   mainWindow.setMaxListeners(100)
-  mb.setMaxListeners(100)
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
   let isReady = false
-  mb.on('ready', async () => {
+  mainWindow.on('ready-to-show', async () => {
     isReady = true
     if (isDevelopmentOrDebug) {
       mainWindow.webContents.openDevTools({ mode: 'detach' })
     }
     app.setAccessibilitySupportEnabled(true)
   })
-  mb.tray.setImage(trayIcon)
+  tray.setImage(trayIcon)
+  trpcIpcHandler.attachWindow(mainWindow)
 
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
@@ -122,7 +96,8 @@ async function createWindow() {
   if (!isProduction) {
     mainWindow.setAlwaysOnTop(true)
   }
-  return mb
+  mainWindow.show()
+  return mainWindow
 }
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
@@ -149,13 +124,14 @@ app.whenReady().then(async () => {
   ytdl.initialize() // init asynchronously
 
   createWindow().then((w) => {
-    const isWindowFocused = () => w.window!.isFocused()
+    const isWindowFocused = () => w!.isFocused()
     const clipboardWatcher = new ClipboardMonitor({
       distinct: true,
       onHttpsText(value) {
         log.debug('found https link in clipboard', { value })
         if (isWindowFocused()) return
         if (appStore.store.features.clipboardMonitor) {
+          pushLogToClient('clipboard hit: ' + value, 'debug')
           if (appStore.store.features.clipboardMonitorAutoAdd) ytdlpEvents.emit('add', value)
           else ytdlpEvents.emit('autoAdd', value)
         }
@@ -171,6 +147,10 @@ app.whenReady().then(async () => {
         ytdl.ytdlp.setBinaryPath(newPath ?? ytdl.currentDownloadPath)
       } else ytdl.ytdlp.setBinaryPath(ytdl.currentDownloadPath)
     })
+    if (!isProduction)
+      appStore.onDidAnyChange(() => {
+        pushLogToClient('store change', 'debug')
+      })
     if (appStore.store.features?.clipboardMonitor) clipboardWatcher.start()
   })
 

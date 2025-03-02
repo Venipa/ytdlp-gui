@@ -1,6 +1,7 @@
-import { initTRPC } from '@trpc/server';
+import { initTRPC, TRPCError } from '@trpc/server';
 import { BrowserWindow, IpcMainInvokeEvent } from 'electron';
 import { Logger } from '~/src/shared/logger';
+import { pushLogToClient } from './events.ee';
 const t = initTRPC
   .context<{ window: BrowserWindow; event: IpcMainInvokeEvent; log: Logger; path: string }>()
   .create({ isServer: true })
@@ -12,7 +13,10 @@ export const publicProcedure = t.procedure.use(async ({ ctx, path, type, next })
   const log = new Logger(path).child(type)
   ctx.log = log
   ctx.path = path
-  return next({ ctx })
+  return next({ ctx }).catch(err => {
+    if (err instanceof TRPCError) pushLogToClient(err.message, "error")
+    return Promise.reject(err);
+  })
 })
 
 /**

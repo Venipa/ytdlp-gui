@@ -10,6 +10,7 @@ import { app } from 'electron'
 import { platform } from 'os'
 import path from 'path'
 import { VideoInfo } from 'yt-dlp-wrap/types'
+import { pushLogToClient } from './events.ee'
 const YTDLP_PLATFORM = platform()
 const ytdlpPath = app.getPath('userData')
 const log = new Logger('YTDLP')
@@ -106,15 +107,12 @@ export class YTDLP {
     const platformFilenames = [
       appPlatform.isWindows ? '--windows-filenames' : '--restrict-filenames'
     ]
-
-    return await resulter<VideoInfo>(
-      this._ytd.getVideoInfo(
-        [...args]
-          .concat((args.includes('--ies') && ignoreGenericUrls) || '')
-          .concat((args.includes(platformFilenames[0]) && platformFilenames) || '')
-          .filter(Boolean)
-      )
-    )
+    const videoArgs = [...args]
+      .concat((args.includes('--ies') && ignoreGenericUrls) || '')
+      .concat((args.includes(platformFilenames[0]) && platformFilenames) || '')
+      .filter(Boolean)
+    pushLogToClient(`yt-dlp ${videoArgs.join(' ')}`)
+    return await resulter<VideoInfo>(this._ytd.getVideoInfo(videoArgs))
   }
   readonly exec: typeof this._ytd.exec = this._ytd.exec.bind(this._ytd)
   get ytdlp() {

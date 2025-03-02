@@ -4,8 +4,9 @@ import { QTooltip } from '@renderer/components/ui/tooltip'
 import { trpc } from '@renderer/lib/trpc-link'
 import { cn } from '@renderer/lib/utils'
 import { logger } from '@shared/logger'
+import { isTRPCErrorResponse } from '@shared/trpc/utils'
 import { LucideFlame } from 'lucide-react'
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useLinkStore } from './add-link.store'
 import { useApp } from './app-context'
@@ -23,6 +24,24 @@ export default function AddLink({ showDownloadPath }: { showDownloadPath?: boole
     () => mediaUrl.split('\n').filter((url) => url && httpsRegex.test(url)).length,
     [mediaUrl]
   )
+  const handleSubmit = useCallback(() => {
+    if (!mediaUrl) return
+    const queueUrls = [
+      ...mediaUrl.split('\n').filter((s) => {
+        logger.debug({ regexTestSource: s })
+        return s && httpsRegex.test(s)
+      })
+    ]
+    logger.debug('download requested for ', { url: queueUrls, mediaUrl })
+    queueDownloadFromUrl({ url: queueUrls })
+      .then((items) => {
+        toast.success(`Downloaded ${items.length} of ${queueUrls.length} urls.`)
+      })
+      .catch((err) => {
+        if (isTRPCErrorResponse(err)) toast.error(err.message)
+      })
+    setMediaUrl('')
+  }, [mediaUrl])
 
   logger.debug('add-link', { mediaUrl })
   return (
@@ -61,19 +80,7 @@ export default function AddLink({ showDownloadPath }: { showDownloadPath?: boole
           </Button>
         </QTooltip>
 
-        <Button
-          disabled={isLoading || !mediaUrl}
-          onClick={() => {
-            if (!mediaUrl) return
-            const queueUrls = [...mediaUrl.split('\n').filter((s) => {
-              logger.debug({regexTestSource: s})
-              return s && httpsRegex.test(s)
-            })]
-            logger.debug('download requested for ', { url: queueUrls, mediaUrl })
-            queueDownloadFromUrl({ url: queueUrls })
-            setMediaUrl('')
-          }}
-        >
+        <Button disabled={!mediaUrl} onClick={handleSubmit}>
           Add & Start Download
         </Button>
       </div>

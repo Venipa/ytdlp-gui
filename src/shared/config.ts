@@ -2,7 +2,7 @@ import { pick } from 'lodash-es'
 import git from '~/git.json'
 import pkg from '~/package.json'
 const config = {
-  title: 'YTDLP Desktop',
+  title: 'YTDLP GUI',
   appInfo: pick(pkg, 'name', 'author', 'version'),
   git: git as any
 }

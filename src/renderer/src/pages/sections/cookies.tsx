@@ -4,7 +4,7 @@ import { Textarea } from '@renderer/components/ui/textarea'
 import { random } from 'lodash'
 import { CookieIcon, LucideCookie, LucideEdit2, LucideImport } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { YTDLCookie } from 'ytdlp-desktop/types'
+import { YTDLCookie } from 'ytdlp-gui/types'
 
 export const meta = {
   title: 'Cookies',

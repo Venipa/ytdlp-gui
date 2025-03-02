@@ -1,5 +1,6 @@
 import type { RouterOutput } from '@main/api'
 import { cn } from '@renderer/lib/utils'
+import { isProduction } from '@shared/config'
 import { cva, VariantProps } from 'class-variance-authority'
 import * as React from 'react'
 import { ControlButton } from './control-button'
@@ -60,7 +61,7 @@ const WindowControlBar = React.forwardRef<HTMLDivElement, WindowsControlBarProps
         </div>
         {!state.parentId && children}
         <div className="flex space-x-0.5">
-          {!state.alwaysOnTop && (
+          {!(isProduction && state.alwaysOnTop) && (
             <ControlButton
               disabled={!state.minimizable}
               icon="minimize"

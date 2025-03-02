@@ -1,9 +1,9 @@
 # yaml-language-server: $schema=https://json.schemastore.org/electron-builder.json
 
 appId: net.venipa.ytdlpgui
-productName: ytdlp-desktop
+productName: ytdlp-gui
 extraMetadata:
-  name: YTDLP Desktop
+  name: YTDLP GUI
 directories:
   buildResources: build
 files:
@@ -18,9 +18,12 @@ files:
   - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,tsconfig*.json}"
 asarUnpack:
   - resources/**
+  - build/*.ico
+  - build/*.png
+  - build/*.jpg
 win:
-  executableName: ytdlp-desktop
-  artifactName: ytdlp-desktop-${version}-setup.${ext}
+  executableName: ytdlp-gui
+  artifactName: ytdlp-gui-${version}-setup.${ext}
   compression: maximum
   target:
     - target: nsis
@@ -41,13 +44,12 @@ mac:
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
   target:
-    - target: zip
-      arch: x64
-    - target: zip
+    - target: dmg
       arch: arm64
   icon: build/icon.icns
 dmg:
   title: "Install or Update ${productName} ${version}"
+  backgroundColor: "#101010"
 # linux:
 #   target:
 #     - target: appImage

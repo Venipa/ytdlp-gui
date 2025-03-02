@@ -11,8 +11,9 @@ import { statSync } from 'fs'
 import { omit, uniq } from 'lodash'
 import path from 'path'
 import { VideoInfo } from 'yt-dlp-wrap/types'
-import { YTDLDownloadStatus, YTDLItem, YTDLStatus } from 'ytdlp-desktop/types'
+import { YTDLDownloadStatus, YTDLItem, YTDLStatus } from 'ytdlp-gui/types'
 import { z } from 'zod'
+import { pushLogToClient } from './events.ee'
 import { publicProcedure, router } from './trpc'
 import {
   MAX_PARALLEL_DOWNLOADS,
@@ -264,6 +265,7 @@ const queueYtdlMetaCheck = async (
     }
     dbFile.meta = omit(videoInfo, 'formats', 'thumbnails') as VideoInfo
     dbFile.metaId = videoInfo.id
+    pushLogToClient(`[${dbFile.id}=${dbFile.metaId}] added new download: ${dbFile.title}`, 'info')
     dbFile = await queries.downloads.updateDownload(dbFile.id, dbFile)
     return { dbFile, videoInfo }
   }
@@ -367,6 +369,7 @@ const queueYtdlDownload = async (dbFile: SelectDownload, videoInfo: VideoInfo) =
     dbFile.state = 'completed'
   }
   ytdlpEvents.emit('list', [dbFile])
+  pushLogToClient(`[${dbFile.id}=${dbFile.metaId}] finished download: ${dbFile.title}`, 'success')
   return await updateEntry()
 }
 function handleYtAddEvent(url: string) {

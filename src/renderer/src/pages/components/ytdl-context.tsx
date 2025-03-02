@@ -1,6 +1,6 @@
 import { trpc } from '@renderer/lib/trpc-link'
 import { Context, createContext, Provider, useContext, useMemo, useState } from 'react'
-import type { YTDLDownloadStatus, YTDLStatus } from 'ytdlp-desktop/types'
+import type { YTDLDownloadStatus, YTDLStatus } from 'ytdlp-gui/types'
 type YTDLContext = {
   getCurrentState: () => Promise<string>
   status: YTDLStatus[] // store states up to 100 items

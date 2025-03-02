@@ -1,7 +1,7 @@
-declare module 'ytdlp-desktop' {
+declare module 'ytdlp-gui' {
   export { };
 }
-declare module 'ytdlp-desktop/types' {
+declare module 'ytdlp-gui/types' {
   export type YTDLState = 'progressing' | 'done'
   export type YTDLStatus =
     | { action: string; data?: any; state: YTDLState }

@@ -4,15 +4,9 @@ import { ScrollArea } from '@renderer/components/ui/scroll-area'
 import SuspenseLoader from '@renderer/components/ui/suspense-loader'
 import { cn } from '@renderer/lib/utils'
 import config, { NodeEnv } from '@shared/config'
-import {
-  createElement,
-  Fragment,
-  HTMLProps,
-  ReactElement,
-  Suspense,
-  useMemo,
-  useState
-} from 'react'
+import { useAtom } from 'jotai'
+import { atomWithStorage } from 'jotai/utils'
+import { createElement, Fragment, HTMLProps, ReactElement, Suspense, useMemo } from 'react'
 import { toast } from 'sonner'
 import StatusBar from './components/status-bar'
 type Element = <T extends HTMLProps<HTMLDivElement> = HTMLProps<HTMLDivElement>>(
@@ -38,8 +32,17 @@ const getSectionContentByTitle = (title: string) =>
   sectionValues.find((d) => d.meta.title === title)?.default
 const getSectionMetaByTitle = (title: string) =>
   sectionValues.find((d) => d.meta.title === title)?.meta
+
+const selectedTabTitle = atomWithStorage<string>(
+  'selectedTabTitle',
+  sectionTabs[0].title,
+  undefined,
+  { getOnInit: true }
+)
+const useSelectedTabTitle = () => useAtom(selectedTabTitle)
+
 export default function SettingsWindow() {
-  const [selectedTab, setSelectedTab] = useState<string>(sectionTabs[0].title)
+  const [selectedTab, setSelectedTab] = useSelectedTabTitle()
   const selectedContent = useMemo(
     () => (selectedTab && createElement(getSectionContentByTitle(selectedTab) as any)) || null,
     [selectedTab]
@@ -51,7 +54,10 @@ export default function SettingsWindow() {
   const buildInfo = useMemo(() => config.git?.shortHash && `${config.git.shortHash}`, [])
   const appVersion = useMemo(() => `v${window.api.version}`, [])
   const ContentLayout: typeof ScrollArea = useMemo(
-    () => (selectedMeta?.customLayout ? Fragment as any : ScrollArea),
+    () =>
+      selectedMeta?.customLayout
+        ? ((({ children }: any) => <Fragment>{children}</Fragment>) as any)
+        : ScrollArea,
     [selectedMeta]
   )
   return (
@@ -101,10 +107,7 @@ export default function SettingsWindow() {
               <span>{NodeEnv}</span>
             </div>
           </TabNavbar>
-          <ContentLayout
-            className="relative h-full px-6"
-
-          >
+          <ContentLayout className="relative h-full px-6">
             {selectedContent ? (
               <Suspense fallback={<SuspenseLoader />}>{selectedContent}</Suspense>
             ) : (

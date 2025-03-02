@@ -26,7 +26,6 @@ export default function AppNavBar({
     'keydown',
     (ev) => {
       if (ev.key === 'Escape' && windowState?.parentId) close()
-      else if (ev.key === 'Escape') onClose()
     },
     windowRef,
     { passive: true }

@@ -22,7 +22,7 @@ import {
 import prettyBytes from 'pretty-bytes'
 import { useMemo, useState } from 'react'
 import { VList } from 'virtua'
-import { YTDLDownloadStatus, YTDLItem } from 'ytdlp-desktop/types'
+import { YTDLDownloadStatus, YTDLItem } from 'ytdlp-gui/types'
 import FileSheet from './file-sheet'
 const log = createLogger('LinkListItem')
 export function LinkListItem(props: YTDLItem & { key: any }) {

@@ -53,7 +53,7 @@ jobs:
         name: rebuild deps for macos
         run: |
           # rebuild libsql deps for macos
-          pnpm rebuild
+          pnpm rebuild --config.platform=darwin --config.arch=arm64
 
       - name: Build Electron release
         run: |
@@ -70,7 +70,7 @@ jobs:
       #   continue-on-error: true
       #   env:
       #     SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-      #     SENTRY_PROJECT: ytdlp-desktop
+      #     SENTRY_PROJECT: ytdlp-gui
       #     SENTRY_ORG: venipa.net
       #     SENTRY_DEPLOY_ENVIRONMENT: production
       #     SENTRY_DSN: ${{ secrets.SENTRY_DSN }}

@@ -14,9 +14,9 @@ import { logger } from '@shared/logger'
 import { buildUrl } from 'build-url-ts'
 // @ts-ignore
 // @ts-ignore
-import iconWin from '~/resources/icon.ico?asset'
+import iconWin from '~/build/icon.ico?asset'
 // @ts-ignore
-import icon from '~/resources/icon.png?asset'
+import icon from '~/build/icon_512x512.png?asset'
 
 export const createChildWindow = (options?: BrowserWindowConstructorOptions) => {
   const { parent = null } = options as BrowserWindowConstructorOptions
