@@ -3,6 +3,7 @@ import ClickableText from '@renderer/components/ui/clickable-text'
 import { QTooltip } from '@renderer/components/ui/tooltip'
 import { trpc } from '@renderer/lib/trpc-link'
 import config, { NodeEnv } from '@shared/config'
+import { throwErrorToast } from '@shared/trpc/error'
 import { formatDistanceToNow, isValid } from 'date-fns'
 import { DotIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -41,10 +42,18 @@ export default function AboutTab() {
           toast.info('A new version has been found', {
             action: (
               <div className="flex gap-1 ml-auto">
-                <Button className="h-6 px-2 text-xs" variant={"ghost"} onClick={() => resolve(true)}>
+                <Button
+                  className="h-6 px-2 text-xs"
+                  variant={'ghost'}
+                  onClick={() => resolve(true)}
+                >
                   Update Now
                 </Button>
-                <Button className="h-6 px-2 text-xs" variant={"ghost"} onClick={() => resolve(false)}>
+                <Button
+                  className="h-6 px-2 text-xs"
+                  variant={'ghost'}
+                  onClick={() => resolve(false)}
+                >
                   Later
                 </Button>
               </div>
@@ -62,9 +71,16 @@ export default function AboutTab() {
             duration: 0
           })
           await downloadUpdate().then(() => {
-            toast.success('Update downloaded...', { description: 'Awaiting installation.', id })
+            toast.success('Update downloaded...', {
+              description: 'Awaiting installation.',
+              dismissible: true,
+              duration: 3000,
+              id
+            })
           })
-          await quitAndInstallUpdate()
+          await quitAndInstallUpdate().catch((err) => {
+            throwErrorToast(err)
+          })
         } else {
           toast.info('Update postponed.', { id, duration: 5000, description: null })
         }

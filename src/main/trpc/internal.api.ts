@@ -62,9 +62,10 @@ export const internalRouter = router({
   }),
   downloadUpdate: publicProcedure.mutation(() => {
     try {
-      return autoUpdater.downloadUpdate().then((s) => {
-        setUpdateHandledByFrontend(true)
-        return s
+      setUpdateHandledByFrontend(true)
+      return autoUpdater.downloadUpdate().catch((err) => {
+        setUpdateHandledByFrontend(false)
+        throw err
       })
     } catch (ex: any) {
       throw new TRPCError({ message: ex.message, code: 'INTERNAL_SERVER_ERROR' })

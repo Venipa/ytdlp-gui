@@ -66,10 +66,10 @@ export default function StatusBar() {
           </>
         ) : updateProgress && !updateDone ? (
           <>
-            <Appear>Downloading... {String(updateProgress.percent).padStart(3, ' ')}%</Appear>
+            <Appear>Downloading... {(updateProgress.percent as number).toFixed(2).padStart(5, ' ')}%</Appear>
             <div className="h-10 w-px bg-muted"></div>
           </>
-        ) : updateAvailable ? (
+        ) : updateAvailable && !updateDone ? (
           <>
             <Appear>Update Available, preparing...</Appear>
             <div className="h-10 w-px bg-muted"></div>

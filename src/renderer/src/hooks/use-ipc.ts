@@ -6,8 +6,12 @@ import usePromise from './use-promise'
 
 interface IpcOptions<T = any> {
   defaultValue: T
+  getOnInit?: boolean
 }
-export function useIPC<T = any>(eventName: string, options: IpcOptions<T> = {} as any) {
+export function useIPC<T = any>(
+  eventName: string,
+  options: IpcOptions<T> = { getOnInit: false } as IpcOptions<T>
+) {
   const [state, setState] = useState(options.defaultValue)
   const handle = useCallback(
     (ev: IpcRendererEvent, data: any) => {
@@ -16,12 +20,13 @@ export function useIPC<T = any>(eventName: string, options: IpcOptions<T> = {} a
     [eventName]
   )
   useIsomorphicLayoutEffect(() => {
-    window.api
-      .invoke(`action:${eventName}`)
-      .then((initialData) => setState(initialData))
-      .catch((err) => {
-        logger.error(err)
-      })
+    if (options.getOnInit)
+      window.api
+        .invoke(`action:${eventName}`)
+        .then((initialData) => setState(initialData))
+        .catch((err) => {
+          logger.error(err)
+        })
   }, [eventName])
   useEffect(() => {
     window.api.on(eventName, handle)

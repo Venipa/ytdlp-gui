@@ -1,6 +1,6 @@
 {
   "name": "ytdlp-gui",
-  "version": "0.9.7",
+  "version": "0.9.8",
   "description": "venipa-electron-template",
   "main": "./out/main/index.js",
   "author": "Venipa <admin@venipa.net>",

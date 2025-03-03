@@ -21,7 +21,7 @@ export default function AppNavBar({
   const { pathname } = useLocation()
   const isQuitRoute = useMemo(() => quitPaths.includes(pathname), [pathname])
   const { windowState } = useWindowState()
-  const { hide: onClose, close, maximize: onMaximize, minimize: onMinimize } = useWindowControls()
+  const { hide, close, maximize: onMaximize, minimize: onMinimize } = useWindowControls()
   useEventListener(
     'keydown',
     (ev) => {
@@ -36,7 +36,7 @@ export default function AppNavBar({
         title={configState?.title || <Spinner />}
         state={{ ...windowState, title: '' } as any}
         className={cn('h-10 px-1.5', className)}
-        {...{ onMinimize, onMaximize, onClose: isQuitRoute ? close : onClose }}
+        {...{ onMinimize, onMaximize, onClose: isQuitRoute ? close : hide }}
         {...props}
       >
         {windowState && (

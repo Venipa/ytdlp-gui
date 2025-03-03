@@ -3,20 +3,14 @@ import { createYmlStore } from '@shared/electron/store/createYmlStore'
 import { PathsOf } from '@shared/electron/store/inferKey'
 import { app } from 'electron'
 import { AppStore } from './AppStore'
+import appStoreMigrations from './app.migrations'
 export interface AppLicense {
   code: string
   expires: string
 }
 const defaultDownloadsPath = app.getPath('downloads')
 const store = createYmlStore<AppStore>('app-settings', {
-  migrations: [
-    {
-      version: 0,
-      hook(instance, currentVersion) {
-        instance.store.features.concurrentDownloads = MAX_PARALLEL_DOWNLOADS
-      }
-    }
-  ],
+  migrations: appStoreMigrations,
   defaults: {
     ytdlp: {
       checkForUpdate: true,
@@ -32,6 +26,8 @@ const store = createYmlStore<AppStore>('app-settings', {
       clipboardMonitorAutoAdd: true,
       concurrentDownloads: MAX_PARALLEL_DOWNLOADS
     },
+    startMinimized: false,
+    startOnBoot: true,
     beta: false
   }
 })
