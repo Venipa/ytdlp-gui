@@ -32,9 +32,10 @@ export const ytdlpRouter = router({
         url: z.string().url().array()
       })
     )
-    .mutation(async ({ input: { url }, ctx }) => {
+    .mutation(async ({ input: { url: urls }, ctx }) => {
+      const dbEntries = await addToDatabase(urls)
       const files = await queuePromiseStack(
-        url.map((u) => () => queueYtdlMetaCheck(u).catch(() => null)),
+        dbEntries.map((u) => () => queueYtdlMetaCheck(u).catch(() => null)),
         MAX_PARALLEL_DOWNLOADS
       ).then((files) => files.filter((s) => !!s))
       const asyncResult = ytdlpDownloadQueue.addAll(
@@ -231,14 +232,42 @@ const deleteDownloadItem = (dbFile: SelectDownload) =>
       })
     }
   })
+const addToDatabase = async (urls: string[]) => {
+  const [items] = await db.batch(
+    urls
+      .map((url) => {
+        if (typeof url !== 'string' || !/^https/gi.test(url)) return null
+        return queries.downloads.createDownload({
+          filepath: '',
+          filesize: 0,
+          meta: {} as any,
+          metaId: '',
+          source: new URL(url).hostname,
+          title: url,
+          url,
+          state: 'queued',
+          type: null,
+          error: null,
+          retryCount: 0
+        })
+      })
+      .filter(Boolean) as any
+  )
+  ytdlpEvents.emit('list', items)
+  log.debug('addToDatabase', { items })
+  return items as SelectDownload[]
+}
 const queueYtdlMetaCheck = async (
-  url: string
+  createdDbFile: SelectDownload
 ): Promise<{ dbFile: SelectDownload; videoInfo: VideoInfo }> => {
-  if (typeof url !== 'string' || !/^https/gi.test(url)) throw new Error('Invalid url format')
+  const { url } = createdDbFile
+  log.debug('meta', `added url`, url, createdDbFile)
+  if (!createdDbFile.url) throw new Error('Invalid url format')
   ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'progressing' })
-  log.debug('meta', `added url ${url}`)
-  const existingDbFile = await queries.downloads.findDownloadByExactUrl(url)
-  let [dbFile] = await queries.downloads.createDownload({
+  let dbFile = await queries.downloads.findDownloadById(createdDbFile.id)
+  if (!dbFile) throw new Error('Entry has been not found or has been removed')
+  const existingDbFile = await queries.downloads.findDownloadByExactUrl(url, dbFile.id)
+  Object.assign(dbFile, {
     metaId: existingDbFile?.metaId ?? '',
     meta: existingDbFile?.meta ?? ({} as any),
     filepath: existingDbFile?.filepath ?? '',
@@ -247,10 +276,10 @@ const queueYtdlMetaCheck = async (
     state: 'fetching_meta',
     title: existingDbFile?.title ?? url,
     type: null,
-    url,
     error: null,
     retryCount: 0
   })
+  await queries.downloads.updateDownload(dbFile.id, dbFile)
   ytdlpEvents.emit('list', [dbFile])
   if (!dbFile.meta?.filename) {
     const { value: videoInfo, error: videoInfoError } = await ytdl.getVideoInfo(url)
@@ -372,8 +401,9 @@ const queueYtdlDownload = async (dbFile: SelectDownload, videoInfo: VideoInfo) =
   pushLogToClient(`[${dbFile.id}=${dbFile.metaId}] finished download: ${dbFile.title}`, 'success')
   return await updateEntry()
 }
-function handleYtAddEvent(url: string) {
-  queueYtdlMetaCheck(url).then(({ dbFile, videoInfo }) => {
+async function handleYtAddEvent(url: string) {
+  const [newDbFile] = await addToDatabase([url])
+  await queueYtdlMetaCheck(newDbFile).then(({ dbFile, videoInfo }) => {
     const asyncResult = ytdlpDownloadQueue.add(() => queueYtdlDownload(dbFile, videoInfo))
     if (ytdlpDownloadQueue.isPaused) ytdlpDownloadQueue.start()
     return asyncResult

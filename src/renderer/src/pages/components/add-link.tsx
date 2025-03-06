@@ -14,7 +14,7 @@ import SelectDownloadBox from './select-download-path'
 const httpsRegex = /^https?/i
 export default function AddLink({ showDownloadPath }: { showDownloadPath?: boolean }) {
   const { settings, setSetting } = useApp()
-  const { mutateAsync: queueDownloadFromUrl, isLoading } = trpc.ytdl.downloadMedia.useMutation({
+  const { mutateAsync: queueDownloadFromUrl } = trpc.ytdl.downloadMedia.useMutation({
     onError(error, variables, context) {
       toast.error(error.data!.code, { description: error.message })
     }
@@ -63,7 +63,6 @@ export default function AddLink({ showDownloadPath }: { showDownloadPath?: boole
         <div className="flex-auto"></div>
         <QTooltip content="Enable/Disable clipboard monitoring">
           <Button
-            disabled={isLoading}
             variant={'ghost'}
             onClick={() =>
               setSetting('features.clipboardMonitor', !settings.features.clipboardMonitor)

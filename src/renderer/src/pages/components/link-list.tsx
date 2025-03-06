@@ -15,6 +15,7 @@ import {
   LucideFileX,
   LucideFolderOpen,
   LucideGlobe,
+  LucideListPlus,
   LucideRedo2,
   LucideSquare,
   LucideX
@@ -43,6 +44,7 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
   const cancelled = useMemo(() => state === 'cancelled', [state, status])
   const downloading = useMemo(() => state === 'downloading', [state, status])
   const processingMeta = useMemo(() => state === 'fetching_meta', [state, status])
+  const queued = useMemo(() => state === 'queued', [state, status])
   const faviconUrl = useMemo(
     () =>
       source && `https://icons.duckduckgo.com/ip3/${source.replace(TrimSubdomainRegex, '')}.ico`,
@@ -65,6 +67,12 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
           <div className="size-5 p-1 flex flex-col items-center justify-center bg-green-500 text-white rounded-full">
             <LucideCheck className="stroke-[4px]" />
           </div>
+        ) : queued ? (
+          <QTooltip className="cursor-default" content={'Queued'} side="right">
+            <div className="flex flex-col items-center justify-center size-10 relative">
+              <LucideListPlus className="size-5 text-secondary-foreground" />
+            </div>
+          </QTooltip>
         ) : downloading && status ? (
           <QTooltip className="cursor-default" content={'Download Progress'} side="right">
             <div className="flex flex-col items-center justify-center size-10 relative">
@@ -177,7 +185,7 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
             <LucideFileX className="stroke-current" />
           </ButtonLoading>
         )}
-        {(error || cancelled) && (
+        {(error || cancelled || queued) && (
           <ButtonLoading
             variant={'ghost'}
             size={'sm'}

@@ -6,7 +6,8 @@ import {
   InferInsertModel,
   InferSelectModel,
   isNotNull,
-  like
+  like,
+  not
 } from 'drizzle-orm'
 import { omit } from 'lodash'
 import { db } from './queue-database'
@@ -30,11 +31,29 @@ function findDownloadByUrl(url: string, state?: string | string[]) {
     )
     .all()
 }
-function findDownloadByExactUrl(url: string) {
+function findDownloadByExactUrl(url: string, dbFileId?: SelectDownload['id']) {
   return db
     .select()
     .from(downloads)
-    .where(and(eq(downloads.url, url), isNotNull(downloads.meta)))
+    .where(
+      and(
+        eq(downloads.url, url),
+        isNotNull(downloads.meta),
+        ...((dbFileId !== undefined && [not(eq(downloads.id, dbFileId))]) || [])
+      )
+    )
+    .orderBy(desc(downloads.created))
+    .get()
+}
+function findDownloadById(dbFileId: SelectDownload['id']) {
+  return db
+    .select()
+    .from(downloads)
+    .where(
+      and(
+        eq(downloads.id, dbFileId)
+      )
+    )
     .orderBy(desc(downloads.created))
     .get()
 }
@@ -56,6 +75,7 @@ export const queries = {
     updateDownload,
     deleteDownload,
     findDownloadByUrl,
-    findDownloadByExactUrl
+    findDownloadByExactUrl,
+    findDownloadById
   }
 }

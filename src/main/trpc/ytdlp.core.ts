@@ -14,7 +14,7 @@ export const checkBrokenLinks = async () => {
   const itemCount = await db
     .update(downloads)
     .set({ state: 'cancelled' })
-    .where(inArray(downloads.state, ['downloading', 'fetching_meta']))
+    .where(inArray(downloads.state, ['downloading', 'fetching_meta', 'queued']))
   logger.info(`Updated state of ${itemCount.rowsAffected} to cancelled`)
 }
 
