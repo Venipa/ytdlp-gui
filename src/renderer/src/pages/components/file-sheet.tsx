@@ -1,4 +1,4 @@
-import type { SelectDownload } from '@main/stores/queue-database.helpers'
+import type { SelectDownload } from '@main/stores/app-database.helpers'
 import { Button } from '@renderer/components/ui/button'
 import { ScrollArea } from '@renderer/components/ui/scroll-area'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@renderer/components/ui/sheet'

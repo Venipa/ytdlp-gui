@@ -57,7 +57,7 @@ export default forwardRef<HTMLInputElement, SettingsToggleProps>(function Settin
   const [value, setValue] = useState(() => settingsValue)
   useEffect(() => {
     if (settingsValue !== debouncedValue)
-      setSetting(key, debouncedValue).then(() => {
+      setSetting(key, debouncedValue, true).then(() => {
         setValue(debouncedValue)
       })
   }, [debouncedValue])

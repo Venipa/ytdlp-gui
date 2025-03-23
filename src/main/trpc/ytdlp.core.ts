@@ -1,5 +1,5 @@
-import { db } from '@main/stores/queue-database'
-import { downloads } from '@main/stores/queue-database.schema'
+import { db } from '@main/stores/app-database'
+import { downloads } from '@main/stores/app-database.schema'
 import { logger } from '@shared/logger'
 import { inArray } from 'drizzle-orm'
 import { app } from 'electron'

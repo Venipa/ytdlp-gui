@@ -1,7 +1,6 @@
 'use client'
 
 import {
-  ChevronsUpDown,
   LucideCheck,
   LucideFolder,
   LucideFolderOpen,
@@ -22,6 +21,7 @@ import {
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
+import { CaretSortIcon } from '@radix-ui/react-icons'
 import { Spinner } from '@renderer/components/ui/spinner'
 import { trpc } from '@renderer/lib/trpc-link'
 import { CommandLoading } from 'cmdk'
@@ -66,7 +66,7 @@ export default function SelectDownloadBox({
           <span className="flex-auto text-start truncate text-xs">
             {value ? settings.download.selected : 'Select download path...'}
           </span>
-          <ChevronsUpDown className="opacity-50" />
+          <CaretSortIcon className="opacity-50 size-4" />
         </Button>
       </PopoverTrigger>
       <PopoverContent sideOffset={-64} className="p-0 w-[390px]">

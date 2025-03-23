@@ -14,6 +14,7 @@ export interface AppStore {
     clipboardMonitor: boolean,
     clipboardMonitorAutoAdd: boolean
     concurrentDownloads: number
+    advancedView: boolean
   }
   startMinimized: boolean
   startOnBoot: boolean

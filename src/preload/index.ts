@@ -9,6 +9,7 @@ import { } from './index.d'
 const api = {
   version,
   platform,
+  useMica: platform.isWindows && !!process.argv.find(d => d === "--use-mica"),
   maxParallelism: availableParallelism(),
   on: (eventName: string, handle: (ev: IpcRendererEvent, ...args: any[]) => void) =>
     ipcRenderer.on(eventName, handle),

@@ -15,6 +15,12 @@ const appStoreMigrations: Migration<AppStore>[] = [
       instance.store.startMinimized = false
       instance.store.startOnBoot = true
     }
+  },
+  {
+    version: 2,
+    hook(instance, currentVersion) {
+      instance.store.features.advancedView = false
+    }
   }
 ]
 

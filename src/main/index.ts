@@ -15,8 +15,8 @@ import builderConfig from '../../electron-builder.yml'
 import { executableIsAvailable } from './lib/bin.utils'
 import { ClipboardMonitor } from './lib/clipboardMonitor'
 import { wrapWindowHandler } from './lib/windowUtils'
+import { runMigrate } from './stores/app-database'
 import { appStore } from './stores/app.store'
-import { runMigrate } from './stores/queue-database'
 import { trpcIpcHandler } from './trpc'
 import { loadUrlOfWindow } from './trpc/dialog.utils'
 import { pushLogToClient } from './trpc/events.ee'
@@ -56,8 +56,23 @@ async function createWindow() {
     maximizable: true,
     resizable: true,
     show: false,
-    backgroundColor: '#09090B',
-    ...(process.platform === 'linux' ? { icon } : { icon: iconWin }),
+    ...(platform.isLinux ? { icon } : { icon: iconWin }),
+    ...(platform.isWindows && process.argv.find((d) => d === '--use-mica')
+      ? {
+          useContentSize: true,
+          backgroundMaterial: 'mica',
+          titleBarStyle: 'hidden',
+          backgroundColor: undefined
+        }
+      : {
+          backgroundColor: '#09090B'
+        }),
+    ...(platform.isMacOS
+      ? {
+          vibrancy: 'window',
+          backgroundColor: undefined
+        }
+      : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: false,
@@ -106,9 +121,9 @@ async function createWindow() {
 app.whenReady().then(async () => {
   app.commandLine.appendSwitch('disable-backgrounding-occluded-windows', 'true')
   if (platform.isWindows) {
-    app.commandLine.appendSwitch("enable-gpu-rasterization"); // performance feature flags
-    app.commandLine.appendSwitch("enable-zero-copy");
-    app.commandLine.appendSwitch("enable-features", "CanvasOopRasterization,EnableDrDc"); // Enables Display Compositor to use a new gpu thread. todo: testing
+    app.commandLine.appendSwitch('enable-gpu-rasterization') // performance feature flags
+    app.commandLine.appendSwitch('enable-zero-copy')
+    app.commandLine.appendSwitch('enable-features', 'CanvasOopRasterization,EnableDrDc') // Enables Display Compositor to use a new gpu thread. todo: testing
   }
   // Set app user model id for windows
   const appUserId = builderConfig.appId.split('.', 2).join('.')

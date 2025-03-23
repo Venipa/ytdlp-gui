@@ -74,7 +74,6 @@ export const windowRouter = router({
         getWindowState(ctx.window).then((state) => {
           emit.next(state)
         })
-        ctx.log.debug(...args)
       }
       eventNameMap.forEach((eventName) => ctx.window.on(eventName as any, onWindowStateChange))
       ipcMain.on('windowState', onWindowStateChange)

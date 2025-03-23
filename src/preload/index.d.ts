@@ -7,6 +7,7 @@ declare global {
     api: {
       version: string
       platform: typeof platform
+      useMica: boolean
       maxParallelism: number
       on(eventName: string, handle: (ev: IpcRendererEvent, ...args: any[]) => void): void
       invoke<T = any>(actionName: string, ...args: any[]): Promise<T>

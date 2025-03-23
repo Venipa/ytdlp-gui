@@ -2,6 +2,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Textarea } from '@renderer/components/ui/textarea'
 import { QTooltip } from '@renderer/components/ui/tooltip'
 import { trpc } from '@renderer/lib/trpc-link'
+import { useMediaType } from '@renderer/lib/useMediaType'
 import { cn } from '@renderer/lib/utils'
 import { logger } from '@shared/logger'
 import { isTRPCErrorResponse } from '@shared/trpc/utils'
@@ -11,8 +12,10 @@ import { toast } from 'sonner'
 import { useLinkStore } from './add-link.store'
 import { useApp } from './app-context'
 import SelectDownloadBox from './select-download-path'
+import SelectMediaTypeBox from './select-download-type'
 const httpsRegex = /^https?/i
 export default function AddLink({ showDownloadPath }: { showDownloadPath?: boolean }) {
+  const [mediaType] = useMediaType();
   const { settings, setSetting } = useApp()
   const { mutateAsync: queueDownloadFromUrl } = trpc.ytdl.downloadMedia.useMutation({
     onError(error, variables, context) {
@@ -32,8 +35,8 @@ export default function AddLink({ showDownloadPath }: { showDownloadPath?: boole
         return s && httpsRegex.test(s)
       })
     ]
-    logger.debug('download requested for ', { url: queueUrls, mediaUrl })
-    queueDownloadFromUrl({ url: queueUrls })
+    logger.debug('download requested for ', { url: queueUrls, mediaUrl, mediaType })
+    queueDownloadFromUrl({ url: queueUrls, type })
       .then((items) => {
         toast.success(`Downloaded ${items.length} of ${queueUrls.length} urls.`)
       })
@@ -60,6 +63,7 @@ export default function AddLink({ showDownloadPath }: { showDownloadPath?: boole
       </div>
       <div className="flex items-center gap-2">
         <SelectDownloadBox></SelectDownloadBox>
+        <SelectMediaTypeBox className='w-[200px]'></SelectMediaTypeBox>
         <div className="flex-auto"></div>
         <QTooltip content="Enable/Disable clipboard monitoring">
           <Button

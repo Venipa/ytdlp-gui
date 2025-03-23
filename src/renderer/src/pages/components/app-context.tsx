@@ -9,7 +9,11 @@ import { z } from 'zod'
 import { useLinkStore } from './add-link.store'
 type AppContext = {
   settings: AppStore & Record<string, any>
-  setSetting<T = any>(key: string, value: any): Promise<{key: string, value: T}>
+  setSetting<T = any>(
+    key: string,
+    value: any,
+    showToast?: boolean
+  ): Promise<{ key: string; value: T }>
   getSetting<T = any>(key?: string): Promise<T>
 }
 type AppContextType = Context<AppContext>
@@ -56,12 +60,12 @@ const AppContextProvider: Provider<AppContext> = (({ value, ...props }) => {
   const onUpdateCallback = useDebounceCallback((res) => {
     toast.success('Settings have been saved.')
     return res
-  }, 1000)
+  }, 500)
   const { mutateAsync: _setSetting } = trpc.settings.update.useMutation()
   const setSetting = useMemo(
-    () => (key: string, value: any) =>
+    () => (key: string, value: any, showToast?: boolean) =>
       _setSetting({ key, value }).then((s) => {
-        onUpdateCallback(s)
+        if (showToast) onUpdateCallback(s)
         return s
       }) as Promise<{ key: string; value: any }>,
     []

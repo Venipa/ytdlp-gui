@@ -1,6 +1,7 @@
 import { LucideHardDriveDownload } from 'lucide-react'
 import AddLink from '../components/add-link'
 import LinkList from '../components/link-list'
+import AdvancedYTDLPView from '../components/ytdlp-views/advanced-view'
 
 export const meta = {
   title: 'Downloads',
@@ -11,7 +12,7 @@ export const meta = {
 const Icon = meta.icon
 export default function YTDLPTab() {
   return (
-    <div className="grid gap-8 p-2 h-full">
+    <div className="flex flex-col gap-8 p-2 h-full">
       <div className="grid gap-6 pt-10">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
@@ -24,6 +25,7 @@ export default function YTDLPTab() {
             <AddLink />
           </div>
       </div>
+      <AdvancedYTDLPView />
     </div>
   )
 }

@@ -24,7 +24,8 @@ const store = createYmlStore<AppStore>('app-settings', {
     features: {
       clipboardMonitor: true,
       clipboardMonitorAutoAdd: true,
-      concurrentDownloads: MAX_PARALLEL_DOWNLOADS
+      concurrentDownloads: MAX_PARALLEL_DOWNLOADS,
+      advancedView: false
     },
     startMinimized: false,
     startOnBoot: true,

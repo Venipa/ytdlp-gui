@@ -69,7 +69,7 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-background/0 text-foreground font-sans;
   }
 
   html,

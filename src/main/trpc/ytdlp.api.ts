@@ -1,7 +1,7 @@
+import { db } from '@main/stores/app-database'
+import { queries, SelectDownload } from '@main/stores/app-database.helpers'
+import { downloads } from '@main/stores/app-database.schema'
 import { appStore } from '@main/stores/app.store'
-import { db } from '@main/stores/queue-database'
-import { queries, SelectDownload } from '@main/stores/queue-database.helpers'
-import { downloads } from '@main/stores/queue-database.schema'
 import { logger } from '@shared/logger'
 import { queuePromiseStack } from '@shared/promises/helper'
 import { TRPCError } from '@trpc/server'
@@ -29,7 +29,8 @@ export const ytdlpRouter = router({
   downloadMedia: publicProcedure
     .input(
       z.object({
-        url: z.string().url().array()
+        url: z.string().url().array(),
+        type: z.enum(['video', 'audio', 'auto']).default('auto')
       })
     )
     .mutation(async ({ input: { url: urls }, ctx }) => {

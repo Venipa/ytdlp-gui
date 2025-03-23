@@ -17,7 +17,7 @@ export default function SettingsToggle({ name: key, children, ...props }: Settin
       defaultChecked={settingsValue}
       checked={settingsValue}
       onCheckedChange={() =>
-        setSetting(key, !settingsValue).then(({ value: newValue }) => {
+        setSetting(key, !settingsValue, true).then(({ value: newValue }) => {
           props.onChange?.(newValue)
           return newValue
         })

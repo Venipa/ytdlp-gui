@@ -11,6 +11,7 @@ export function useWindowState() {
     enabled: true,
     onData(data) {
       utils.window.getState.setData(undefined, data, { updatedAt: Date.now() })
+      utils.window.getState.invalidate();
     }
   })
   return { windowState }

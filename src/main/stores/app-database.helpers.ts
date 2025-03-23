@@ -10,8 +10,8 @@ import {
   not
 } from 'drizzle-orm'
 import { omit } from 'lodash'
-import { db } from './queue-database'
-import { downloads } from './queue-database.schema'
+import { db } from './app-database'
+import { downloads } from './app-database.schema'
 export type SelectDownload = InferSelectModel<typeof downloads>
 export type InsertDownload = InferInsertModel<typeof downloads>
 

@@ -9,6 +9,7 @@ if (import.meta.env.PROD) Logger.enableProductionMode()
 const htmlElement = document.getElementsByTagName('html')![0]
 const container = document.getElementById('root')!
 import.meta.env.DEV && htmlElement.classList.add('dark')
+if (!window.api.useMica) document.body.classList.add("bg-background");
 container.classList.add(...'flex flex-col flex-auto h-full'.split(' '))
 
 createRoot(container).render(<Routes />)
