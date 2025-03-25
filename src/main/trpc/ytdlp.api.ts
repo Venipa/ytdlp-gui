@@ -11,7 +11,7 @@ import { statSync } from 'fs'
 import { omit, uniq } from 'lodash'
 import path from 'path'
 import { VideoInfo } from 'yt-dlp-wrap/types'
-import { YTDLDownloadStatus, YTDLItem, YTDLStatus } from 'ytdlp-gui/types'
+import { YTDLDownloadStatus, YTDLItem, YTDLMediaType, YTDLStatus } from 'ytdlp-gui/types'
 import { z } from 'zod'
 import { pushLogToClient } from './events.ee'
 import { publicProcedure, router } from './trpc'
@@ -33,8 +33,8 @@ export const ytdlpRouter = router({
         type: z.enum(['video', 'audio', 'auto']).default('auto')
       })
     )
-    .mutation(async ({ input: { url: urls }, ctx }) => {
-      const dbEntries = await addToDatabase(urls)
+    .mutation(async ({ input: { url: urls, type }, ctx }) => {
+      const dbEntries = await addToDatabase(urls, type)
       const files = await queuePromiseStack(
         dbEntries.map((u) => () => queueYtdlMetaCheck(u).catch(() => null)),
         MAX_PARALLEL_DOWNLOADS
@@ -233,7 +233,7 @@ const deleteDownloadItem = (dbFile: SelectDownload) =>
       })
     }
   })
-const addToDatabase = async (urls: string[]) => {
+const addToDatabase = async (urls: string[], type: YTDLMediaType = 'auto') => {
   const [items] = await db.batch(
     urls
       .map((url) => {
@@ -247,7 +247,7 @@ const addToDatabase = async (urls: string[]) => {
           title: url,
           url,
           state: 'queued',
-          type: null,
+          type: type ?? null,
           error: null,
           retryCount: 0
         })
@@ -276,15 +276,25 @@ const queueYtdlMetaCheck = async (
     source: new URL(url).hostname,
     state: 'fetching_meta',
     title: existingDbFile?.title ?? url,
-    type: null,
+    type: createdDbFile.type ?? 'auto',
     error: null,
     retryCount: 0
   })
   await queries.downloads.updateDownload(dbFile.id, dbFile)
   ytdlpEvents.emit('list', [dbFile])
   if (!dbFile.meta?.filename) {
-    const { value: videoInfo, error: videoInfoError } = await ytdl.getVideoInfo(url)
-    log.debug('metadata', omit(videoInfo, 'thumbnails', 'formats'))
+    const { value: videoInfo, error: videoInfoError } = await ytdl.getVideoInfo(
+      url,
+      ...(dbFile.type === 'audio' ? `-f bestaudio` : ``).split(' ')
+    )
+    const trimmedVideoInfo = omit(
+      videoInfo,
+      'formats',
+      'thumbnails',
+      'automatic_captions',
+      'heatmap'
+    ) as VideoInfo
+    log.debug('metadata', trimmedVideoInfo)
     if (videoInfoError || !videoInfo) {
       if (videoInfoError) log.error('getVideoInfo', videoInfoError)
       await deleteDownloadItem(dbFile)
@@ -293,7 +303,7 @@ const queueYtdlMetaCheck = async (
         message: 'URL not supported or video not found'
       })
     }
-    dbFile.meta = omit(videoInfo, 'formats', 'thumbnails') as VideoInfo
+    dbFile.meta = trimmedVideoInfo
     dbFile.metaId = videoInfo.id
     pushLogToClient(`[${dbFile.id}=${dbFile.metaId}] added new download: ${dbFile.title}`, 'info')
     dbFile = await queries.downloads.updateDownload(dbFile.id, dbFile)
@@ -321,28 +331,25 @@ const queueYtdlDownload = async (dbFile: SelectDownload, videoInfo: VideoInfo) =
   }
   const settings = appStore.store.ytdlp
   ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'done' })
-  const filepath = path.join(ytdl.currentDownloadPath, videoInfo.filename)
+  let filepath = path.join(ytdl.currentDownloadPath, videoInfo.filename)
   dbFile.meta = omit(videoInfo, ['formats']) as any
   dbFile.metaId = videoInfo.id
   dbFile.filepath = filepath
   dbFile.title = videoInfo.title
   dbFile.state = 'downloading'
   dbFile.filesize = videoInfo.filesize_approx ?? videoInfo.filesize ?? 0
-  dbFile.type = videoInfo._type?.toLowerCase() ?? 'video'
+  if (!dbFile.type || dbFile.type === 'auto') dbFile.type = videoInfo._type?.toLowerCase() ?? 'auto'
   await updateEntry()
-  const execArgs = [
-    dbFile.url,
-    '-f',
-    'best',
-    '-o',
-    filepath,
+  const execArgs = [dbFile.url, '-f', 'best', '-o', filepath]
+  if (dbFile.type === 'audio') execArgs.push(...'--extract-audio --audio-format mp3'.split(' '))
+  if (settings.flags?.nomtime) execArgs.push('--no-mtime')
+  if (settings.flags?.custom) execArgs.push(...settings.flags.custom.split(' '))
+  execArgs.push(
     '--concurrent-fragments',
     String(MAX_STREAM_CONCURRENT_FRAGMENTS),
     '--cache-dir',
     YTDLP_CACHE_PATH
-  ]
-  if (settings.flags?.nomtime) execArgs.push('--no-mtime')
-  if (settings.flags?.custom) execArgs.push(...settings.flags.custom.split(' '))
+  )
   const stream = ytdl.ytdlp.exec(uniq(execArgs), {}, controller.signal)
 
   async function cancel(id: any) {
@@ -394,6 +401,7 @@ const queueYtdlDownload = async (dbFile: SelectDownload, videoInfo: VideoInfo) =
   })
   await new Promise((resolve) => stream.once('close', resolve))
   if (!dbFile.error) {
+    if (dbFile.type === 'audio') dbFile.filepath = filepath = filepath + '.mp3'
     const fileStats = statSync(filepath)
     dbFile.filesize = fileStats.size
     dbFile.state = 'completed'
@@ -403,7 +411,7 @@ const queueYtdlDownload = async (dbFile: SelectDownload, videoInfo: VideoInfo) =
   return await updateEntry()
 }
 async function handleYtAddEvent(url: string) {
-  const [newDbFile] = await addToDatabase([url])
+  const [newDbFile] = await addToDatabase([url], 'auto')
   await queueYtdlMetaCheck(newDbFile).then(({ dbFile, videoInfo }) => {
     const asyncResult = ytdlpDownloadQueue.add(() => queueYtdlDownload(dbFile, videoInfo))
     if (ytdlpDownloadQueue.isPaused) ytdlpDownloadQueue.start()

@@ -172,7 +172,11 @@ app.whenReady().then(async () => {
       appStore.onDidAnyChange(() => {
         pushLogToClient('store change', 'debug')
       })
-    if (appStore.store.features?.clipboardMonitor) clipboardWatcher.start()
+    if (appStore.store.features.clipboardMonitor) clipboardWatcher.start()
+
+    app.on('will-quit', () => {
+      clipboardWatcher.destroy()
+    })
   })
 
   app.on('activate', function () {

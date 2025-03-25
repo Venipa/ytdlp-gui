@@ -15,7 +15,7 @@ import SelectDownloadBox from './select-download-path'
 import SelectMediaTypeBox from './select-download-type'
 const httpsRegex = /^https?/i
 export default function AddLink({ showDownloadPath }: { showDownloadPath?: boolean }) {
-  const [mediaType] = useMediaType();
+  const [mediaType] = useMediaType()
   const { settings, setSetting } = useApp()
   const { mutateAsync: queueDownloadFromUrl } = trpc.ytdl.downloadMedia.useMutation({
     onError(error, variables, context) {
@@ -36,7 +36,7 @@ export default function AddLink({ showDownloadPath }: { showDownloadPath?: boole
       })
     ]
     logger.debug('download requested for ', { url: queueUrls, mediaUrl, mediaType })
-    queueDownloadFromUrl({ url: queueUrls, type })
+    queueDownloadFromUrl({ url: queueUrls, type: mediaType })
       .then((items) => {
         toast.success(`Downloaded ${items.length} of ${queueUrls.length} urls.`)
       })
@@ -44,7 +44,7 @@ export default function AddLink({ showDownloadPath }: { showDownloadPath?: boole
         if (isTRPCErrorResponse(err)) toast.error(err.message)
       })
     setMediaUrl('')
-  }, [mediaUrl])
+  }, [mediaUrl, mediaType])
 
   logger.debug('add-link', { mediaUrl })
   return (
@@ -63,7 +63,7 @@ export default function AddLink({ showDownloadPath }: { showDownloadPath?: boole
       </div>
       <div className="flex items-center gap-2">
         <SelectDownloadBox></SelectDownloadBox>
-        <SelectMediaTypeBox className='w-[200px]'></SelectMediaTypeBox>
+        <SelectMediaTypeBox className="w-[200px]"></SelectMediaTypeBox>
         <div className="flex-auto"></div>
         <QTooltip content="Enable/Disable clipboard monitoring">
           <Button

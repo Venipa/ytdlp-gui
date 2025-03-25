@@ -2,6 +2,7 @@ declare module 'ytdlp-gui' {
   export { };
 }
 declare module 'ytdlp-gui/types' {
+  export type YTDLMediaType = "video" | "audio" | "auto";
   export type YTDLState = 'progressing' | 'done'
   export type YTDLStatus =
     | { action: string; data?: any; state: YTDLState }

@@ -2,18 +2,18 @@ import clip from 'clipboard-event';
 import { clipboard } from 'electron';
 const HTTPS = /^https/gi
 export class ClipboardMonitor {
-  constructor(private config: { onHttpsText?: (value: string) => void; distinct?: boolean }) {}
-  start() {
+  constructor(private config: { onHttpsText?: (value: string) => void; distinct?: boolean }) {
     clip.startListening()
+  }
+  start() {
     clip.on('change', this.checkClipboard.bind(this))
   }
   stop() {
     clip.off('change', this.checkClipboard.bind(this))
-    this.destroy()
   }
   private _lastText: string | null = null
   private checkClipboard() {
-    console.log("clipboard changed")
+    console.log('clipboard changed')
     const text = clipboard.readText('clipboard')
     if (text) {
       if (
