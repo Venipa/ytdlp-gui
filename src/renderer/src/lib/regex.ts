@@ -1,1 +1,1 @@
-export const TrimSubdomainRegex = /^[^.]*\.(?=\w+\.\w+$)/
+export const TrimSubdomainRegex = /^[^.]*\.(?=\w+\.\w+$)/;

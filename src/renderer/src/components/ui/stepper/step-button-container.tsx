@@ -9,20 +9,8 @@ type StepButtonContainerProps = StepSharedProps & {
 	children?: React.ReactNode;
 };
 
-const StepButtonContainer = ({
-	isCurrentStep,
-	isCompletedStep,
-	children,
-	isError,
-	isLoading: isLoadingProp,
-	onClickStep,
-}: StepButtonContainerProps) => {
-	const {
-		clickable,
-		isLoading: isLoadingContext,
-		variant,
-		styles,
-	} = useStepper();
+const StepButtonContainer = ({ isCurrentStep, isCompletedStep, children, isError, isLoading: isLoadingProp, onClickStep }: StepButtonContainerProps) => {
+	const { clickable, isLoading: isLoadingContext, variant, styles } = useStepper();
 
 	const currentStepClickable = clickable || !!onClickStep;
 
@@ -34,8 +22,8 @@ const StepButtonContainer = ({
 
 	return (
 		<Button
-			variant="ghost"
-			type="button"
+			variant='ghost'
+			type='button'
 			tabIndex={currentStepClickable ? 0 : -1}
 			className={cn(
 				"stepper__step-button-container",
@@ -53,8 +41,7 @@ const StepButtonContainer = ({
 			data-invalid={isError && (isCurrentStep || isCompletedStep)}
 			data-active={isCompletedStep}
 			data-clickable={currentStepClickable}
-			data-loading={isLoading && (isCurrentStep || isCompletedStep)}
-		>
+			data-loading={isLoading && (isCurrentStep || isCompletedStep)}>
 			{children}
 		</Button>
 	);

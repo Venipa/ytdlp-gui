@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z } from "zod";
 
-export const EventNameSchema = z.enum(["message", "log"])
-export type EventNames = z.infer<typeof EventNameSchema>
+export const EventNameSchema = z.enum(["message", "log"]);
+export type EventNames = z.infer<typeof EventNameSchema>;

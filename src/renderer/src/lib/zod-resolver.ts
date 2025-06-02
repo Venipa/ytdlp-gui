@@ -1,2 +1,1 @@
-
-export { zodResolver } from '@hookform/resolvers/zod';
+export { zodResolver } from "@hookform/resolvers/zod";

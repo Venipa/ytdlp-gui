@@ -1,3 +1,3 @@
 declare global {
-  declare const Anystack
+	declare const Anystack;
 }

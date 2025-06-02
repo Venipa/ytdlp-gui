@@ -55,7 +55,7 @@ interface StepperProps extends StepOptions {
 	className?: string;
 	initialStep: number;
 	steps: StepItem[];
-  onStepperFinish: StepOptions["onClickStep"];
+	onStepperFinish: StepOptions["onClickStep"];
 }
 
 interface StepProps extends React.HTMLAttributes<HTMLLIElement> {
@@ -79,12 +79,4 @@ interface StepSharedProps extends StepProps {
 	isLoading?: boolean;
 }
 
-export type {
-  IconType,
-  StepItem,
-  StepOptions,
-  StepperProps,
-  StepProps,
-  StepSharedProps
-};
-
+export type { IconType, StepItem, StepOptions, StepperProps, StepProps, StepSharedProps };

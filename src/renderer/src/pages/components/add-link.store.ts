@@ -1,4 +1,4 @@
-import { atom, useAtom } from 'jotai'
+import { atom, useAtom } from "jotai";
 
-export const linkStore = atom('')
-export const useLinkStore = () => useAtom(linkStore)
+export const linkStore = atom("");
+export const useLinkStore = () => useAtom(linkStore);

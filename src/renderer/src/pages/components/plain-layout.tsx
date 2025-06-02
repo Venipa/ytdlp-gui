@@ -1,3 +1,3 @@
 export default function PlainLayout(props: any) {
-  return <div {...props}></div>
+	return <div {...props}></div>;
 }

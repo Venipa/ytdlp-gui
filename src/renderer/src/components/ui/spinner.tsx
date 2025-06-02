@@ -1,13 +1,13 @@
-import { cn } from '@renderer/lib/utils'
-import { cva, VariantProps } from 'class-variance-authority'
-import { HTMLMotionProps } from "motion/react"
-import React from 'react'
-import { Appear } from './routes/animated-content'
+import { cn } from "@renderer/lib/utils";
+import { cva, VariantProps } from "class-variance-authority";
+import { HTMLMotionProps } from "motion/react";
+import React from "react";
+import { Appear } from "./routes/animated-content";
 
 const getSpans = () => {
-  return [...new Array(12)].map((_, index) => (
-    <span key={`spinner-${index}`}>
-      <style jsx>{`
+	return [...new Array(12)].map((_, index) => (
+		<span key={`spinner-${index}`}>
+			<style jsx>{`
         span {
           @apply bg-primary rounded;
           position: absolute;
@@ -87,38 +87,33 @@ const getSpans = () => {
           }
         }
       `}</style>
-    </span>
-  ))
-}
+		</span>
+	));
+};
 
-const spinnerVariants = cva('spinner relative block box-border p-0 m-0', {
-  variants: {
-    size: {
-      default: 'size-5',
-      xs: 'size-3',
-      sm: 'size-4',
-      lg: 'size-6',
-      xl: 'size-10'
-    }
-  },
-  defaultVariants: {
-    size: 'default'
-  }
-})
+const spinnerVariants = cva("spinner relative block box-border p-0 m-0", {
+	variants: {
+		size: {
+			default: "size-5",
+			xs: "size-3",
+			sm: "size-4",
+			lg: "size-6",
+			xl: "size-10",
+		},
+	},
+	defaultVariants: {
+		size: "default",
+	},
+});
 
-export interface SpinnerProps
-  extends HTMLMotionProps<"div">,
-    VariantProps<typeof spinnerVariants> {}
-const Spinner = React.forwardRef<HTMLDivElement, SpinnerProps>(
-  ({ className, size, ...props }, ref) => {
-    return (
-      <Appear ref={ref} className={cn(spinnerVariants({ size, className }))} {...props}>
-        <div className="h-full w-full relative left-1/2 top-1/2">{getSpans()}</div>
-      </Appear>
-    )
-  }
-)
+export interface SpinnerProps extends HTMLMotionProps<"div">, VariantProps<typeof spinnerVariants> {}
+const Spinner = React.forwardRef<HTMLDivElement, SpinnerProps>(({ className, size, ...props }, ref) => {
+	return (
+		<Appear ref={ref} className={cn(spinnerVariants({ size, className }))} {...props}>
+			<div className='h-full w-full relative left-1/2 top-1/2'>{getSpans()}</div>
+		</Appear>
+	);
+});
 
-Spinner.displayName = 'Spinner'
-export { Spinner }
-
+Spinner.displayName = "Spinner";
+export { Spinner };

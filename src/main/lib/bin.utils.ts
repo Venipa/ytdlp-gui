@@ -1,15 +1,15 @@
-import { execSync } from 'node:child_process'
-import { statSync } from 'node:fs'
-import platform from './platform'
+import { execSync } from "node:child_process";
+import { statSync } from "node:fs";
+import platform from "./platform";
 
-const shell = (cmd: string) => execSync(cmd, { encoding: 'utf8' })
+const shell = (cmd: string) => execSync(cmd, { encoding: "utf8" });
 
 export function executableIsAvailable(name: string) {
-  if (platform.isWindows) return null
-  try {
-    const execPath = shell(`which ${name}`)
-    return statSync(execPath) && execPath || null
-  } catch (error) {
-    return null
-  }
+	if (platform.isWindows) return null;
+	try {
+		const execPath = shell(`which ${name}`);
+		return (statSync(execPath) && execPath) || null;
+	} catch (error) {
+		return null;
+	}
 }
