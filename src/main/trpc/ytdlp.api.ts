@@ -1,5 +1,5 @@
 import { db } from '@main/stores/app-database'
-import { queries, SelectDownload } from '@main/stores/app-database.helpers'
+import { SelectDownload, queries } from '@main/stores/app-database.helpers'
 import { downloads } from '@main/stores/app-database.schema'
 import { appStore } from '@main/stores/app.store'
 import { logger } from '@shared/logger'
@@ -18,8 +18,8 @@ import { publicProcedure, router } from './trpc'
 import {
   MAX_PARALLEL_DOWNLOADS,
   MAX_STREAM_CONCURRENT_FRAGMENTS,
-  ytdl,
-  YTDLP_CACHE_PATH
+  YTDLP_CACHE_PATH,
+  ytdl
 } from './ytdlp.core'
 import { ytdlpDownloadQueue, ytdlpEvents } from './ytdlp.ee'
 
