@@ -1,0 +1,12 @@
+pre-commit:
+  parallel: true
+  commands:
+    lint:
+      run: npm run biome:format
+      include: "./src/**/*.{js,jsx,ts,tsx,html}"
+      exclude: "node_modules"
+    # tests:
+    #   run: npm run test
+    #   include: "./src/**/*.{js,jsx,ts,tsx,html}"
+    #   exclude: "node_modules"
+

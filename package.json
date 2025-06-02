@@ -23,6 +23,10 @@
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux",
+    "biome:lint": "biome lint ./src",
+    "biome:format": "biome format ./src --write",
+    "biome:check": "biome check ./src",
+    "biome:check:apply": "biome check ./src --apply",
     "drizzle:make": "npx drizzle-kit generate"
   },
   "dependencies": {
@@ -118,6 +122,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
     "@electron-toolkit/eslint-config-prettier": "^2.0.0",
     "@electron-toolkit/eslint-config-ts": "^2.0.0",
     "@electron-toolkit/tsconfig": "^1.0.1",
@@ -140,6 +145,7 @@
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.34.3",
     "last-commit-log": "^3.4.0",
+    "lefthook": "^1.11.13",
     "mini-svg-data-uri": "^1.4.4",
     "postcss": "^8.4.47",
     "prettier": "^3.3.2",

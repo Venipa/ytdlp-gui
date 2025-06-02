@@ -22,6 +22,264 @@ import {
   YTDLP_CACHE_PATH
 } from './ytdlp.core'
 import { ytdlpDownloadQueue, ytdlpEvents } from './ytdlp.ee'
+
+class DownloadQueueManager {
+  private activeDownloads = new Map<number, AbortController>()
+  private processingUrls = new Set<string>()
+  private metaCache = new Map<string, VideoInfo>()
+
+  async addToQueue(urls: string[], type: YTDLMediaType = 'auto') {
+    const uniqueUrls = urls.filter(url => !this.processingUrls.has(url))
+    if (uniqueUrls.length === 0) return []
+
+    uniqueUrls.forEach(url => this.processingUrls.add(url))
+    const dbEntries = await addToDatabase(uniqueUrls, type)
+
+    const files = await queuePromiseStack(
+      dbEntries.map((u) => () => this.checkMetadata(u).catch(() => null)),
+      MAX_PARALLEL_DOWNLOADS
+    ).then((files) => files.filter((s) => !!s))
+
+    const asyncResult = ytdlpDownloadQueue.addAll(
+      files.map(
+        (f) => () =>
+          this.processDownload(f.dbFile, f.videoInfo).catch((err) => {
+            log.error('failed to download media', err)
+            return Promise.reject(err)
+          })
+      )
+    )
+
+    if (ytdlpDownloadQueue.isPaused) ytdlpDownloadQueue.start()
+    return await asyncResult
+  }
+
+  private async checkMetadata(dbFile: SelectDownload): Promise<{ dbFile: SelectDownload; videoInfo: VideoInfo }> {
+    const { url } = dbFile
+    log.debug('meta', `checking metadata for url`, url, dbFile)
+
+    if (!url) throw new Error('Invalid url format')
+
+    ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'progressing' })
+
+    let dbFileRecord = await queries.downloads.findDownloadById(dbFile.id)
+    if (!dbFileRecord) throw new Error('Entry has been not found or has been removed')
+
+    // Check for existing metadata
+    const existingDbFile = await queries.downloads.findDownloadByExactUrl(url, dbFile.id)
+    if (existingDbFile?.metaId) {
+      return this.handleExistingMetadata(dbFileRecord, existingDbFile)
+    }
+
+    return this.fetchNewMetadata(dbFileRecord)
+  }
+
+  private async handleExistingMetadata(
+    dbFile: SelectDownload,
+    existingDbFile: SelectDownload
+  ): Promise<{ dbFile: SelectDownload; videoInfo: VideoInfo }> {
+    if (!existingDbFile.meta) {
+      throw new Error('Existing file metadata is missing')
+    }
+
+    Object.assign(dbFile, {
+      metaId: existingDbFile.metaId,
+      meta: existingDbFile.meta,
+      filepath: existingDbFile.filepath,
+      filesize: existingDbFile.filesize,
+      source: new URL(dbFile.url).hostname,
+      state: 'fetching_meta',
+      title: existingDbFile.title,
+      type: dbFile.type ?? 'auto',
+      error: null,
+      retryCount: 0
+    })
+
+    await this.updateDownloadEntry(dbFile)
+    return { dbFile, videoInfo: existingDbFile.meta as VideoInfo }
+  }
+
+  private async fetchNewMetadata(dbFile: SelectDownload): Promise<{ dbFile: SelectDownload; videoInfo: VideoInfo }> {
+    const { url } = dbFile
+    const { value: videoInfo, error: videoInfoError } = await ytdl.getVideoInfo(
+      url,
+      ...(dbFile.type === 'audio' ? `-f bestaudio` : ``).split(' ')
+    )
+
+    if (videoInfoError || !videoInfo) {
+      if (videoInfoError) log.error('getVideoInfo', videoInfoError)
+      await this.deleteDownloadItem(dbFile)
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'URL not supported or video not found'
+      })
+    }
+
+    const trimmedVideoInfo = this.trimVideoInfo(videoInfo)
+    dbFile.meta = trimmedVideoInfo
+    dbFile.metaId = videoInfo.id
+    dbFile.state = 'fetching_meta'
+    dbFile.source = new URL(url).hostname
+
+    pushLogToClient(`[${dbFile.id}=${dbFile.metaId}] added new download: ${dbFile.title}`, 'info')
+
+    const updatedDbFile = await this.updateDownloadEntry(dbFile)
+    return { dbFile: updatedDbFile, videoInfo: trimmedVideoInfo }
+  }
+
+  private trimVideoInfo(videoInfo: VideoInfo): VideoInfo {
+    return omit(
+      videoInfo,
+      'formats',
+      'thumbnails',
+      'automatic_captions',
+      'heatmap'
+    ) as VideoInfo
+  }
+
+  private async deleteDownloadItem(dbFile: SelectDownload) {
+    const result = await queries.downloads.deleteDownload(dbFile.id)
+    if (result.rowsAffected === 1) {
+      dbFile.state = 'deleted'
+      ytdlpEvents.emit('list', [dbFile])
+      ytdlpEvents.emit('status', {
+        id: dbFile.id,
+        action: 'download',
+        data: null,
+        state: 'deleted'
+      })
+    }
+  }
+
+  async processDownload(dbFile: SelectDownload, videoInfo: VideoInfo) {
+    if (!ytdl.currentDownloadPath) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'YTDLP has not been found, make sure the app is running with sufficient permission.'
+      })
+    }
+
+    const controller = new AbortController()
+    this.activeDownloads.set(dbFile.id, controller)
+
+    try {
+      await this.prepareDownload(dbFile, videoInfo)
+      await this.executeDownload(dbFile, videoInfo, controller)
+      await this.finalizeDownload(dbFile)
+    } catch (error) {
+      await this.handleDownloadError(dbFile, error)
+    } finally {
+      this.cleanupDownload(dbFile)
+    }
+  }
+
+  private async prepareDownload(dbFile: SelectDownload, videoInfo: VideoInfo) {
+    const filepath = path.join(ytdl.currentDownloadPath, videoInfo.filename)
+    dbFile.meta = omit(videoInfo, ['formats']) as any
+    dbFile.metaId = videoInfo.id
+    dbFile.filepath = filepath
+    dbFile.title = videoInfo.title
+    dbFile.state = 'downloading'
+    dbFile.filesize = videoInfo.filesize_approx ?? videoInfo.filesize ?? 0
+    if (!dbFile.type || dbFile.type === 'auto') {
+      dbFile.type = videoInfo._type?.toLowerCase() ?? 'auto'
+    }
+    await this.updateDownloadEntry(dbFile)
+  }
+
+  private async executeDownload(dbFile: SelectDownload, videoInfo: VideoInfo, controller: AbortController) {
+    const settings = appStore.store.ytdlp
+    const execArgs = [dbFile.url, '-f', 'best', '-o', dbFile.filepath]
+
+    if (dbFile.type === 'audio') execArgs.push(...'--extract-audio --audio-format mp3'.split(' '))
+    if (settings.flags?.nomtime) execArgs.push('--no-mtime')
+    if (settings.flags?.custom) execArgs.push(...settings.flags.custom.split(' '))
+    execArgs.push(
+      '--concurrent-fragments',
+      String(MAX_STREAM_CONCURRENT_FRAGMENTS),
+      '--cache-dir',
+      YTDLP_CACHE_PATH
+    )
+
+    const stream = ytdl.ytdlp.exec(uniq(execArgs), {}, controller.signal)
+
+    this.setupStreamHandlers(stream, dbFile, videoInfo)
+    await new Promise((resolve) => stream.once('close', resolve))
+  }
+
+  private setupStreamHandlers(stream: any, dbFile: SelectDownload, videoInfo: VideoInfo) {
+    stream.on('progress', (ev: any) => {
+      ytdlpEvents.emit('status', {
+        id: dbFile.id,
+        action: 'download',
+        data: ev,
+        state: 'progressing'
+      })
+      ytdlpEvents.emit('download', { ...ev, id: dbFile.id })
+    })
+
+    stream.once('progress', () => {
+      ytdlpEvents.emit('list', [dbFile])
+    })
+
+    stream.once('close', () => {
+      ytdlpEvents.emit('status', {
+        id: dbFile.id,
+        action: 'download',
+        data: videoInfo,
+        state: 'done'
+      })
+      ytdlpEvents.emit('download', { id: dbFile.id, percent: 100 })
+    })
+
+    stream.on('error', (error: any) => {
+      ytdlpEvents.emit('status', { id: dbFile.id, action: 'download', error, state: 'error' })
+      ytdlpEvents.emit('download', { id: dbFile.id, percent: 100, error })
+      dbFile.state = 'error'
+      dbFile.error = error
+    })
+  }
+
+  private async finalizeDownload(dbFile: SelectDownload) {
+    if (!dbFile.error) {
+      if (dbFile.type === 'audio') dbFile.filepath = dbFile.filepath + '.mp3'
+      const fileStats = statSync(dbFile.filepath)
+      dbFile.filesize = fileStats.size
+      dbFile.state = 'completed'
+    }
+    ytdlpEvents.emit('list', [dbFile])
+    pushLogToClient(`[${dbFile.id}=${dbFile.metaId}] finished download: ${dbFile.title}`, 'success')
+    await this.updateDownloadEntry(dbFile)
+  }
+
+  private async handleDownloadError(dbFile: SelectDownload, error: any) {
+    dbFile.state = 'error'
+    dbFile.error = error
+    await this.updateDownloadEntry(dbFile)
+  }
+
+  private async updateDownloadEntry(dbFile: SelectDownload) {
+    const updated = await queries.downloads.updateDownload(dbFile.id, dbFile)
+    ytdlpEvents.emit('list', [updated])
+    return updated
+  }
+
+  private cleanupDownload(dbFile: SelectDownload) {
+    this.activeDownloads.delete(dbFile.id)
+    this.processingUrls.delete(dbFile.url)
+  }
+
+  cancelDownload(id: number) {
+    const controller = this.activeDownloads.get(id)
+    if (controller) {
+      controller.abort('cancelled by user')
+      this.activeDownloads.delete(id)
+    }
+  }
+}
+
+const downloadQueueManager = new DownloadQueueManager()
+
 const log = logger.child('ytdlp.api')
 export const ytdlpRouter = router({
   state: publicProcedure.query(() => ytdl.state.toString()),
@@ -33,27 +291,15 @@ export const ytdlpRouter = router({
         type: z.enum(['video', 'audio', 'auto']).default('auto')
       })
     )
-    .mutation(async ({ input: { url: urls, type }, ctx }) => {
-      const dbEntries = await addToDatabase(urls, type)
-      const files = await queuePromiseStack(
-        dbEntries.map((u) => () => queueYtdlMetaCheck(u).catch(() => null)),
-        MAX_PARALLEL_DOWNLOADS
-      ).then((files) => files.filter((s) => !!s))
-      const asyncResult = ytdlpDownloadQueue.addAll(
-        files.map(
-          (f) => () =>
-            queueYtdlDownload(f.dbFile, f.videoInfo).catch((err) => {
-              log.error('failed to download media', err)
-              return Promise.reject(err)
-            })
-        )
-      )
-      if (ytdlpDownloadQueue.isPaused) ytdlpDownloadQueue.start()
-      return await asyncResult
+    .mutation(async ({ input: { url: urls, type } }) => {
+      return await downloadQueueManager.addToQueue(urls, type)
     }),
   cancel: publicProcedure
-    .input(z.union([z.string(), z.number()]))
-    .mutation(({ input: id }) => ytdlpEvents.emit('cancel', id)),
+    .input(z.union([z.string(), z.number()]).transform((v) => Number(v)))
+    .mutation(({ input: id }) => {
+      downloadQueueManager.cancelDownload(id)
+      ytdlpEvents.emit('cancel', id)
+    }),
   status: publicProcedure.subscription(() => {
     return observable<YTDLStatus>((emit) => {
       function onStatusChange(data: any) {
@@ -219,20 +465,6 @@ export const ytdlpRouter = router({
   })
 } as const)
 
-const deleteDownloadItem = (dbFile: SelectDownload) =>
-  queries.downloads.deleteDownload(dbFile.id).then((s) => {
-    if (s.rowsAffected === 1) {
-      dbFile.state = 'deleted'
-      ytdlpEvents.emit('list', [dbFile])
-
-      ytdlpEvents.emit('status', {
-        id: dbFile.id,
-        action: 'download',
-        data: null,
-        state: 'deleted'
-      })
-    }
-  })
 const addToDatabase = async (urls: string[], type: YTDLMediaType = 'auto') => {
   const [items] = await db.batch(
     urls
@@ -258,166 +490,11 @@ const addToDatabase = async (urls: string[], type: YTDLMediaType = 'auto') => {
   log.debug('addToDatabase', { items })
   return items as SelectDownload[]
 }
-const queueYtdlMetaCheck = async (
-  createdDbFile: SelectDownload
-): Promise<{ dbFile: SelectDownload; videoInfo: VideoInfo }> => {
-  const { url } = createdDbFile
-  log.debug('meta', `added url`, url, createdDbFile)
-  if (!createdDbFile.url) throw new Error('Invalid url format')
-  ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'progressing' })
-  let dbFile = await queries.downloads.findDownloadById(createdDbFile.id)
-  if (!dbFile) throw new Error('Entry has been not found or has been removed')
-  const existingDbFile = await queries.downloads.findDownloadByExactUrl(url, dbFile.id)
-  Object.assign(dbFile, {
-    metaId: existingDbFile?.metaId ?? '',
-    meta: existingDbFile?.meta ?? ({} as any),
-    filepath: existingDbFile?.filepath ?? '',
-    filesize: existingDbFile?.filesize ?? 0,
-    source: new URL(url).hostname,
-    state: 'fetching_meta',
-    title: existingDbFile?.title ?? url,
-    type: createdDbFile.type ?? 'auto',
-    error: null,
-    retryCount: 0
-  })
-  await queries.downloads.updateDownload(dbFile.id, dbFile)
-  ytdlpEvents.emit('list', [dbFile])
-  if (!dbFile.meta?.filename) {
-    const { value: videoInfo, error: videoInfoError } = await ytdl.getVideoInfo(
-      url,
-      ...(dbFile.type === 'audio' ? `-f bestaudio` : ``).split(' ')
-    )
-    const trimmedVideoInfo = omit(
-      videoInfo,
-      'formats',
-      'thumbnails',
-      'automatic_captions',
-      'heatmap'
-    ) as VideoInfo
-    log.debug('metadata', trimmedVideoInfo)
-    if (videoInfoError || !videoInfo) {
-      if (videoInfoError) log.error('getVideoInfo', videoInfoError)
-      await deleteDownloadItem(dbFile)
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'URL not supported or video not found'
-      })
-    }
-    dbFile.meta = trimmedVideoInfo
-    dbFile.metaId = videoInfo.id
-    pushLogToClient(`[${dbFile.id}=${dbFile.metaId}] added new download: ${dbFile.title}`, 'info')
-    dbFile = await queries.downloads.updateDownload(dbFile.id, dbFile)
-    return { dbFile, videoInfo }
-  }
-  return { dbFile, videoInfo: dbFile.meta }
-}
-const queueYtdlDownload = async (dbFile: SelectDownload, videoInfo: VideoInfo) => {
-  if (!ytdl.currentDownloadPath)
-    throw new TRPCError({
-      code: 'NOT_FOUND',
-      message: 'YTDLP has not been found, make sure the app is running with sufficient permission.'
-    })
-  const controller = new AbortController()
-  const deleteEntry = () => deleteDownloadItem(dbFile)
-  const updateEntry = () =>
-    queries.downloads.updateDownload(dbFile.id, dbFile).then((s) => {
-      ytdlpEvents.emit('list', [s])
-      dbFile = s
-      return s
-    })
-  if (controller.signal.aborted) {
-    await deleteEntry()
-    throw new TRPCError({ code: 'CLIENT_CLOSED_REQUEST', message: 'Video fetch aborted' })
-  }
-  const settings = appStore.store.ytdlp
-  ytdlpEvents.emit('status', { action: 'getVideoInfo', state: 'done' })
-  let filepath = path.join(ytdl.currentDownloadPath, videoInfo.filename)
-  dbFile.meta = omit(videoInfo, ['formats']) as any
-  dbFile.metaId = videoInfo.id
-  dbFile.filepath = filepath
-  dbFile.title = videoInfo.title
-  dbFile.state = 'downloading'
-  dbFile.filesize = videoInfo.filesize_approx ?? videoInfo.filesize ?? 0
-  if (!dbFile.type || dbFile.type === 'auto') dbFile.type = videoInfo._type?.toLowerCase() ?? 'auto'
-  await updateEntry()
-  const execArgs = [dbFile.url, '-f', 'best', '-o', filepath]
-  if (dbFile.type === 'audio') execArgs.push(...'--extract-audio --audio-format mp3'.split(' '))
-  if (settings.flags?.nomtime) execArgs.push('--no-mtime')
-  if (settings.flags?.custom) execArgs.push(...settings.flags.custom.split(' '))
-  execArgs.push(
-    '--concurrent-fragments',
-    String(MAX_STREAM_CONCURRENT_FRAGMENTS),
-    '--cache-dir',
-    YTDLP_CACHE_PATH
-  )
-  const stream = ytdl.ytdlp.exec(uniq(execArgs), {}, controller.signal)
 
-  async function cancel(id: any) {
-    if (id && id === dbFile.id) {
-      controller.abort('cancelled by user')
-      dbFile.state = 'cancelled'
-      await updateEntry()
-      ytdlpEvents.emit('list', [dbFile])
-      ytdlpEvents.emit('status', {
-        id: dbFile.id,
-        action: 'download',
-        data: videoInfo,
-        state: 'cancelled'
-      })
-      ytdlpEvents.emit('download', { id: dbFile.id, percent: 100 })
-
-      ytdlpEvents.off('cancel', cancel)
-    }
-  }
-  ytdlpEvents.on('cancel', cancel)
-  ytdlpEvents.emit('list', [dbFile])
-  ytdlpEvents.emit('download', { id: dbFile.id, percent: 0 })
-  stream.on('progress', (ev) => {
-    ytdlpEvents.emit('status', {
-      id: dbFile.id,
-      action: 'download',
-      data: ev,
-      state: 'progressing'
-    })
-    ytdlpEvents.emit('download', { ...ev, id: dbFile.id })
-  })
-  stream.once('progress', () => {
-    ytdlpEvents.emit('list', [dbFile])
-  })
-  stream.once('close', () => {
-    ytdlpEvents.emit('status', {
-      id: dbFile.id,
-      action: 'download',
-      data: videoInfo,
-      state: 'done'
-    })
-    ytdlpEvents.emit('download', { id: dbFile.id, percent: 100 })
-  })
-  stream.on('error', (error) => {
-    ytdlpEvents.emit('status', { id: dbFile.id, action: 'download', error, state: 'error' })
-    ytdlpEvents.emit('download', { id: dbFile.id, percent: 100, error })
-    dbFile.state = 'error'
-    dbFile.error = error
-  })
-  await new Promise((resolve) => stream.once('close', resolve))
-  if (!dbFile.error) {
-    if (dbFile.type === 'audio') dbFile.filepath = filepath = filepath + '.mp3'
-    const fileStats = statSync(filepath)
-    dbFile.filesize = fileStats.size
-    dbFile.state = 'completed'
-  }
-  ytdlpEvents.emit('list', [dbFile])
-  pushLogToClient(`[${dbFile.id}=${dbFile.metaId}] finished download: ${dbFile.title}`, 'success')
-  return await updateEntry()
-}
 async function handleYtAddEvent(url: string) {
-  const [newDbFile] = await addToDatabase([url], 'auto')
-  await queueYtdlMetaCheck(newDbFile).then(({ dbFile, videoInfo }) => {
-    const asyncResult = ytdlpDownloadQueue.add(() => queueYtdlDownload(dbFile, videoInfo))
-    if (ytdlpDownloadQueue.isPaused) ytdlpDownloadQueue.start()
-    return asyncResult
-  })
+  await downloadQueueManager.addToQueue([url], 'auto')
 }
+
 ytdlpEvents.on('add', handleYtAddEvent)
 process.on('exit', () => {
   ytdlpEvents.off('add', handleYtAddEvent)
