@@ -1,3 +1,5 @@
+import { platform } from "os";
+import path from "path";
 import { platform as appPlatform } from "@electron-toolkit/utils";
 import { executableIsAvailable } from "@main/lib/bin.utils";
 import YTDLWrapper from "@main/lib/ytdlp-wrapper";
@@ -7,15 +9,13 @@ import { Logger } from "@shared/logger";
 import { resulter } from "@shared/promises/helper";
 import { nt as calvNewerThan } from "calver";
 import { app } from "electron";
-import { platform } from "os";
-import path from "path";
 import { VideoInfo } from "yt-dlp-wrap/types";
 import { pushLogToClient } from "./events.ee";
 const YTDLP_PLATFORM = platform();
 const ytdlpPath = app.getPath("userData");
 const log = new Logger("YTDLP");
 type GithubRelease = Endpoints["GET /repos/{owner}/{repo}/releases"]["response"]["data"][0];
-enum YTDLP_STATE {
+export enum YTDLP_STATE {
 	NONE,
 	READY,
 	CONVERTING,
@@ -23,6 +23,7 @@ enum YTDLP_STATE {
 	UPDATE_CHECKING,
 	UPDATE_ERROR,
 	ERROR,
+	MISSING_BINARY,
 }
 export class YTDLP {
 	private _state: YTDLP_STATE = YTDLP_STATE.NONE;
@@ -37,7 +38,7 @@ export class YTDLP {
 		log.debug({ ytdVersion });
 		if (appPlatform.isWindows) appStore.store.ytdlp.useGlobal = false;
 		const ytdlpPath = appStore.store.ytdlp.useGlobal && executableIsAvailable("yt-dlp");
-		if (!ytdlpPath) await this.checkUpdates();
+		if (!ytdlpPath) this._state = YTDLP_STATE.MISSING_BINARY;
 		else {
 			this._ytd.setBinaryPath(ytdlpPath);
 		}

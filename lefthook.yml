@@ -2,9 +2,9 @@ pre-commit:
   parallel: true
   commands:
     lint:
-      run: npm run biome:format
-      include: "./src/**/*.{js,jsx,ts,tsx,html}"
-      exclude: "node_modules"
+      glob: "src/**/*.{js,jsx,ts,tsx,json,yaml,yml,html}"
+      run: npx @biomejs/biome check --write --no-errors-on-unmatched --files-ignore-unknown=true --colors=off {staged_files}
+      stage_fixed: true
     # tests:
     #   run: npm run test
     #   include: "./src/**/*.{js,jsx,ts,tsx,html}"

@@ -6,6 +6,9 @@ import { autoUpdater } from "electron-updater";
 import { dirname } from "node:path";
 import { z } from "zod";
 import { mainProcedure, publicProcedure, router } from "./trpc";
+import { ytdl } from "./ytdlp.core";
+import { YTDLP_STATE } from "./ytdlp.utils";
+let appInitialized = false;
 export const internalRouter = router({
 	getAll: mainProcedure.query(() => secureStore.getAll()),
 	set: mainProcedure
@@ -77,5 +80,12 @@ export const internalRouter = router({
 		} catch (ex: any) {
 			throw new TRPCError({ message: ex.message, code: "INTERNAL_SERVER_ERROR" });
 		}
+	}),
+	initializeApp: publicProcedure.mutation(async () => {
+		if (appInitialized) throw new TRPCError({ message: "App already initialized", code: "INTERNAL_SERVER_ERROR" });
+		await ytdl.initialize();
+		await ytdl.checkUpdates(ytdl.state === YTDLP_STATE.MISSING_BINARY);
+		appInitialized = true;
+		return await ytdl.ytdlp.getVersion();
 	}),
 } as const);
