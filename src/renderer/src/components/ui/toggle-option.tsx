@@ -17,7 +17,7 @@ export function ToggleOption({ control, name, label, description }: ToggleOption
 			render={({ field }) => (
 				<FormItem className='flex items-center justify-between'>
 					<div className='space-y-0.5'>
-						{label && <FormLabel>{label}</FormLabel>}
+						{label && <FormLabel className='text-secondary-foreground'>{label}</FormLabel>}
 						{description && <FormDescription>{description}</FormDescription>}
 					</div>
 					<FormControl>

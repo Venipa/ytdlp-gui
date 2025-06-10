@@ -19,7 +19,7 @@ export function SectionToggle({ control, name, label, description, children }: S
 				<FormItem className='space-y-4'>
 					<div className='flex items-center justify-between'>
 						<div className='space-y-0.5'>
-							{label && <FormLabel>{label}</FormLabel>}
+							{label && <FormLabel className='text-secondary-foreground'>{label}</FormLabel>}
 							{description && <FormDescription>{description}</FormDescription>}
 						</div>
 						<FormControl>
