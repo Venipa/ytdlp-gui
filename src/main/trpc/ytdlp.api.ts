@@ -1,3 +1,5 @@
+import { statSync } from "fs";
+import path from "path";
 import { db } from "@main/stores/app-database";
 import { SelectDownload, queries } from "@main/stores/app-database.helpers";
 import { downloads } from "@main/stores/app-database.schema";
@@ -7,9 +9,7 @@ import { queuePromiseStack } from "@shared/promises/helper";
 import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { desc } from "drizzle-orm";
-import { statSync } from "fs";
 import { omit, uniq } from "lodash";
-import path from "path";
 import { VideoInfo } from "yt-dlp-wrap/types";
 import { YTDLDownloadStatus, YTDLItem, YTDLMediaType, YTDLStatus } from "ytdlp-gui/types";
 import { z } from "zod";
@@ -280,6 +280,12 @@ class DownloadQueueManager {
 			this.activeDownloads.delete(id);
 		}
 	}
+
+	onQueueDone(onDone: () => void) {
+		ytdlpDownloadQueue.once("completed", () => {
+			if (ytdlpDownloadQueue.pending === 0) onDone();
+		});
+	}
 }
 
 const downloadQueueManager = new DownloadQueueManager();
@@ -401,6 +407,9 @@ export const ytdlpRouter = router({
 
 			ytdlpEvents.on("toast", onToastRelay);
 
+			downloadQueueManager.onQueueDone(() => {
+				onToastRelay({ message: "Downloads completed", type: "success" });
+			});
 			return () => {
 				ytdlpEvents.off("toast", onToastRelay);
 			};
@@ -441,7 +450,6 @@ export const ytdlpRouter = router({
 			}
 
 			ytdlpEvents.on("list", onStatusChange);
-
 			// Initial state
 			db.select()
 				.from(downloads)
@@ -453,6 +461,9 @@ export const ytdlpRouter = router({
 				.catch((error) => {
 					log.error("Failed to fetch initial download list", error);
 				});
+			downloadQueueManager.onQueueDone(async () => {
+				emit.next((await db.select().from(downloads).orderBy(desc(downloads.created)).all()) as YTDLItem[]);
+			});
 
 			return () => {
 				ytdlpEvents.off("list", onStatusChange);

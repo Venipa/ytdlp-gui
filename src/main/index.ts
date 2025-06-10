@@ -1,14 +1,14 @@
+import { join } from "path";
 import { electronApp, optimizer, platform } from "@electron-toolkit/utils";
 import { isDevelopmentOrDebug, isProduction } from "@shared/config";
 import { Logger, logger } from "@shared/logger";
 import { BrowserWindow, Menu, MenuItem, Tray, app, shell, systemPreferences } from "electron";
-import { join } from "path";
+// @ts-ignore
+import { autoUpdater } from "electron-updater";
 // @ts-ignore
 import iconWin from "~/build/icon.ico?asset";
 // @ts-ignore
 import icon from "~/build/icon_24x24.png?asset";
-// @ts-ignore
-import { autoUpdater } from "electron-updater";
 // @ts-ignore
 // @ts-ignore
 import builderConfig from "../../electron-builder.yml";
@@ -43,10 +43,10 @@ async function createWindow() {
 	tray.setIgnoreDoubleClickEvents(true);
 	tray.on("right-click", () => trayMenu.popup());
 	tray.setContextMenu(trayMenu);
-	const [defaultWidth, defaultHeight] = [800, 600];
+	const [defaultWidth, defaultHeight] = [960, 800];
 	const mainWindow = new BrowserWindow({
-		width: defaultWidth + 160,
-		height: defaultHeight + 178,
+		width: defaultWidth,
+		height: defaultHeight,
 		minHeight: defaultHeight,
 		minWidth: defaultWidth,
 		movable: true,
