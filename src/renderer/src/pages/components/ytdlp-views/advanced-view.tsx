@@ -6,9 +6,11 @@ import { SelectOption } from "@renderer/components/ui/select-option";
 import { Textarea } from "@renderer/components/ui/textarea";
 import { ToggleOption } from "@renderer/components/ui/toggle-option";
 import { cn } from "@renderer/lib/utils";
+import { debounce } from "lodash";
 import { LucideChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import { useApp } from "../app-context";
 
 function AdvancedViewContent() {
@@ -48,6 +50,30 @@ function AdvancedViewContent() {
 			},
 		},
 	});
+
+	useEffect(() => {
+		const watcher = form.watch(
+			debounce(async (v) => {
+				const changedValues = Object.keys(v.flags)
+					.filter((key) => v.flags[key] !== settings?.flags?.[key])
+					.map((key) => ({ key, value: v.flags[key] }));
+				if (changedValues.length > 0) {
+					await Promise.allSettled(changedValues.map(({ key, value }) => setSetting(key, value))).then((results) => {
+						const rejected = results.find((r) => r.status === "rejected");
+						const rejectedButSomeFulfilled = rejected && results.find((r) => r.status === "fulfilled");
+						if (rejectedButSomeFulfilled) {
+							toast.warning("Failed to save some settings");
+						} else if (rejected) {
+							toast.error("Failed to save settings");
+						} else {
+							toast.success("Settings have been saved");
+						}
+					});
+				}
+			}, 1000),
+		);
+		return () => watcher.unsubscribe();
+	}, [form.watch]);
 
 	return (
 		<>
