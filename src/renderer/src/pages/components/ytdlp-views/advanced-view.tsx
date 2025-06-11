@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { useApp } from "../app-context";
 
 function AdvancedViewContent() {
-	const { settings, setSetting } = useApp();
+	const { settings, setSetting, setSettingsObject } = useApp();
 	const form = useForm({
 		defaultValues: {
 			flags: {
@@ -58,17 +58,8 @@ function AdvancedViewContent() {
 					.filter((key) => v.flags[key] !== settings?.flags?.[key])
 					.map((key) => ({ key, value: v.flags[key] }));
 				if (changedValues.length > 0) {
-					await Promise.allSettled(changedValues.map(({ key, value }) => setSetting(key, value))).then((results) => {
-						const rejected = results.find((r) => r.status === "rejected");
-						const rejectedButSomeFulfilled = rejected && results.find((r) => r.status === "fulfilled");
-						if (rejectedButSomeFulfilled) {
-							toast.warning("Failed to save some settings");
-						} else if (rejected) {
-							toast.error("Failed to save settings");
-						} else {
-							toast.success("Settings have been saved");
-						}
-					});
+					await setSettingsObject(changedValues);
+					toast.success("Settings have been saved");
 				}
 			}, 1000),
 		);
