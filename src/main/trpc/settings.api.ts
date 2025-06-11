@@ -5,6 +5,7 @@ import config from "@shared/config";
 import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { app, dialog } from "electron";
+import { uniqBy } from "lodash-es";
 import { z } from "zod";
 import { publicProcedure, router } from "./trpc";
 const settingsChangeEmitter = new EventEmitter();
@@ -65,6 +66,7 @@ export const settingsRouter = router({
 		)
 		.mutation(async ({ ctx, input }) => {
 			await Promise.allSettled(input.map(({ key, value }) => appStore.set(key, value)));
+			uniqBy(input, (s) => s.key.slice(0, s.key.indexOf("."))).forEach(({ key }) => settingsChangeEmitter.emit(handleKey, { key }));
 			return { success: true };
 		}),
 	addDownloadPath: publicProcedure.mutation(async ({ ctx: { window } }) => {

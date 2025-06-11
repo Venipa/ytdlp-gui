@@ -8,45 +8,48 @@ import { ToggleOption } from "@renderer/components/ui/toggle-option";
 import { cn } from "@renderer/lib/utils";
 import { debounce } from "lodash";
 import { LucideChevronDown } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useApp } from "../app-context";
 
 function AdvancedViewContent() {
 	const { settings, setSetting, setSettingsObject } = useApp();
+	const flags = useMemo(() => {
+		return settings?.ytdlp?.flags ?? {};
+	}, [settings]);
 	const form = useForm({
 		defaultValues: {
 			flags: {
-				nomtime: settings?.flags?.nomtime,
-				custom: settings?.flags?.custom,
+				nomtime: flags?.nomtime,
+				custom: flags?.custom,
 				// Section toggles
-				enableYoutubeOptions: settings?.flags?.enableYoutubeOptions ?? false,
-				enableStreamingOptions: settings?.flags?.enableStreamingOptions ?? false,
-				enableDownloadOptions: settings?.flags?.enableDownloadOptions ?? false,
-				enableMetadataOptions: settings?.flags?.enableMetadataOptions ?? false,
-				enableSystemOptions: settings?.flags?.enableSystemOptions ?? false,
+				enableYoutubeOptions: flags?.enableYoutubeOptions ?? false,
+				enableStreamingOptions: flags?.enableStreamingOptions ?? false,
+				enableDownloadOptions: flags?.enableDownloadOptions ?? false,
+				enableMetadataOptions: flags?.enableMetadataOptions ?? false,
+				enableSystemOptions: flags?.enableSystemOptions ?? false,
 				// YouTube specific options
-				noLiveChat: settings?.flags?.noLiveChat,
-				noYoutubeChannelRedirect: settings?.flags?.noYoutubeChannelRedirect,
-				noYoutubeUnavailableVideos: settings?.flags?.noYoutubeUnavailableVideos,
-				noYoutubePreferUtcUploadDate: settings?.flags?.noYoutubePreferUtcUploadDate,
+				noLiveChat: flags?.noLiveChat,
+				noYoutubeChannelRedirect: flags?.noYoutubeChannelRedirect,
+				noYoutubeUnavailableVideos: flags?.noYoutubeUnavailableVideos,
+				noYoutubePreferUtcUploadDate: flags?.noYoutubePreferUtcUploadDate,
 				// Download and merge options
-				noDirectMerge: settings?.flags?.noDirectMerge,
-				embedThumbnailAtomicparsley: settings?.flags?.embedThumbnailAtomicparsley,
+				noDirectMerge: flags?.noDirectMerge,
+				embedThumbnailAtomicparsley: flags?.embedThumbnailAtomicparsley,
 				// Metadata options
-				noCleanInfojson: settings?.flags?.noCleanInfojson,
-				noKeepSubs: settings?.flags?.noKeepSubs,
+				noCleanInfojson: flags?.noCleanInfojson,
+				noKeepSubs: flags?.noKeepSubs,
 				// System options
-				noCertificate: settings?.flags?.noCertificate,
-				filenameSanitization: settings?.flags?.filenameSanitization,
-				playlistMatchFilter: settings?.flags?.playlistMatchFilter,
+				noCertificate: flags?.noCertificate,
+				filenameSanitization: flags?.filenameSanitization,
+				playlistMatchFilter: flags?.playlistMatchFilter,
 				// Multi-value options
-				youtubeSkip: settings?.flags?.youtubeSkip || [],
-				hotstarRes: settings?.flags?.hotstarRes || [],
-				hotstarVcodec: settings?.flags?.hotstarVcodec || [],
-				hotstarDr: settings?.flags?.hotstarDr || [],
-				crunchyrollHardsub: settings?.flags?.crunchyrollHardsub || [],
+				youtubeSkip: flags?.youtubeSkip || [],
+				hotstarRes: flags?.hotstarRes || [],
+				hotstarVcodec: flags?.hotstarVcodec || [],
+				hotstarDr: flags?.hotstarDr || [],
+				crunchyrollHardsub: flags?.crunchyrollHardsub || [],
 			},
 		},
 	});
@@ -58,7 +61,7 @@ function AdvancedViewContent() {
 					.filter((key) => v.flags[key] !== settings?.flags?.[key])
 					.map((key) => ({ key, value: v.flags[key] }));
 				if (changedValues.length > 0) {
-					await setSettingsObject(changedValues);
+					await setSettingsObject(changedValues.reduce((acc, { key, value }) => ({ ...acc, [`ytdlp.flags.${key}`]: value }), settings!));
 					toast.success("Settings have been saved");
 				}
 			}, 1000),
