@@ -1,7 +1,7 @@
 import { platform } from "os";
 import path from "path";
 import { platform as appPlatform } from "@electron-toolkit/utils";
-import { executableIsAvailable } from "@main/lib/bin.utils";
+import { executableIsAvailable, fileExists } from "@main/lib/bin.utils";
 import YTDLWrapper from "@main/lib/ytdlp-wrapper";
 import { appStore } from "@main/stores/app.store";
 import { Endpoints } from "@octokit/types";
@@ -37,10 +37,11 @@ export class YTDLP {
 		const ytdVersion = await this._ytd.getVersion();
 		log.debug({ ytdVersion });
 		if (appPlatform.isWindows) appStore.store.ytdlp.useGlobal = false;
-		const ytdlpPath = appStore.store.ytdlp.useGlobal && executableIsAvailable("yt-dlp");
+		const ytdlpPath = appStore.store.ytdlp.useGlobal ? executableIsAvailable("yt-dlp") : appStore.store.ytdlp.path && fileExists(appStore.store.ytdlp.path);
 		if (!ytdlpPath) this._state = YTDLP_STATE.MISSING_BINARY;
 		else {
 			this._ytd.setBinaryPath(ytdlpPath);
+			appStore.store.ytdlp.path = ytdlpPath;
 		}
 	}
 	async checkUpdates(forceLatestUpdate?: boolean) {

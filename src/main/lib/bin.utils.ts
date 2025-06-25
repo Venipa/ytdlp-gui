@@ -13,3 +13,10 @@ export function executableIsAvailable(name: string) {
 		return null;
 	}
 }
+export function fileExists(path: string) {
+	try {
+		return (statSync(path) && path) || null;
+	} catch (error) {
+		return null;
+	}
+}

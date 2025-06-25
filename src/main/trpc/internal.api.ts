@@ -1,9 +1,10 @@
+import { dirname } from "node:path";
 import secureStore from "@main/secureStore";
-import { checkForUpdates, setUpdateHandledByFrontend } from "@main/updater";
+import { appStore } from "@main/stores/app.store";
+import { checkForUpdates, checkForUpdatesAndNotify, setUpdateHandledByFrontend } from "@main/updater";
 import { TRPCError } from "@trpc/server";
 import { shell } from "electron";
 import { autoUpdater } from "electron-updater";
-import { dirname } from "node:path";
 import { z } from "zod";
 import { mainProcedure, publicProcedure, router } from "./trpc";
 import { ytdl } from "./ytdlp.core";
@@ -85,7 +86,8 @@ export const internalRouter = router({
 		if (appInitialized) throw new TRPCError({ message: "App already initialized", code: "INTERNAL_SERVER_ERROR" });
 		await ytdl.initialize();
 		await ytdl.checkUpdates(ytdl.state === YTDLP_STATE.MISSING_BINARY);
+		await checkForUpdatesAndNotify();
 		appInitialized = true;
-		return await ytdl.ytdlp.getVersion();
+		return appStore.store.ytdlp.version ? appStore.store.ytdlp.version : await ytdl.ytdlp.getVersion();
 	}),
 } as const);

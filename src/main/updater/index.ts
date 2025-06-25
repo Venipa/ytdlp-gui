@@ -1,7 +1,7 @@
 import { appStore } from "@main/stores/app.store";
 import { isProduction } from "@shared/config";
-import { app, BrowserWindow, dialog } from "electron";
-import { autoUpdater, UpdateInfo } from "electron-updater";
+import { BrowserWindow, app, dialog } from "electron";
+import { UpdateInfo, autoUpdater } from "electron-updater";
 import semver from "semver";
 const [GITHUB_AUTHOR, GITHUB_REPOSITORY] = import.meta.env.VITE_GITHUB_REPOSITORY?.split("/", 2) ?? [null, null];
 let updateQueuedInFrontend = false;
@@ -15,7 +15,11 @@ export function isUpdateInRange(ver: string) {
 export function checkForUpdates() {
 	return autoUpdater.checkForUpdates().then((info) => (info && isUpdateInRange(info.updateInfo.version) && info) || null);
 }
-export function checkForUpdatesAndNotify() {}
+export async function checkForUpdatesAndNotify() {
+	const info = await checkForUpdates().catch(() => null);
+	if (!info) return;
+	return info && (await proceedUpdateDialog(info.updateInfo));
+}
 export async function proceedUpdateDialog(info: UpdateInfo) {
 	const releaseNotes = (typeof info.releaseNotes === "string" ? info.releaseNotes : info.releaseNotes?.map((x) => x.note).join("\n"))?.replace(/<[^>]+>/g, "").trimStart();
 	return await dialog
@@ -45,6 +49,9 @@ export function attachAutoUpdaterIPC(win: BrowserWindow) {
 		win.webContents.send("update-download-done", x);
 		if (updateQueuedInFrontend) return;
 		return await proceedUpdateDialog(x);
+	});
+	win.webContents.on("did-finish-load", () => {
+		checkForUpdatesAndNotify();
 	});
 	if (!import.meta.env.VITE_GITHUB_REPOSITORY)
 		autoUpdater.setFeedURL({
