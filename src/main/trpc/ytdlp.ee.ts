@@ -1,9 +1,13 @@
+import EventEmitter from "events";
 import { appStore } from "@main/stores/app.store";
 import { logger } from "@shared/logger";
-import EventEmitter from "events";
 import PQueue from "p-queue";
 import { MAX_PARALLEL_DOWNLOADS } from "./ytdlp.core";
 export const ytdlpEvents = new EventEmitter();
+
+export const pushToastToClient = (message: string, type?: string, description?: string) => {
+	return ytdlpEvents.emit("toast", { message, type, description });
+};
 ytdlpEvents.setMaxListeners(10000);
 
 export const ytdlpDownloadQueue = new PQueue({

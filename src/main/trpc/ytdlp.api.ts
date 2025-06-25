@@ -1,3 +1,5 @@
+import { statSync } from "fs";
+import path from "path";
 import { db } from "@main/stores/app-database";
 import { SelectDownload, queries } from "@main/stores/app-database.helpers";
 import { downloads } from "@main/stores/app-database.schema";
@@ -7,22 +9,20 @@ import { queuePromiseStack } from "@shared/promises/helper";
 import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { desc } from "drizzle-orm";
-import { statSync } from "fs";
 import { omit, uniq } from "lodash";
-import path from "path";
 import { VideoInfo } from "yt-dlp-wrap/types";
 import { YTDLDownloadStatus, YTDLItem, YTDLMediaType, YTDLStatus } from "ytdlp-gui/types";
 import { z } from "zod";
 import { pushLogToClient } from "./events.ee";
 import { publicProcedure, router } from "./trpc";
 import { MAX_PARALLEL_DOWNLOADS, MAX_STREAM_CONCURRENT_FRAGMENTS, YTDLP_CACHE_PATH, ytdl } from "./ytdlp.core";
-import { ytdlpDownloadQueue, ytdlpEvents } from "./ytdlp.ee";
+import { pushToastToClient, ytdlpDownloadQueue, ytdlpEvents } from "./ytdlp.ee";
 
 class DownloadQueueManager {
 	private activeDownloads = new Map<number, AbortController>();
+	private finishedDownloads = new Map<string, "success" | "error" | "cancelled">();
 	private processingUrls = new Set<string>();
 	private metaCache = new Map<string, VideoInfo>();
-
 	async addToQueue(urls: string[], type: YTDLMediaType = "auto") {
 		const uniqueUrls = urls.filter((url) => !this.processingUrls.has(url));
 		if (uniqueUrls.length === 0) return [];
@@ -250,6 +250,7 @@ class DownloadQueueManager {
 			const fileStats = statSync(dbFile.filepath);
 			dbFile.filesize = fileStats.size;
 			dbFile.state = "completed";
+			this.finishedDownloads.set(dbFile.url, "success");
 		}
 		ytdlpEvents.emit("list", [dbFile]);
 		pushLogToClient(`[${dbFile.id}=${dbFile.metaId}] finished download: ${dbFile.title}`, "success");
@@ -259,6 +260,9 @@ class DownloadQueueManager {
 	private async handleDownloadError(dbFile: SelectDownload, error: any) {
 		dbFile.state = "error";
 		dbFile.error = error;
+		this.finishedDownloads.set(dbFile.url, "error");
+		pushToastToClient(`${dbFile.title}`, "error", `Failed to download: ${error.message ?? "Unknown error"}`);
+
 		await this.updateDownloadEntry(dbFile);
 	}
 
@@ -267,15 +271,21 @@ class DownloadQueueManager {
 		ytdlpEvents.emit("list", [updated]);
 		return updated;
 	}
-
 	private cleanupDownload(dbFile: SelectDownload) {
 		this.activeDownloads.delete(dbFile.id);
 		this.processingUrls.delete(dbFile.url);
+		if (!this.activeDownloads.size && this.finishedDownloads.size) {
+			pushToastToClient(`Downloads completed`, "success", `${Array.from(this.finishedDownloads.values()).filter((d) => d === "success").length} downloads completed`);
+			this.finishedDownloads.clear();
+		}
 	}
 
-	cancelDownload(id: number) {
+	async cancelDownload(id: number) {
 		const controller = this.activeDownloads.get(id);
 		if (controller) {
+			const dbFile = await queries.downloads.findDownloadById(id);
+			if (dbFile) this.finishedDownloads.set(dbFile.url, "cancelled");
+
 			controller.abort("cancelled by user");
 			this.activeDownloads.delete(id);
 		}
@@ -298,8 +308,8 @@ export const ytdlpRouter = router({
 		.mutation(async ({ input: { url: urls, type } }) => {
 			return await downloadQueueManager.addToQueue(urls, type);
 		}),
-	cancel: publicProcedure.input(z.union([z.string(), z.number()]).transform((v) => Number(v))).mutation(({ input: id }) => {
-		downloadQueueManager.cancelDownload(id);
+	cancel: publicProcedure.input(z.union([z.string(), z.number()]).transform((v) => Number(v))).mutation(async ({ input: id }) => {
+		await downloadQueueManager.cancelDownload(id);
 		ytdlpEvents.emit("cancel", id);
 	}),
 	status: publicProcedure.subscription(() => {
