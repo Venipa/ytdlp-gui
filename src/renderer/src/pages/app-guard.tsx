@@ -6,12 +6,13 @@ import { logger } from "@shared/logger";
 import { useAtom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { useEffect } from "react";
-import { resetSelectedTab } from "./index.store";
+import { useResetSelectedTab } from "./index.store";
 
 const appInitialized = atomWithStorage("appInitialized", false, tempStorage, { getOnInit: true });
 const useAppInitialized = () => useAtom(appInitialized);
 export default function AppGuard({ children }: { children: React.ReactNode }) {
 	const [appInitialized, setAppInitialized] = useAppInitialized();
+	const resetSelectedTab = useResetSelectedTab();
 	const { mutateAsync: initialize, isLoading } = trpc.internals.initializeApp.useMutation({
 		onError: (error) => {
 			logger.error("Failed to initialize", error);

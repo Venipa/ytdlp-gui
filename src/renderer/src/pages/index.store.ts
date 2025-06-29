@@ -1,4 +1,4 @@
-import { setAtom, useAtom } from "jotai";
+import { useAtom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { HTMLProps, ReactElement } from "react";
 
@@ -25,4 +25,4 @@ export const getSectionMetaByTitle = (title: string) => sectionValues.find((d) =
 
 export const selectedTabTitle = atomWithStorage<string>("selectedTabTitle", sectionTabs[0].title, undefined, { getOnInit: true });
 export const useSelectedTabTitle = () => useAtom(selectedTabTitle);
-export const resetSelectedTab = () => setAtom(selectedTabTitle, sectionTabs[0].title);
+export const useResetSelectedTab = () => () => useSelectedTabTitle()[1](sectionTabs[0].title);
