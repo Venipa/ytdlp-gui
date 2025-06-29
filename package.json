@@ -126,6 +126,7 @@
     "@electron-toolkit/eslint-config-prettier": "^2.0.0",
     "@electron-toolkit/eslint-config-ts": "^2.0.0",
     "@electron-toolkit/tsconfig": "^1.0.1",
+    "@electron/fuses": "^1.8.0",
     "@modyfi/vite-plugin-yaml": "^1.1.0",
     "@octokit/types": "^13.8.0",
     "@types/axios": "^0.14.4",

@@ -4,33 +4,10 @@ import { ScrollArea } from "@renderer/components/ui/scroll-area";
 import SuspenseLoader from "@renderer/components/ui/suspense-loader";
 import { cn } from "@renderer/lib/utils";
 import config, { NodeEnv } from "@shared/config";
-import { useAtom } from "jotai";
-import { atomWithStorage } from "jotai/utils";
-import { createElement, Fragment, HTMLProps, ReactElement, Suspense, useMemo } from "react";
+import { Fragment, Suspense, createElement, useMemo } from "react";
 import { toast } from "sonner";
 import StatusBar from "./components/status-bar";
-type Element = <T extends HTMLProps<HTMLDivElement> = HTMLProps<HTMLDivElement>>(props?: T) => ReactElement<T, any>;
-type Module = {
-	default: Element;
-	meta: {
-		title: string;
-		icon?: Element;
-		index?: number;
-		show?: boolean;
-		customLayout?: boolean;
-	};
-};
-const SECTIONTABS = import.meta.glob<Module>(`./sections/*.tsx`, { eager: true });
-const sectionValues = Object.values(SECTIONTABS).filter((d) => d.default);
-const sectionTabs = sectionValues
-	.map(({ meta }, i) => ({ ...meta, index: meta.index !== undefined ? meta.index : i }))
-	.filter((d) => d.show !== false)
-	.sort((a, b) => a.index - b.index);
-const getSectionContentByTitle = (title: string) => sectionValues.find((d) => d.meta.title === title)?.default;
-const getSectionMetaByTitle = (title: string) => sectionValues.find((d) => d.meta.title === title)?.meta;
-
-const selectedTabTitle = atomWithStorage<string>("selectedTabTitle", sectionTabs[0].title, undefined, { getOnInit: true });
-const useSelectedTabTitle = () => useAtom(selectedTabTitle);
+import { getSectionContentByTitle, getSectionMetaByTitle, sectionTabs, useSelectedTabTitle } from "./index.store";
 
 export default function SettingsWindow() {
 	const [selectedTab, setSelectedTab] = useSelectedTabTitle();

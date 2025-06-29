@@ -6,6 +6,7 @@ import { logger } from "@shared/logger";
 import { useAtom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { useEffect } from "react";
+import { resetSelectedTab } from "./index.store";
 
 const appInitialized = atomWithStorage("appInitialized", false, tempStorage, { getOnInit: true });
 const useAppInitialized = () => useAtom(appInitialized);
@@ -19,7 +20,10 @@ export default function AppGuard({ children }: { children: React.ReactNode }) {
 	useEffect(() => {
 		if (appInitialized) return;
 		initialize()
-			.then(() => setAppInitialized(true))
+			.then(() => {
+				setAppInitialized(true);
+				resetSelectedTab();
+			})
 			.catch((err) => {
 				if (err.message === "App already initialized") setAppInitialized(true);
 			});

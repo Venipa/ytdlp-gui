@@ -33,13 +33,9 @@ export default function AddLink({ showDownloadPath }: { showDownloadPath?: boole
 			}),
 		];
 		logger.debug("download requested for ", { url: queueUrls, mediaUrl, mediaType });
-		queueDownloadFromUrl({ url: queueUrls, type: mediaType })
-			.then((items) => {
-				toast.success(`Downloaded ${items.length} of ${queueUrls.length} urls.`);
-			})
-			.catch((err) => {
-				if (isTRPCErrorResponse(err)) toast.error(err.message);
-			});
+		queueDownloadFromUrl({ url: queueUrls, type: mediaType }).catch((err) => {
+			if (isTRPCErrorResponse(err)) toast.error(err.message);
+		});
 		setMediaUrl("");
 	}, [mediaUrl, mediaType]);
 

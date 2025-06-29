@@ -44,7 +44,11 @@ mac:
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
+  hardenedRuntime: true
+  gatekeeperAssess: false
   target:
+    - target: zip
+      arch: arm64
     - target: dmg
       arch: arm64
   icon: build/icon.icns
@@ -65,6 +69,7 @@ dmg:
 # appx:
 #   electronUpdaterAware: true
 #   addAutoLaunchExtension: true
+afterPack: ./scripts/afterPack.js
 
 npmRebuild: false
 publish:
