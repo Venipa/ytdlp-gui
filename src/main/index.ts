@@ -1,19 +1,20 @@
+import { join } from "path";
 import { electronApp, optimizer, platform } from "@electron-toolkit/utils";
 import { isDevelopmentOrDebug, isProduction } from "@shared/config";
 import { Logger, logger } from "@shared/logger";
 import { BrowserWindow, Menu, MenuItem, Tray, app, shell, systemPreferences } from "electron";
-import { join } from "path";
+// @ts-ignore
+import { autoUpdater } from "electron-updater";
 // @ts-ignore
 import iconWin from "~/build/icon.ico?asset";
 // @ts-ignore
 import icon from "~/build/icon_24x24.png?asset";
 // @ts-ignore
-import { autoUpdater } from "electron-updater";
-// @ts-ignore
 // @ts-ignore
 import builderConfig from "../../electron-builder.yml";
 import { executableIsAvailable } from "./lib/bin.utils";
 import { ClipboardMonitor } from "./lib/clipboardMonitor";
+import contextMenu from "./lib/contextMenu";
 import { wrapWindowHandler } from "./lib/windowUtils";
 import { runMigrate } from "./stores/app-database";
 import { appStore } from "./stores/app.store";
@@ -110,6 +111,13 @@ async function createWindow() {
 	await loadUrlOfWindow(mainWindow, "/");
 	attachAutoUpdaterIPC(mainWindow);
 	await readyPromise;
+	contextMenu({
+		window: mainWindow,
+		showInspectElement: false,
+		showSelectAll: true,
+		showLearnSpelling: false,
+		showLookUpSelection: true,
+	});
 	mainWindow.show();
 	return mainWindow;
 }

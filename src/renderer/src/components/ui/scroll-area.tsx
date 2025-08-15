@@ -26,7 +26,7 @@ const ScrollArea = React.forwardRef<React.ElementRef<typeof ScrollAreaPrimitive.
 						className={cn("absolute top-0 inset-x-0 backdrop-blur-sm h-12 pointer-events-auto mask-to-t z-10")}
 						style={{ opacity: showStartScrollBlur }}></motion.div>
 				)}
-				<ScrollAreaPrimitive.Viewport className='h-full w-full rounded-[inherit] pb-6' ref={scrollRef as any}>
+				<ScrollAreaPrimitive.Viewport className='h-full w-full rounded-[inherit] pb-6 [&>div]:h-full' ref={scrollRef as any}>
 					{children}
 				</ScrollAreaPrimitive.Viewport>
 

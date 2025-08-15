@@ -1,4 +1,5 @@
 import { Button } from "@renderer/components/ui/button";
+import { Input } from "@renderer/components/ui/input";
 import { Textarea } from "@renderer/components/ui/textarea";
 import { QTooltip } from "@renderer/components/ui/tooltip";
 import { trpc } from "@renderer/lib/trpc-link";
@@ -7,17 +8,17 @@ import { cn } from "@renderer/lib/utils";
 import { logger } from "@shared/logger";
 import { isTRPCErrorResponse } from "@shared/trpc/utils";
 import { LucideFlame } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLinkStore } from "./add-link.store";
 import { useApp } from "./app-context";
 import SelectDownloadBox from "./select-download-path";
 import SelectMediaTypeBox from "./select-download-type";
 const httpsRegex = /^https?/i;
-export default function AddLink({ showDownloadPath }: { showDownloadPath?: boolean }) {
+export default function AddLink({ showDownloadPath, children }: { showDownloadPath?: boolean; children?: React.ReactNode }) {
 	const [mediaType] = useMediaType();
 	const { settings, setSetting } = useApp();
-	const { mutateAsync: queueDownloadFromUrl } = trpc.ytdl.downloadMedia.useMutation({
+	const { mutateAsync: queueDownloadFromUrl, isLoading: isDownloading } = trpc.ytdl.downloadMedia.useMutation({
 		onError(error, variables, context) {
 			toast.error(error.data!.code, { description: error.message });
 		},
@@ -38,36 +39,55 @@ export default function AddLink({ showDownloadPath }: { showDownloadPath?: boole
 		});
 		setMediaUrl("");
 	}, [mediaUrl, mediaType]);
-
+	const [showAddLink, setShowAddLink] = useState(false);
 	logger.debug("add-link", { mediaUrl });
 	return (
-		<div className='flex flex-col gap-6'>
-			<div className='flex flex-col gap-0.5'>
-				<Textarea
-					placeholder='https://youtube.com/watch?v=xyz'
-					className='placeholder:text-xs text-[0.775rem]'
-					value={mediaUrl}
-					onChange={(ev) => setMediaUrl(ev.target.value)}
-					rows={5}
-				/>
-				<div className='flex items-end justify-end text-xs text-muted-foreground mr-2'>{linkCount} links captured</div>
-			</div>
-			<div className='flex items-center gap-2'>
-				<SelectDownloadBox></SelectDownloadBox>
-				<SelectMediaTypeBox className='w-[200px]'></SelectMediaTypeBox>
-				<div className='flex-auto'></div>
-				<QTooltip content='Enable/Disable clipboard monitoring'>
-					<Button variant={"ghost"} onClick={() => setSetting("features.clipboardMonitor", !settings.features.clipboardMonitor)}>
-						<LucideFlame
-							className={cn(settings.features.clipboardMonitor ? "fill-yellow-300 stroke-yellow-600" : "stroke-primary", "transition-colors duration-200 ease-out")}
-						/>
+		<>
+			<div className={cn("flex flex-col gap-4 pt-4", showAddLink && " bg-muted/20 border-b border-b-muted")}>
+				<div className='flex justify-start items-center px-4 gap-2'>
+					<Input placeholder='Search...' />
+					<div className='w-px h-[80%] bg-muted/60'></div>
+					<Button variant={"outline"} onClick={() => setShowAddLink((s) => !s)} className='w-[100px]'>
+						{showAddLink ? "Close" : "Add Link"}
 					</Button>
-				</QTooltip>
+				</div>
+				{showAddLink && (
+					<>
+						<div className='flex flex-col gap-6 px-4 py-4'>
+							<div className='flex flex-col gap-0.5'>
+								<Textarea
+									placeholder='https://youtube.com/watch?v=xyz'
+									className='placeholder:text-xs text-[0.775rem]'
+									value={mediaUrl}
+									onChange={(ev) => setMediaUrl(ev.target.value)}
+									rows={5}
+									role='textbox'
+								/>
+								<div className='flex items-end justify-end text-xs text-muted-foreground mr-2'>{linkCount} links captured</div>
+							</div>
+							<div className='flex items-center gap-2'>
+								<SelectDownloadBox></SelectDownloadBox>
+								<SelectMediaTypeBox className='w-[200px]'></SelectMediaTypeBox>
+								<div className='flex-auto'></div>
+								<QTooltip content='Enable/Disable clipboard monitoring'>
+									<Button variant={"ghost"} onClick={() => setSetting("features.clipboardMonitor", !settings.features.clipboardMonitor)}>
+										<LucideFlame
+											className={cn(
+												settings.features.clipboardMonitor ? "fill-yellow-300 stroke-yellow-600" : "stroke-primary",
+												"transition-colors duration-200 ease-out",
+											)}
+										/>
+									</Button>
+								</QTooltip>
 
-				<Button disabled={!mediaUrl} onClick={handleSubmit}>
-					Add & Start Download
-				</Button>
+								<Button disabled={!mediaUrl} onClick={handleSubmit}>
+									Add & Start Download
+								</Button>
+							</div>
+						</div>
+					</>
+				)}
 			</div>
-		</div>
+		</>
 	);
 }

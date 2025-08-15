@@ -52,7 +52,7 @@ export default function SettingsWindow() {
 							<span>{NodeEnv}</span>
 						</div>
 					</TabNavbar>
-					<ContentLayout className='relative h-full px-6'>
+					<ContentLayout className={cn("relative h-full", !selectedMeta?.plain && "px-6")}>
 						{selectedContent ? (
 							<Suspense fallback={<SuspenseLoader />}>{selectedContent}</Suspense>
 						) : (

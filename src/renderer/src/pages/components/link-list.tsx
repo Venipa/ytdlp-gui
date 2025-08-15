@@ -1,5 +1,5 @@
-import { Button } from "@renderer/components/ui/button";
 import ButtonLoading from "@renderer/components/ui/ButtonLoading";
+import { Button } from "@renderer/components/ui/button";
 import ClickableText from "@renderer/components/ui/clickable-text";
 import { ProgressCircle } from "@renderer/components/ui/progress-circle";
 import { Spinner } from "@renderer/components/ui/spinner";
@@ -7,6 +7,7 @@ import SuspenseLoader from "@renderer/components/ui/suspense-loader";
 import { QTooltip } from "@renderer/components/ui/tooltip";
 import { TrimSubdomainRegex } from "@renderer/lib/regex";
 import { trpc } from "@renderer/lib/trpc-link";
+import { cn } from "@renderer/lib/utils";
 import { createLogger, logger } from "@shared/logger";
 import { DotIcon, LucideArrowDownToDot, LucideCheck, LucideFileX, LucideFolderOpen, LucideGlobe, LucideListPlus, LucideRedo2, LucideSquare, LucideX } from "lucide-react";
 import prettyBytes from "pretty-bytes";
@@ -171,7 +172,7 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
 		</div>
 	);
 }
-export default function LinkList() {
+export default function LinkList(props: { className?: string }) {
 	const { data: items, isFetching } = trpc.ytdl.list.useQuery(undefined);
 	const {
 		ytdl: { list },
@@ -196,8 +197,8 @@ export default function LinkList() {
 		},
 	});
 	return (
-		<div className='flex flex-col gap-2'>
-			<VList className='h-[300px] border border-muted rounded-lg relative flex flex-col py-2.5 px-2' style={{ height: 300 }}>
+		<div className={cn("flex flex-col gap-2", props.className)}>
+			<VList className='flex-grow relative flex flex-col py-2.5 px-2' style={{ height: "100%" }}>
 				{isFetching && <SuspenseLoader className='absolute bg-background inset-0' />}
 				{items?.map((d) => (
 					<div className='h-12' key={d.id}>
