@@ -2,11 +2,11 @@ import { AppStore } from "@main/stores/AppStore";
 import { trpc } from "@renderer/lib/trpc-link";
 import { logger } from "@shared/logger";
 import { uniq } from "lodash-es";
-import { Context, createContext, Provider, useContext, useMemo } from "react";
+import { Context, Provider, createContext, useContext, useMemo } from "react";
 import { toast } from "sonner";
 import { useDebounceCallback } from "usehooks-ts";
 import { z } from "zod";
-import { useLinkStore } from "./add-link.store";
+import { useLinkBoxStore } from "./add-link.store";
 type AppContext = {
 	settings: AppStore & Record<string, any>;
 	setSetting<T = any>(key: string, value: any, showToast?: boolean): Promise<{ key: string; value: T }>;
@@ -39,7 +39,7 @@ const AppContextProvider: Provider<AppContext> = (({ value, ...props }) => {
 			else toast[messageType](message, { description });
 		},
 	});
-	const [, setAddLinkContent] = useLinkStore();
+	const [, setAddLinkContent] = useLinkBoxStore();
 	trpc.ytdl.onAutoAdd.useSubscription(undefined, {
 		onData(data) {
 			setAddLinkContent((s) => {

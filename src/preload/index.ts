@@ -1,8 +1,9 @@
 import { electronAPI } from "@electron-toolkit/preload";
 import platform from "@main/lib/platform";
+import "@shared/primitivies";
+import { availableParallelism } from "node:os";
 import { IpcRendererEvent, contextBridge, ipcRenderer } from "electron";
 import { ELECTRON_TRPC_CHANNEL } from "electron-trpc/main";
-import { availableParallelism } from "node:os";
 import { version } from "~/package.json";
 import {} from "./index.d";
 // Custom APIs for renderer

@@ -1,3 +1,4 @@
+import { Badge } from "@renderer/components/ui/badge";
 import { Button } from "@renderer/components/ui/button";
 import { Input } from "@renderer/components/ui/input";
 import { Textarea } from "@renderer/components/ui/textarea";
@@ -8,9 +9,9 @@ import { cn } from "@renderer/lib/utils";
 import { logger } from "@shared/logger";
 import { isTRPCErrorResponse } from "@shared/trpc/utils";
 import { LucideFlame } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { useLinkStore } from "./add-link.store";
+import { useAddLinkStore, useLinkBoxStore, useSearchStore } from "./add-link.store";
 import { useApp } from "./app-context";
 import SelectDownloadBox from "./select-download-path";
 import SelectMediaTypeBox from "./select-download-type";
@@ -23,8 +24,16 @@ export default function AddLink({ showDownloadPath, children }: { showDownloadPa
 			toast.error(error.data!.code, { description: error.message });
 		},
 	});
-	const [mediaUrl, setMediaUrl] = useLinkStore();
-	const linkCount = useMemo(() => mediaUrl.split("\n").filter((url) => url && httpsRegex.test(url)).length, [mediaUrl]);
+	const [search, setSearch] = useSearchStore();
+	const [mediaUrl, setMediaUrl] = useLinkBoxStore();
+	const linkCount = useMemo(
+		() =>
+			mediaUrl
+				.split("\n")
+				.filter((url) => url && httpsRegex.test(url))
+				.clampMax(999),
+		[mediaUrl],
+	);
 	const handleSubmit = useCallback(() => {
 		if (!mediaUrl) return;
 		const queueUrls = [
@@ -39,16 +48,17 @@ export default function AddLink({ showDownloadPath, children }: { showDownloadPa
 		});
 		setMediaUrl("");
 	}, [mediaUrl, mediaType]);
-	const [showAddLink, setShowAddLink] = useState(false);
+	const [{ showAddLink }, setAddConfig] = useAddLinkStore();
 	logger.debug("add-link", { mediaUrl });
 	return (
 		<>
 			<div className={cn("flex flex-col gap-4 pt-4", showAddLink && " bg-muted/20 border-b border-b-muted")}>
 				<div className='flex justify-start items-center px-4 gap-2'>
-					<Input placeholder='Search...' />
+					<Input placeholder='Search...' value={search ?? ""} onChange={(ev) => setSearch(ev.target.value)} />
 					<div className='w-px h-[80%] bg-muted/60'></div>
-					<Button variant={"outline"} onClick={() => setShowAddLink((s) => !s)} className='w-[100px]'>
+					<Button variant={"outline"} onClick={() => setAddConfig((s) => ({ ...s, showAddLink: !s.showAddLink }))} className='w-[100px] relative'>
 						{showAddLink ? "Close" : "Add Link"}
+						{linkCount > 0 && !showAddLink && <Badge className='absolute -top-2.5 right-0 h-5 px-1.5 flex items-center justify-center'>{linkCount}</Badge>}
 					</Button>
 				</div>
 				{showAddLink && (
