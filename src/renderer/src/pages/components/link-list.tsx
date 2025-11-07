@@ -38,12 +38,12 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
 	const { mutateAsync: retryFromId } = trpc.ytdl.retry.useMutation();
 	const { mutateAsync: cancelFromId } = trpc.ytdl.cancel.useMutation();
 	const { mutateAsync: deleteFromId, isLoading: deleteLoading } = trpc.ytdl.delete.useMutation();
-	const filesize = useMemo(() => prettyBytes(fsize), [fsize]);
 	trpc.ytdl.onIdDownload.useSubscription(id, {
 		onData(data) {
 			if (data) setDownloadStatus(data as any);
 		},
 	});
+	const filesize = useMemo(() => (fsize && fsize > 0 ? prettyBytes(fsize) : null), [fsize, setDownloadStatus]);
 	const completed = useMemo(() => state === "completed", [state, status]);
 	const cancelled = useMemo(() => state === "cancelled", [state, status]);
 	const downloading = useMemo(() => state === "downloading", [state, status]);
@@ -96,9 +96,14 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
 				<div className='grid grid-rows-[20px_12px] items-center cursor-pointer'>
 					<div className='text-sm truncate leading-none'>{title}</div>
 					<div className='flex gap-1 items-center text-xs text-muted-foreground leading-none'>
-						{!error && filesize && (
+						{!error && filesize ? (
 							<>
 								<span className='w-[60px]'>{filesize}</span>
+								<DotIcon className='size-2' />
+							</>
+						) : (
+							<>
+								<span className='w-[60px]'>unknown</span>
 								<DotIcon className='size-2' />
 							</>
 						)}

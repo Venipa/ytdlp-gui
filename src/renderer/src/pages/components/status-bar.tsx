@@ -13,7 +13,7 @@ import { useYtdl } from "./ytdl-context";
 export default function StatusBar() {
 	const { settings } = useApp();
 	const { status } = useYtdl();
-	const [data] = trpc.ytdl.stats.useSuspenseQuery();
+	const [data, { refetch }] = trpc.ytdl.stats.useSuspenseQuery();
 	const { mutateAsync: quitAndUpdate } = trpc.internals.quitAndInstallUpdate.useMutation({
 		onError(error, variables, context) {
 			toast.error(error.message);
@@ -26,6 +26,11 @@ export default function StatusBar() {
 	const [updateDone, setUpdateDone] = useIPC("update-download-done");
 	const latestYtdlpStatus = useMemo(() => status[0], [status]);
 	const noStateOrInvalidStatus = useMemo(() => !latestYtdlpStatus || ["done", "deleted"].includes(latestYtdlpStatus.state), [latestYtdlpStatus]);
+	trpc.ytdl.status.useSubscription(undefined, {
+		onData(data) {
+			if (data.state === "done") refetch();
+		},
+	});
 	return (
 		<div className='grid items-center grid-cols-[140px_200px_1fr] h-10 flex-shrink-0 overflow-hidden border-t border-t-border flex-auto text-xs text-muted-foreground px-4 select-none'>
 			<Appear className='flex gap-1 items-center'>

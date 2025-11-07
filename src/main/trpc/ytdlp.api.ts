@@ -1,5 +1,6 @@
 import { statSync } from "fs";
 import path from "path";
+import { Progress } from "@main/lib/ytdlp-wrapper";
 import { db } from "@main/stores/app-database";
 import { SelectDownload, queries } from "@main/stores/app-database.helpers";
 import { downloads } from "@main/stores/app-database.schema";
@@ -104,7 +105,7 @@ class DownloadQueueManager {
 			metaId: existingDbFile.metaId,
 			meta: existingDbFile.meta,
 			filepath: existingDbFile.filepath,
-			filesize: existingDbFile.filesize,
+			filesize: dbFile.filesize || existingDbFile.filesize,
 			source: new URL(dbFile.url).hostname,
 			state: "fetching_meta",
 			title: existingDbFile.title,
@@ -184,12 +185,12 @@ class DownloadQueueManager {
 
 	private async prepareDownload(dbFile: SelectDownload, videoInfo: VideoInfo) {
 		const filepath = path.join(ytdl.currentDownloadPath, videoInfo.filename);
-		dbFile.meta = omit(videoInfo, ["formats"]) as any;
+		dbFile.meta = this.trimVideoInfo(videoInfo);
 		dbFile.metaId = videoInfo.id;
 		dbFile.filepath = filepath;
 		dbFile.title = videoInfo.title;
 		dbFile.state = "downloading";
-		dbFile.filesize = videoInfo.filesize_approx ?? videoInfo.filesize ?? 0;
+		dbFile.filesize = videoInfo.filesize_approx || videoInfo.filesize || 0;
 		if (!dbFile.type || dbFile.type === "auto") {
 			dbFile.type = videoInfo._type?.toLowerCase() ?? "auto";
 		}
@@ -212,7 +213,7 @@ class DownloadQueueManager {
 	}
 
 	private setupStreamHandlers(stream: any, dbFile: SelectDownload, videoInfo: VideoInfo) {
-		stream.on("progress", (ev: any) => {
+		stream.on("progress", (ev: Progress) => {
 			ytdlpEvents.emit("status", {
 				id: dbFile.id,
 				action: "download",
