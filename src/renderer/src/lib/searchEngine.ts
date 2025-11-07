@@ -23,6 +23,7 @@ function parseSize(sizeStr: string): { value: number; unit: "b" | "kb" | "mb" | 
 		unit: match[2].toLowerCase() as "b" | "kb" | "mb" | "gb",
 	};
 }
+export type SearchItem<T> = T & { type: MediaType; filesize: number; status: StatusType; [k: string]: any };
 
 /**
  * Parses the search string into filters and free text.
@@ -75,14 +76,7 @@ export class SearchEngine {
 	 * Filters a list of items using the parsed query.
 	 * Items must support at least: type, size(bytes), status and optionally any string content for matching with text search.
 	 */
-	filterResults<
-		T extends {
-			type: MediaType;
-			filesize: number; // in bytes
-			status: StatusType;
-			[k: string]: any;
-		},
-	>(items: T[], query: string, stringFields: (keyof T)[]): T[] {
+	filterResults<T, TItem extends SearchItem<T>>(items: TItem[], query: string, stringFields: (keyof TItem)[]): TItem[] {
 		const filters = this.parse(query);
 		logger.debug("filters", { filters });
 		return items.filter((item) => {

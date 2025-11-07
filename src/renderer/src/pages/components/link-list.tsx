@@ -6,7 +6,7 @@ import { Spinner } from "@renderer/components/ui/spinner";
 import SuspenseLoader from "@renderer/components/ui/suspense-loader";
 import { QTooltip } from "@renderer/components/ui/tooltip";
 import { TrimSubdomainRegex } from "@renderer/lib/regex";
-import { SearchEngine } from "@renderer/lib/searchEngine";
+import { SearchEngine, SearchItem } from "@renderer/lib/searchEngine";
 import { trpc } from "@renderer/lib/trpc-link";
 import { cn } from "@renderer/lib/utils";
 import { createLogger } from "@shared/logger";
@@ -195,7 +195,7 @@ export default function LinkList(props: { className?: string }) {
 	const [searchEngine] = useState(() => new SearchEngine());
 	const filteredItems = useMemo(() => {
 		const activeItems = items?.filter((d) => d.state === "downloading" || d.state === "fetching_meta" || d.state === "queued") ?? [];
-		const results = searchEngine.filterResults(items ?? [], search ?? "", ["title", "source", "url"]);
+		const results = searchEngine.filterResults((items ?? []) as unknown as SearchItem<YTDLItem>[], search ?? "", ["title", "source", "url"]);
 		if (search) {
 			return activeItems?.reduce((acc, item) => {
 				if (!results.find((d) => d.id === item.id)) acc.push(item as YTDLItem);

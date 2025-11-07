@@ -7,13 +7,13 @@ const webContents = (win: BrowserWindow) => win.webContents ?? (win.id && win);
 type DecoratedMenuItem = MenuItem & Partial<{ transform: (text: string) => string; click: (menuItem: MenuItem) => void }>;
 
 const decorateMenuItem =
-	<T extends MenuItem>(menuItem: T) =>
-	(options: { transform?: (text: string) => string; click?: () => void } = {}): T => {
+	<T extends MenuItem>(menuItem: Partial<T> & { id: string; label: string }) =>
+	(options: { transform?: (text: string) => string; click?: () => void } = {}): MenuItem => {
 		if (options.transform && !("transform" in menuItem)) {
 			(menuItem as unknown as DecoratedMenuItem).transform = options.transform;
 		}
 
-		return menuItem;
+		return menuItem as unknown as MenuItem;
 	};
 const removeUnusedMenuItems = (menuTemplate: DecoratedMenuItem[]) => {
 	let notDeletedPreviousElement;
@@ -130,10 +130,10 @@ const create = (win: BrowserWindow, options: ContextMenuOptions) => {
 			defaultActions.copy(),
 			defaultActions.paste(),
 			shouldShowSelectAll && defaultActions.selectAll(),
-		];
+		].filter(Boolean) as unknown as MenuItem[];
 
 		if (options.menu) {
-			menuTemplate = options.menu(defaultActions, properties, win, dictionarySuggestions, event);
+			menuTemplate = options.menu(defaultActions, properties, win, [], event);
 		}
 
 		if (options.prepend) {
@@ -154,7 +154,7 @@ const create = (win: BrowserWindow, options: ContextMenuOptions) => {
 
 		// Filter out leading/trailing separators
 		// TODO: https://github.com/electron/electron/issues/5869
-		menuTemplate = removeUnusedMenuItems(menuTemplate);
+		menuTemplate = removeUnusedMenuItems(menuTemplate as unknown as DecoratedMenuItem[]);
 
 		for (const menuItem of menuTemplate) {
 			// Apply custom labels for default menu items
@@ -170,17 +170,17 @@ const create = (win: BrowserWindow, options: ContextMenuOptions) => {
 		}
 
 		if (menuTemplate.length > 0) {
-			const menu = electron.Menu.buildFromTemplate(menuTemplate);
+			const menu = electron.Menu.buildFromTemplate(menuTemplate as unknown as MenuItem[]);
 
 			if (typeof options.onShow === "function") {
-				menu.on("menu-will-show", options.onShow);
+				menu.on("menu-will-show", options.onShow as any);
 			}
 
 			if (typeof options.onClose === "function") {
-				menu.on("menu-will-close", options.onClose);
+				menu.on("menu-will-close", options.onClose as any);
 			}
 
-			menu.popup(win);
+			menu.popup({ window: win });
 		}
 	};
 
