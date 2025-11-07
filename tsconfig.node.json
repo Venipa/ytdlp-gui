@@ -22,7 +22,8 @@
     "allowUnusedLabels": true,
     "types": [
       "electron-vite/node",
-      "./src/main/global.d.ts"
+      "./src/main/global.d.ts",
+      "./src/shared/primitivies.d.ts"
     ],
     "baseUrl": ".",
     "paths": {

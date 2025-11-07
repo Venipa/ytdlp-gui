@@ -6,14 +6,28 @@ import { Spinner } from "@renderer/components/ui/spinner";
 import SuspenseLoader from "@renderer/components/ui/suspense-loader";
 import { QTooltip } from "@renderer/components/ui/tooltip";
 import { TrimSubdomainRegex } from "@renderer/lib/regex";
+import { SearchEngine } from "@renderer/lib/searchEngine";
 import { trpc } from "@renderer/lib/trpc-link";
 import { cn } from "@renderer/lib/utils";
-import { createLogger, logger } from "@shared/logger";
-import { DotIcon, LucideArrowDownToDot, LucideCheck, LucideFileX, LucideFolderOpen, LucideGlobe, LucideListPlus, LucideRedo2, LucideSquare, LucideX } from "lucide-react";
+import { createLogger } from "@shared/logger";
+import {
+	DotIcon,
+	LucideArrowDownToDot,
+	LucideCheck,
+	LucideFileX,
+	LucideFolderOpen,
+	LucideGlobe,
+	LucideListPlus,
+	LucideRedo2,
+	LucideRefreshCcw,
+	LucideSquare,
+	LucideX,
+} from "lucide-react";
 import prettyBytes from "pretty-bytes";
 import { useMemo, useState } from "react";
 import { VList } from "virtua";
 import { YTDLDownloadStatus, YTDLItem } from "ytdlp-gui/types";
+import { useSearchStore } from "./add-link.store";
 import FileSheet from "./file-sheet";
 const log = createLogger("LinkListItem");
 export function LinkListItem(props: YTDLItem & { key: any }) {
@@ -65,7 +79,7 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
 							<ProgressCircle
 								min={0}
 								max={100}
-								value={status.percent ?? 0}
+								value={queued ? 0 : (status?.percent ?? 0)}
 								className='h-6'
 								gaugePrimaryColor='rgb(225 225 225)'
 								gaugeSecondaryColor='rgba(120, 120, 120, 0.1)'
@@ -177,35 +191,77 @@ export default function LinkList(props: { className?: string }) {
 	const {
 		ytdl: { list },
 	} = trpc.useUtils();
+	const [search, setSearch] = useSearchStore();
+	const [searchEngine] = useState(() => new SearchEngine());
+	const filteredItems = useMemo(() => {
+		const activeItems = items?.filter((d) => d.state === "downloading" || d.state === "fetching_meta" || d.state === "queued") ?? [];
+		const results = searchEngine.filterResults(items ?? [], search ?? "", ["title", "source", "url"]);
+		if (search) {
+			return activeItems?.reduce((acc, item) => {
+				if (!results.find((d) => d.id === item.id)) acc.push(item as YTDLItem);
+				return acc;
+			}, [] as YTDLItem[]);
+		}
+		return results;
+	}, [items, search, list]);
 	trpc.ytdl.listSync.useSubscription(undefined, {
 		onData(data: YTDLItem[]) {
 			if (data?.length) {
+				log.debug("listSync", { data });
 				list.setData(undefined, (state) => {
 					if (!state) state = [];
 					data.forEach((item) => {
 						const idx = state.findIndex((d) => d.id === item.id);
 						if (item.state === "deleted" && idx !== -1) {
 							state.splice(idx, 1);
-						} else if (idx !== -1) state.splice(idx, 1, item as any);
-						else [item, ...state];
+							log.debug("operation", "removed item from list", { item });
+						} else if (idx !== -1) {
+							state.splice(idx, 1, item as any);
+							log.debug("operation", "updated item in list", { item });
+						} else {
+							state.insert(idx, item as any);
+							log.debug("operation", "added item to list", { item });
+						}
 					});
-					logger.debug("listSync", { state });
+					log.debug("listSync complete", { state });
 					return [...state];
 				});
-				list.invalidate();
+				list.invalidate(undefined);
 			}
 		},
 	});
 	return (
-		<div className={cn("flex flex-col gap-2", props.className)}>
+		<div className={cn("flex flex-col gap-2 relative", props.className)}>
 			<VList className='flex-grow relative flex flex-col py-2.5 px-2' style={{ height: "100%" }}>
 				{isFetching && <SuspenseLoader className='absolute bg-background inset-0' />}
-				{items?.map((d) => (
+				{filteredItems?.map((d) => (
 					<div className='h-12' key={d.id}>
 						<LinkListItem {...(d as any)} />
 					</div>
 				))}
 			</VList>
+			{!filteredItems.length && (
+				<div className='absolute bg-background inset-0 flex items-center justify-center text-muted-foreground gap-4 flex-col'>
+					<span>No results found. Try a different search.</span>
+					<pre className='flex flex-col bg-muted/20 border border-muted/40 p-2 rounded-md'>
+						{["type:video|audio", "size:<100mb, <=10gb, etc", "status:success|error|active"].map((line) => (
+							<span key={line} className='text-xs text-muted-foreground'>
+								{line}
+							</span>
+						))}
+					</pre>
+					<Button
+						variant={"ghost"}
+						size={"sm"}
+						className='px-2'
+						onClick={() => {
+							setSearch("");
+						}}>
+						<LucideRefreshCcw />
+						<span>Clear search</span>
+					</Button>
+				</div>
+			)}
 		</div>
 	);
 }

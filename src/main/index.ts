@@ -1,7 +1,8 @@
-import { join } from "path";
 import { electronApp, optimizer, platform } from "@electron-toolkit/utils";
 import { isDevelopmentOrDebug, isProduction } from "@shared/config";
 import { Logger, logger } from "@shared/logger";
+import "@shared/primitivies";
+import { join } from "path";
 import { BrowserWindow, Menu, MenuItem, Tray, app, shell, systemPreferences } from "electron";
 // @ts-ignore
 import { autoUpdater } from "electron-updater";
@@ -152,11 +153,10 @@ app.whenReady().then(async () => {
 
 	createWindow().then((w) => {
 		const isWindowFocused = () => w!.isFocused();
-		const clipboardWatcher = new ClipboardMonitor({
+		const clipboardWatcher = new ClipboardMonitor(w!, {
 			distinct: true,
 			onHttpsText(value) {
 				log.debug("found https link in clipboard", { value });
-				if (isWindowFocused()) return;
 				if (appStore.store.features.clipboardMonitor) {
 					pushLogToClient("clipboard hit: " + value, "debug");
 					if (appStore.store.features.clipboardMonitorAutoAdd) ytdlpEvents.emit("add", value);
