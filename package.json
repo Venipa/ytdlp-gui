@@ -94,7 +94,6 @@
     "motion": "^12.4.3",
     "neverthrow": "^8.1.1",
     "next-themes": "^0.3.0",
-    "node-global-key-listener": "^0.3.0",
     "node-machine-id": "^1.1.12",
     "non.geist": "^1.0.4",
     "nuqs": "^2.0.4",

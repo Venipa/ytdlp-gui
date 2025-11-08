@@ -7,6 +7,6 @@ console.log("current working dir:", resolve("."))
 const lcl = new LCL()
 try {
   const lastCommit = lcl.getLastCommitSync()
-  if (!lastCommit) return
+  if (!lastCommit) throw new Error("No last commit found")
   writeFileSync(resolve(__dirname, 'git.json'), JSON.stringify(lastCommit))
 } catch (e) {}
