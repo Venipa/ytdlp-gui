@@ -29,5 +29,6 @@
     "**/.hg/**",
     "**/.svn/**"
   ],
-  "discord.enabled": false
+  "discord.enabled": false,
+  "typescript.preferences.importModuleSpecifier": "non-relative"
 }

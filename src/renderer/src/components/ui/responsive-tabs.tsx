@@ -73,7 +73,7 @@ function TabNavbar({ children, defaultTab, orientation = "horizontal", indicator
 		<TabContext.Provider value={contextValue}>
 			<nav
 				className={cn(
-					`relative flex select-none ${isMobile ? "items-stretch" : isVertical ? "flex-col items-stretch pb-10" : "items-center"} border-border ${isMobile && !isVertical ? "" : isVertical ? "border-r h-full pr-2" : "border-b"}`,
+					`relative flex select-none ${isMobile ? "items-stretch" : isVertical ? "flex-col items-stretch pb-10" : "items-center "} border-border ${isMobile && !isVertical ? "" : isVertical ? "border-r h-full pr-2" : "border-b"}`,
 					className,
 				)}>
 				{isMobile && orientation === "horizontal" ? (
@@ -97,7 +97,7 @@ function TabNavbar({ children, defaultTab, orientation = "horizontal", indicator
 					</Sheet>
 				) : (
 					<>
-						<div className={`flex ${orientation === "vertical" ? "flex-col space-y-1 truncate flex-auto" : "items-center space-x-1"}`}>{children}</div>
+						<div className={cn(`flex ${orientation === "vertical" ? "flex-col space-y-1 truncate flex-auto" : "items-center flex-auto space-x-1"}`)}>{children}</div>
 						<ActiveTabIndicator />
 					</>
 				)}
@@ -105,31 +105,46 @@ function TabNavbar({ children, defaultTab, orientation = "horizontal", indicator
 		</TabContext.Provider>
 	);
 }
-
+export const useTabContext = () => useContext(TabContext);
 // Individual tab component
 function Tab({
 	children,
 	value,
 	className = "",
+	onClick,
 }: {
 	children: React.ReactNode;
 	value: string;
 	className?: string;
+	onClick?: (ev: React.MouseEvent<HTMLDivElement>) => void;
 }) {
-	const { activeTab, setActiveTab, tabRefs, orientation } = useContext(TabContext);
-
+	const { activeTab, setActiveTab, tabRefs, orientation, indicatorPosition } = useTabContext();
+	const isActive = activeTab === value;
 	return (
 		<div
 			ref={(el) => (tabRefs.current[value] = el)}
-			className={`relative cursor-pointer px-3 py-2 text-sm font-medium transition-colors duration-200 ${activeTab === value ? "text-foreground" : "text-muted-foreground hover:text-foreground"} ${orientation === "vertical" ? "w-full text-left" : ""} ${className}`}
-			onClick={() => setActiveTab(value)}>
+			className={cn(
+				"relative cursor-pointer px-3 py-2 text-sm font-medium transition-colors duration-200",
+				activeTab === value ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+				orientation === "vertical" ? "w-full text-left" : "",
+				orientation === "horizontal" && indicatorPosition === "bottom" && "rounded-t-sm",
+				orientation === "horizontal" && indicatorPosition === "top" && "rounded-b-sm",
+				orientation === "horizontal" && "bg-muted/0",
+				orientation === "horizontal" && isActive && "bg-muted/50",
+				className,
+			)}
+			onClick={(ev) => {
+				onClick?.(ev);
+				if (ev.defaultPrevented) return;
+				setActiveTab(value);
+			}}>
 			{children}
 		</div>
 	);
 }
 
 function ActiveTabIndicator() {
-	const { activeTab, tabRefs, orientation, indicatorPosition } = useContext(TabContext);
+	const { activeTab, tabRefs, orientation, indicatorPosition } = useTabContext();
 	const [dimensions, setDimensions] = useState({ width: 0, height: 0, left: 0, top: 0 });
 	const [isInitialRender, setIsInitialRender] = useState(true);
 

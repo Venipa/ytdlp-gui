@@ -1,5 +1,5 @@
 import { cn } from "@renderer/lib/utils";
-import { cva, VariantProps } from "class-variance-authority";
+import { VariantProps, cva } from "class-variance-authority";
 import { HTMLMotionProps } from "motion/react";
 import React from "react";
 import { Appear } from "./routes/animated-content";
@@ -9,7 +9,8 @@ const getSpans = () => {
 		<span key={`spinner-${index}`}>
 			<style jsx>{`
         span {
-          @apply bg-primary rounded;
+          background-color: var(--primary);
+          border-radius: var(--radius);
           position: absolute;
           top: -3.9%;
           width: 24%;

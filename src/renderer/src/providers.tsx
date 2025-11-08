@@ -7,6 +7,7 @@ import { PropsWithChildren, Suspense, useState } from "react";
 import SuspenseLoader from "./components/ui/suspense-loader";
 import { AppContextProvider } from "./pages/components/app-context";
 import { LogsContextProvider } from "./pages/components/logs-context";
+import { SettingsContextProvider } from "./pages/components/settings/context";
 import { YTDLContextProvider } from "./pages/components/ytdl-context";
 import YTLDPObserver from "./pages/components/ytdlp-worker";
 export default function AppProviders({ children }: PropsWithChildren) {
@@ -20,17 +21,19 @@ export default function AppProviders({ children }: PropsWithChildren) {
 						<QueryClientProvider client={queryClient}>
 							<JotaiProvider>
 								<AppContextProvider value={{ selected: null } as any}>
-									<LogsContextProvider
-										value={
-											{
-												data: [],
-											} as any
-										}>
-										<YTDLContextProvider value={{} as any}>
-											{children}
-											<YTLDPObserver />
-										</YTDLContextProvider>
-									</LogsContextProvider>
+									<SettingsContextProvider>
+										<LogsContextProvider
+											value={
+												{
+													data: [],
+												} as any
+											}>
+											<YTDLContextProvider value={{} as any}>
+												{children}
+												<YTLDPObserver />
+											</YTDLContextProvider>
+										</LogsContextProvider>
+									</SettingsContextProvider>
 								</AppContextProvider>
 							</JotaiProvider>
 						</QueryClientProvider>

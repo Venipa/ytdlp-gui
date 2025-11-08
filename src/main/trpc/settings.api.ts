@@ -1,10 +1,10 @@
-import { appStore } from "@main/stores/app.store";
+import EventEmitter from "events";
 import { AppStore } from "@main/stores/AppStore";
+import { appStore } from "@main/stores/app.store";
 import config from "@shared/config";
 import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { app, dialog } from "electron";
-import EventEmitter from "events";
 import { z } from "zod";
 import { publicProcedure, router } from "./trpc";
 const settingsChangeEmitter = new EventEmitter();
@@ -54,6 +54,13 @@ export const settingsRouter = router({
 			settingsChangeEmitter.emit(handleKey, { key });
 			return { key, value };
 		}),
+	updateMany: publicProcedure.input(z.record(z.any())).mutation(async ({ ctx, input: settings }) => {
+		appStore.set(settings);
+		Object.keys(settings).forEach((key) => {
+			settingsChangeEmitter.emit(handleKey, { key });
+		});
+		return appStore.store;
+	}),
 	addDownloadPath: publicProcedure.mutation(async ({ ctx: { window } }) => {
 		window.setAlwaysOnTop(true);
 		const folder = await dialog.showOpenDialog(window, {

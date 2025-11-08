@@ -1,10 +1,10 @@
 import { sn } from "@renderer/lib/utils";
-import { forwardRef, MouseEvent, useCallback, useEffect, useState } from "react";
+import { MouseEvent, forwardRef, useCallback, useEffect, useState } from "react";
 import { Button, ButtonProps } from "./button";
 import { Spinner } from "./spinner";
 interface ButtonLoadingProps extends ButtonProps {
 	loading?: boolean;
-	onClickWithLoading?: () => Promise<void>;
+	onClickWithLoading?: (ev: MouseEvent<HTMLButtonElement>) => Promise<void>;
 	fixWidth?: boolean;
 }
 export default forwardRef(function ButtonLoading({ children, loading: refLoading, onClickWithLoading, fixWidth, ...props }: ButtonLoadingProps, ref: any) {
@@ -15,7 +15,7 @@ export default forwardRef(function ButtonLoading({ children, loading: refLoading
 			if (fixWidth) setFixedWidth(ev.currentTarget.clientWidth);
 			if (onClickWithLoading) {
 				setLoading(true);
-				onClickWithLoading().finally(() => setLoading(false));
+				onClickWithLoading(ev).finally(() => setLoading(false));
 			}
 		},
 		[props.onClick],

@@ -11,6 +11,7 @@ type Module = {
 		index?: number;
 		show?: boolean;
 		customLayout?: boolean;
+		onClick?: (ev: React.MouseEvent<HTMLDivElement>) => string | undefined;
 	};
 };
 export const SECTIONTABS = import.meta.glob<Module>(`./sections/*.tsx`, { eager: true });
@@ -22,6 +23,7 @@ export const sectionTabs = sectionValues
 
 export const getSectionContentByTitle = (title: string) => sectionValues.find((d) => d.meta.title === title)?.default;
 export const getSectionMetaByTitle = (title: string) => sectionValues.find((d) => d.meta.title === title)?.meta;
+export const getSectionByTitle = (title: string) => sectionValues.find((d) => d.meta.title === title);
 
 export const selectedTabTitle = atomWithStorage<string>("selectedTabTitle", sectionTabs[0].title, undefined, { getOnInit: true });
 export const useSelectedTabTitle = () => useAtom(selectedTabTitle);

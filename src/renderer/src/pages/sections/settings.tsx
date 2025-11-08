@@ -13,6 +13,10 @@ export const meta = {
 	icon: LucideCog,
 	index: 10,
 	show: true,
+	onClick: (ev: any) => {
+		ev.preventDefault();
+		return "settings";
+	},
 };
 const Icon = meta.icon;
 export default function SettingsTab() {

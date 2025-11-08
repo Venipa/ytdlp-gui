@@ -6,19 +6,32 @@ import { cn } from "@renderer/lib/utils";
 import config, { NodeEnv } from "@shared/config";
 import { Fragment, Suspense, createElement, useMemo } from "react";
 import { toast } from "sonner";
+import { useSettings } from "./components/settings/context";
 import StatusBar from "./components/status-bar";
-import { getSectionContentByTitle, getSectionMetaByTitle, sectionTabs, useSelectedTabTitle } from "./index.store";
+import { getSectionByTitle, sectionTabs, useSelectedTabTitle } from "./index.store";
 
 export default function SettingsWindow() {
 	const [selectedTab, setSelectedTab] = useSelectedTabTitle();
-	const selectedContent = useMemo(() => (selectedTab && createElement(getSectionContentByTitle(selectedTab) as any)) || null, [selectedTab]);
-	const selectedMeta = useMemo(() => (selectedTab && (getSectionMetaByTitle(selectedTab) as any)) || null, [selectedTab]);
 	const buildInfo = useMemo(() => config.git?.shortHash && `${config.git.shortHash}`, []);
 	const appVersion = useMemo(() => `v${window.api.version}`, []);
+	const { content: selectedContent, meta: selectedMeta } = useMemo(() => {
+		const section = selectedTab && getSectionByTitle(selectedTab);
+		if (section) {
+			return {
+				content: createElement(section.default as any, { meta: section.meta }),
+				meta: section.meta,
+			};
+		}
+		return {
+			content: null,
+			meta: null,
+		};
+	}, [selectedTab]);
 	const ContentLayout: typeof ScrollArea = useMemo(
 		() => (selectedMeta?.customLayout ? ((({ children }: any) => <Fragment>{children}</Fragment>) as any) : ScrollArea),
 		[selectedMeta],
 	);
+	const settings = useSettings();
 	return (
 		<div className={cn("absolute inset-0 flex flex-col px-0 h-full")}>
 			<div className='flex flex-col flex-shrink-0 h-full flex-auto'>
@@ -29,9 +42,17 @@ export default function SettingsWindow() {
 						orientation='vertical'
 						indicatorPosition='right'
 						className='h-full bg-background-2 pt-16 pb-6 relative'>
-						{sectionTabs.map(({ title, icon: Icon }) => {
+						{sectionTabs.map(({ title, icon: Icon, onClick }) => {
 							return (
-								<Tab value={title!} key={title}>
+								<Tab
+									value={title!}
+									key={title}
+									onClick={(ev) => {
+										const result = onClick?.(ev) as unknown as string | undefined;
+										if (result === "settings") {
+											settings.showSettings();
+										}
+									}}>
 									<div className='flex items-center flex-row-reverse gap-x-2'>
 										{Icon && <Icon className='size-4' />}
 										<div>{title}</div>

@@ -10,6 +10,7 @@ import { useLinkBoxStore } from "./add-link.store";
 type AppContext = {
 	settings: AppStore & Record<string, any>;
 	setSetting<T = any>(key: string, value: any, showToast?: boolean): Promise<{ key: string; value: T }>;
+	updateSettings<T extends Record<string, any>>(settings: T, showToast?: boolean): Promise<T>;
 	getSetting<T = any>(key?: string): Promise<T>;
 };
 type AppContextType = Context<AppContext>;
@@ -63,7 +64,17 @@ const AppContextProvider: Provider<AppContext> = (({ value, ...props }) => {
 			}) as Promise<{ key: string; value: any }>,
 		[],
 	);
+	const { mutateAsync: _updateSettings } = trpc.settings.updateMany.useMutation();
+	const updateSettings = useMemo(
+		() =>
+			<T extends Record<string, any>>(settings: T, showToast?: boolean) =>
+				_updateSettings(settings).then((s) => {
+					if (showToast) onUpdateCallback(s);
+					return s;
+				}) as Promise<T>,
+		[],
+	);
 
-	return <appContext.Provider value={{ getSetting, setSetting, settings }} {...props}></appContext.Provider>;
+	return <appContext.Provider value={{ getSetting, setSetting, updateSettings, settings }} {...props}></appContext.Provider>;
 }) as any;
 export { AppContextProvider, useApp };

@@ -1,13 +1,13 @@
 import type { RouterOutput } from "@main/api";
 import { cn } from "@renderer/lib/utils";
 import { isProduction } from "@shared/config";
-import { cva, VariantProps } from "class-variance-authority";
+import { VariantProps, cva } from "class-variance-authority";
 import * as React from "react";
 import { ControlButton } from "./control-button";
 type WindowTrpcState = RouterOutput["window"]["getState"];
 type WindowState = WindowTrpcState;
 
-const windowControlBarVariants = cva("flex items-center justify-between border-b h-10", {
+const windowControlBarVariants = cva("flex items-center justify-between border-b h-10 z-50", {
 	variants: {
 		variant: {
 			default: "bg-background",

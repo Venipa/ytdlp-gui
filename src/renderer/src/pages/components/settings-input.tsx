@@ -1,84 +1,37 @@
+import { FormControl, FormField, FormItem, FormMessage } from "@renderer/components/ui/form";
 import { Input, InputProps } from "@renderer/components/ui/input";
-import { Label } from "@renderer/components/ui/label";
-import { cn } from "@renderer/lib/utils";
-import { cva, VariantProps } from "class-variance-authority";
-import { clamp, get } from "lodash";
-import { forwardRef, useEffect, useMemo, useState } from "react";
-import { useDebounceValue } from "usehooks-ts";
-import { useApp } from "./app-context";
-const inputVariants = cva("", {
-	variants: {
-		variant: {
-			vertical: "flex flex-col gap-1",
-			horizontal: "flex flex-row gap-0 items-center h-10",
-		},
-	},
-	defaultVariants: {
-		variant: "vertical",
-	},
-});
-const inputFieldVariants = cva("", {
-	variants: {
-		variant: {
-			vertical: "",
-			horizontal: "rounded-l-none h-full",
-		},
-	},
-	defaultVariants: {
-		variant: "vertical",
-	},
-});
-const inputLabelVariants = cva("relative", {
-	variants: {
-		variant: {
-			vertical: "",
-			horizontal: "bg-muted/40 h-full border border-r-0 border-border rounded-s-md flex justify-center items-center px-2.5 text-right",
-		},
-	},
-	defaultVariants: {
-		variant: "vertical",
-	},
-});
+import { useSettingsForm } from "@renderer/pages/components/settings/form";
+import { forwardRef, useId } from "react";
 type SettingsToggleProps = {
 	name: string;
 	onChange?: (value: any) => void;
 	title: any;
 	hint?: any;
-} & Omit<InputProps, "title"> &
-	VariantProps<typeof inputVariants>;
+} & Omit<InputProps, "title">;
 export default forwardRef<HTMLInputElement, SettingsToggleProps>(function SettingsInput({ className, name: key, title: placeholder, hint, ...props }, ref) {
-	const { settings, setSetting } = useApp();
-	const settingsValue = useMemo(() => get(settings, key), [key, settings]);
-	const [debouncedValue, setDebouncedValue] = useDebounceValue<any>(settingsValue, 1000);
-	const [value, setValue] = useState(() => settingsValue);
-	useEffect(() => {
-		if (settingsValue !== debouncedValue)
-			setSetting(key, debouncedValue, true).then(() => {
-				setValue(debouncedValue);
-			});
-	}, [debouncedValue]);
+	const form = useSettingsForm();
+	const id = useId();
 	return (
-		<div className={cn("flex flex-col gap-1", hint && "pb-4")}>
-			<div className={cn(inputVariants(props))}>
-				<Label className={cn(inputLabelVariants(props))}>{placeholder}</Label>
-				{/* {props.variant === 'horizontal' && <div className="w-px bg-muted h-full"></div>} */}
-				<Input
-					ref={ref}
-					defaultValue={debouncedValue}
-					onChange={(ev) => {
-						setValue(ev.target.value);
-						if (ev.target.type === "number")
-							return setDebouncedValue(
-								clamp(ev.target.valueAsNumber, (ev.target.min && Number(ev.target.min)) || 0, (ev.target.max && Number(ev.target.max)) || ev.target.valueAsNumber),
-							);
-						return setDebouncedValue(ev.target.value);
-					}}
-					value={value}
-					className={cn(inputFieldVariants(props))}
-					{...props}
-				/>
-			</div>
-			{(typeof hint === "string" && <div className='text-muted-foreground text-xs flex justify-end'>{hint}</div>) || hint}
-		</div>
+		<FormField
+			control={form.control}
+			name={key as any}
+			render={({ field }) => (
+				<>
+					<FormItem>
+						<FormControl>
+							<div className='group relative w-full'>
+								<label
+									htmlFor={id}
+									className='origin-start text-muted-foreground group-focus-within:text-foreground has-[+input:not(:placeholder-shown)]:text-foreground absolute top-1/2 block -translate-y-1/2 cursor-text px-2 text-sm transition-all group-focus-within:pointer-events-none group-focus-within:top-0 group-focus-within:cursor-default group-focus-within:text-xs group-focus-within:font-medium has-[+input:not(:placeholder-shown)]:pointer-events-none has-[+input:not(:placeholder-shown)]:top-0 has-[+input:not(:placeholder-shown)]:cursor-default has-[+input:not(:placeholder-shown)]:text-xs has-[+input:not(:placeholder-shown)]:font-medium'>
+									<span className='bg-background inline-flex px-1'>{placeholder}</span>
+								</label>
+								<Input id={id} {...field} className='dark:bg-background h-12' />
+							</div>
+						</FormControl>
+						<FormMessage />
+					</FormItem>
+				</>
+			)}
+		/>
 	);
 });
