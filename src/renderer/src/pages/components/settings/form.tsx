@@ -15,6 +15,14 @@ const settingsSchema = z.object({
 		clipboardMonitor: z.coerce.boolean(),
 		clipboardMonitorAutoAdd: z.coerce.boolean(),
 	}),
+	ytdlp: z.object({
+		flags: z.object({
+			custom: z
+				.string()
+				.nullish()
+				.transform((val) => val?.trim() ?? ""),
+		}),
+	}),
 });
 type SettingsValues = z.infer<typeof settingsSchema>;
 const log = logger.child("SettingsFormProvider");
@@ -23,9 +31,6 @@ export function SettingsFormProvider({ children }: PropsWithChildren) {
 	const utils = trpc.useUtils();
 	const form = useForm<SettingsValues>({
 		resolver: zodResolver(settingsSchema),
-		reValidateMode: "onChange",
-		mode: "onChange",
-		criteriaMode: "all",
 		async defaultValues() {
 			const settings = await utils.settings.index.fetch();
 			return {
@@ -35,6 +40,11 @@ export function SettingsFormProvider({ children }: PropsWithChildren) {
 					concurrentDownloads: settings.features.concurrentDownloads ?? 2,
 					clipboardMonitor: !!settings.features.clipboardMonitor,
 					clipboardMonitorAutoAdd: !!settings.features.clipboardMonitorAutoAdd,
+				},
+				ytdlp: {
+					flags: {
+						custom: settings.ytdlp.flags?.custom ?? "",
+					},
 				},
 			};
 		},

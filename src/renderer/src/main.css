@@ -1,14 +1,13 @@
-
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 @source "../../**/*.{ts,tsx}";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --font-sans: "Geist Variable";
+  --font-sans: 'Geist Variable';
   --background: oklch(1 0 0);
-  --background-2: oklch(.95 0 0);
+  --background-2: oklch(0.95 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -45,7 +44,7 @@
 
 .dark {
   --background: oklch(0.145 0 0);
-  --background-2: oklch(.075 0 0);
+  --background-2: oklch(0.075 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.145 0 0);
   --card-foreground: oklch(0.985 0 0);
@@ -118,8 +117,6 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
-
-
 @layer base {
   * {
     @apply border-border;
@@ -127,6 +124,7 @@
 
   body {
     @apply bg-background/0 text-foreground font-sans;
+    overflow: overlay;
   }
 
   html,
@@ -134,7 +132,6 @@
     @apply h-full;
   }
 }
-
 
 @layer components {
   .imgcover img {
@@ -167,15 +164,14 @@
 }
 
 @layer utilities {
-
   .mask-to-t {
-    mask-image: linear-gradient(to top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 90%)
+    mask-image: linear-gradient(to top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 90%);
   }
   .mask-to-b {
-    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 90%)
+    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 90%);
   }
   .mask-gradient {
-    mask-image: linear-gradient(to top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 64px)
+    mask-image: linear-gradient(to top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 64px);
   }
 }
 
@@ -196,6 +192,62 @@ kbd {
   }
 }
 
-body[data-scroll-locked="1"] #root {
+body[data-scroll-locked='1'] #root {
   @apply overflow-hidden;
 }
+
+.file-info-scope .file-info-row {
+  @apply h-10 grid grid-cols-[160px_1fr] gap-6 items-center text-sm shrink-0;
+}
+.file-info-scope .file-info-row:nth-child(even) {
+  @apply bg-muted/20;
+}
+.file-info-scope .file-info-row > span:first-of-type {
+  @apply flex justify-end;
+}
+.file-info-scope .file-info-row > span:nth-child(2) {
+  @apply truncate pr-8;
+}
+
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 8px;
+  background: var(--color-muted);
+  min-height: 32px;
+  min-width: 32px;
+  border: 4px solid transparent!important;
+  background-clip: padding-box !important;
+  transition: background 0.2s;
+}
+::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active {
+  border: 4px solid transparent;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--color-primary);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (pointer: coarse) {
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-muted);
+  }
+}
+

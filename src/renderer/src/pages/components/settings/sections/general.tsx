@@ -21,7 +21,7 @@ export default function GeneralSection({ meta }: { meta: SectionMeta }) {
 	const form = useSettingsForm();
 	logger.child("GeneralSection").info("form", { isDirty: form.formState.isDirty });
 	return (
-		<PageContent icon={Icon} title='General' description={meta.description} tabId={meta.title}>
+		<PageContent icon={Icon} title={meta.title} description={meta.description} tabId={meta.title}>
 			<div className='flex flex-col gap-6'>
 				<FormField
 					control={form.control}
@@ -42,13 +42,13 @@ export default function GeneralSection({ meta }: { meta: SectionMeta }) {
 				<GroupSection title='Clipboard Monitor'>
 					<div className='flex flex-col gap-2'>
 						<SettingsToggle name='features.clipboardMonitor'>
-							<div className='flex flex-col gap-2'>
+							<div className='flex flex-col gap-1 text-sm'>
 								<span>Enable Clipboard Monitor</span>
 								<span className='text-muted-foreground'>Automatically adds any link to the request form.</span>
 							</div>
 						</SettingsToggle>
 						<SettingsToggle name='features.clipboardMonitorAutoAdd'>
-							<div className='flex flex-col gap-2'>
+							<div className='flex flex-col gap-1 text-sm'>
 								<span>Automatically add links to queue</span>
 
 								<span className='text-muted-foreground'>Activating this will Automatically start the download in the request form.</span>

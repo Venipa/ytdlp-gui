@@ -11,7 +11,7 @@ export default function GroupSection({ title, titleRight, children }: PropsWithC
 					<h1 className='text-xs text-muted-foreground tracking-wider select-none bg-background px-2'>{title}</h1>
 					{titleRight}
 				</div>
-				<div className='flex flex-col p-2.5'>{children}</div>
+				<div className='flex flex-col p-2.5 gap-2.5'>{children}</div>
 			</div>
 		</div>
 	);

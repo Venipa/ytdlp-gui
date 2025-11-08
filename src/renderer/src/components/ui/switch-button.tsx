@@ -1,6 +1,6 @@
 import { Switch as ShadcnCheckbox } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { cva, type VariantProps } from "class-variance-authority";
+import { type VariantProps, cva } from "class-variance-authority";
 import * as React from "react";
 
 const checkboxVariants = cva("group flex items-start gap-3 rounded-lg p-4 transition-colors cursor-pointer select-none", {
@@ -56,7 +56,7 @@ const Checkbox = React.forwardRef<HTMLDivElement, CheckboxProps>(({ checked, def
 				id={id}
 				checked={isChecked}
 				onCheckedChange={handleCheckedChange}
-				className={cn("transition-colors pointer-events-none flex-shrink-0", variant === "primary" && "text-primary border-primary")}
+				className={cn("transition-colors pointer-events-none shrink-0", variant === "primary" && "text-primary border-primary")}
 				disabled={props.disabled}
 			/>
 		</div>

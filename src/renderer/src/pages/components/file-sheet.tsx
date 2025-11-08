@@ -23,9 +23,9 @@ export default function FileSheet({ item: { title, source, url, metaId, filepath
 			<Sheet modal>
 				<SheetTrigger asChild>{children}</SheetTrigger>
 				<SheetContent className='flex flex-col gap-6 sm:max-w-2xl h-full'>
-					<SheetTitle className='text-lg font-semibold tracking-wider whitespace-pre-wrap mr-8 break-words line-clamp-2 flex-shrink-0'>{title}</SheetTitle>
+					<SheetTitle className='text-lg font-semibold tracking-wider whitespace-pre-wrap mr-8 wrap-break-word line-clamp-2 shrink-0'>{title}</SheetTitle>
 					{isYoutube && frameSource && (
-						<div className='-mx-6 flex-shrink-0'>
+						<div className='-mx-6 shrink-0'>
 							<iframe
 								className='w-full aspect-video'
 								src={frameSource}
@@ -34,7 +34,7 @@ export default function FileSheet({ item: { title, source, url, metaId, filepath
 								referrerPolicy='strict-origin-when-cross-origin'></iframe>
 						</div>
 					)}
-					<ScrollArea className='flex-auto flex flex-col -m-6 h-full' plain>
+					<ScrollArea className='flex-auto flex flex-col -m-6 h-full file-info-scope' plain>
 						<div className='file-info-row'>
 							<span>Filename</span>
 							<span>{meta?.filename || "-"}</span>
@@ -75,7 +75,7 @@ export default function FileSheet({ item: { title, source, url, metaId, filepath
 							<span>downloaded {createdAt || "?"} ago</span>
 						</div>
 					</ScrollArea>
-					<div className='flex items-center gap-3 -mx-6 px-6 pt-6 border-t border-t-muted justify-end flex-shrink-0'>
+					<div className='flex items-center gap-3 -mx-6 px-6 pt-6 border-t border-t-muted justify-end shrink-0'>
 						<Button asChild variant={"outline"}>
 							<a href={url} target='_blank'>
 								Open in Browser
@@ -87,22 +87,6 @@ export default function FileSheet({ item: { title, source, url, metaId, filepath
 					</div>
 				</SheetContent>
 			</Sheet>
-			<style jsx>
-				{`
-          .file-info-row {
-            @apply h-10 grid grid-cols-[160px_1fr] gap-6 items-center text-sm flex-shrink-0;
-          }
-          .file-info-row:nth-child(even) {
-            @apply bg-muted/20;
-          }
-          .file-info-row > span:first-of-type {
-            @apply flex justify-end;
-          }
-          .file-info-row > span:nth-child(2) {
-            @apply truncate pr-8;
-          }
-        `}
-			</style>
 		</>
 	);
 }

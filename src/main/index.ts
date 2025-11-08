@@ -79,6 +79,7 @@ async function createWindow() {
 			nodeIntegration: true,
 			sandbox: false,
 			devTools: isDevelopmentOrDebug,
+			enableBlinkFeatures: "FluentScrollbars,FluentOverlayScrollbar,OverlayScrollbar",
 			additionalArguments: [`--app-path=${__dirname}`, `--app-version=${app.getVersion()}`],
 		},
 		frame: false,
@@ -127,10 +128,10 @@ async function createWindow() {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
 	app.commandLine.appendSwitch("disable-backgrounding-occluded-windows", "true");
-	if (platform.isWindows) {
+	if (platform.isWindows || platform.isLinux) {
 		app.commandLine.appendSwitch("enable-gpu-rasterization"); // performance feature flags
 		app.commandLine.appendSwitch("enable-zero-copy");
-		app.commandLine.appendSwitch("enable-features", "CanvasOopRasterization,EnableDrDc"); // Enables Display Compositor to use a new gpu thread. todo: testing
+		app.commandLine.appendSwitch("enable-features", "CanvasOopRasterization,EnableDrDc,FluentOverlayScrollbar,OverlayScrollbar"); // Enables Display Compositor to use a new gpu thread. todo: testing
 	}
 	// Set app user model id for windows
 	const appUserId = builderConfig.appId.split(".", 2).join(".");

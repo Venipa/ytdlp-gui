@@ -18,7 +18,7 @@ export default function SettingsToggle({ name: key, children, ...props }: Settin
 			render={({ field }) => (
 				<FormItem>
 					<FormControl>
-						<SwitchButton checked={field.value} onCheckedChange={field.onChange} disabled={isDisabled}>
+						<SwitchButton checked={field.value} onCheckedChange={field.onChange} disabled={isDisabled} className='text-sm'>
 							{children}
 						</SwitchButton>
 					</FormControl>

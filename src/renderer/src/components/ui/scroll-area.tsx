@@ -4,7 +4,6 @@ import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import * as React from "react";
 
 import { cn } from "@renderer/lib/utils";
-import { logger } from "@shared/logger";
 import { motion, useScroll, useTransform } from "motion/react";
 
 const ScrollArea = React.forwardRef<React.ElementRef<typeof ScrollAreaPrimitive.Root>, React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> & { plain?: boolean }>(
@@ -18,7 +17,6 @@ const ScrollArea = React.forwardRef<React.ElementRef<typeof ScrollAreaPrimitive.
 		const scrollHeight = React.useMemo(() => scrollRef.current?.scrollHeight ?? 50, [scrollRef]);
 		const showStartScrollBlur = useTransform(scrollY, [0, 50], [0, 1]);
 		const showEndScrollBlur = useTransform(scrollY, [0, scrollHeight - 50, scrollHeight], [1, 1, 0]);
-		logger.debug("scroller", { showEndScrollBlur: showEndScrollBlur.get(), scrollHeight });
 		return (
 			<ScrollAreaPrimitive.Root ref={ref} className={cn("relative overflow-hidden", className)} {...props}>
 				{!plain && (
@@ -51,13 +49,13 @@ const ScrollBar = React.forwardRef<
 		ref={ref}
 		orientation={orientation}
 		className={cn(
-			"flex touch-none select-none transition-colors",
-			orientation === "vertical" && "h-full w-2.5 border-l border-l-transparent p-[1px]",
-			orientation === "horizontal" && "h-2.5 flex-col border-t border-t-transparent p-[1px]",
+			"flex touch-none select-none transition-colors hover:bg-muted/20 group/scrollbar",
+			orientation === "vertical" && "h-full w-2.5 border-l border-l-transparent p-[3px]",
+			orientation === "horizontal" && "h-2.5 flex-col border-t border-t-transparent p-[3px]",
 			className,
 		)}
 		{...props}>
-		<ScrollAreaPrimitive.ScrollAreaThumb className='relative flex-1 rounded-full bg-border' />
+		<ScrollAreaPrimitive.ScrollAreaThumb className='relative flex-1 rounded-full bg-border group-hover/scrollbar:bg-primary' />
 	</ScrollAreaPrimitive.ScrollAreaScrollbar>
 ));
 ScrollBar.displayName = ScrollAreaPrimitive.ScrollAreaScrollbar.displayName;

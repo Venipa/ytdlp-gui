@@ -12,5 +12,5 @@ export default function PageContent({ icon: Icon, title, description, tabId, chi
 	useEffect(() => {
 		setCurrent({ title, description, tabId });
 	}, [title, description, tabId, setCurrent]);
-	return <div className='flex flex-col gap-2'>{children}</div>;
+	return <div className='flex flex-col gap-8'>{children}</div>;
 }

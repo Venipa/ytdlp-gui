@@ -60,7 +60,12 @@ export default defineConfig({
 		plugins: [
 			ViteYaml(),
 			react({
-				plugins: [["@swc/plugin-styled-jsx", {}]],
+				plugins: [
+					[
+						"@swc/plugin-styled-jsx",
+						{},
+					],
+				],
 			}),
 			tailwindcss({ optimize: isProduction }),
 			generouted({

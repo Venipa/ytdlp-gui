@@ -3,7 +3,6 @@ import { Button } from "@renderer/components/ui/button";
 import { Tab, TabNavbar } from "@renderer/components/ui/responsive-tabs";
 import { Sheet, SheetContent } from "@renderer/components/ui/sheet";
 import { cn } from "@renderer/lib/utils";
-import { logger } from "@shared/logger";
 import { XIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { HTMLProps, PropsWithChildren, ReactElement, createElement, useMemo, useState } from "react";
@@ -46,8 +45,8 @@ function SettingsDialog({ children }: PropsWithChildren) {
 				}
 			}}
 			modal>
-			<SheetContent side='bottom' closeButton={false} className='flex flex-col mx-auto max-w-5xl xl:max-w-6xl 2xl:max-w-7xl h-[70vh] rounded-t-lg border border-t-muted pb-0'>
-				<div className={cn("flex flex-col px-0 h-full")}>
+			<SheetContent side='bottom' closeButton={false} className='flex flex-col mx-auto max-w-3xl xl:max-w-4xl 2xl:max-w-5xl h-[70vh] rounded-t-lg border border-t-muted pb-0'>
+				<div className={cn("flex flex-col px-0 h-full relative")}>
 					<div className='grid grid-rows-[80px_1fr] h-full flex-auto -mt-6 -mx-6'>
 						<TabNavbar
 							defaultTab={selectedTab}
@@ -84,10 +83,12 @@ function SettingsDialog({ children }: PropsWithChildren) {
 								<XIcon className='size-full' />
 							</Button>
 						</TabNavbar>
-						<div className='px-6 pt-6'>{selectedContent ?? <div className='flex flex-col items-center justify-center h-20'>Nothing here ?.?</div>}</div>
+						<div className='px-6 pt-6 overflow-auto h-full pb-40'>
+							{selectedContent ?? <div className='flex flex-col items-center justify-center h-20'>Nothing here ?.?</div>}
+						</div>
 					</div>
+					<DialogFormActionControls />
 				</div>
-				<DialogFormActionControls />
 			</SheetContent>
 		</Sheet>
 	);
@@ -104,7 +105,6 @@ function DialogFormActionControls() {
 	const shouldShowControls = formState.isDirty || formState.isSubmitting;
 	const isLoading = formState.isSubmitting;
 	const isDisabled = !formState.isDirty || formState.isSubmitting || !formState.isValid || formState.isLoading;
-	const values = form.watch();
 	const animationState = {
 		show: {
 			opacity: 1,
@@ -117,20 +117,25 @@ function DialogFormActionControls() {
 			scale: 0.98,
 		},
 	};
-	logger.child("DialogFormActionControls").debug("formState", { formState, values, isValid: formState.isValid });
 	return (
 		<motion.div
 			initial={animationState.hide}
 			animate={shouldShowControls ? "show" : "hide"}
 			variants={animationState}
 			transition={{ type: "spring", bounce: 0.18, duration: 0.36 }}
-			className='fixed left-0 right-0 bottom-0 z-50 w-full px-0 py-0'
+			className='absolute left-0 right-0 bottom-0 z-50 w-full px-0 py-0'
 			style={{ pointerEvents: "auto" }}>
 			<div className='mx-auto w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl px-4 pb-5'>
 				<div className='flex items-center justify-between gap-x-4 bg-background border shadow-lg rounded-xl px-6 py-3'>
 					<span className='text-sm text-muted-foreground'>You have unsaved changes</span>
 					<div className='flex gap-x-2'>
-						<Button type='button' variant='outline' disabled={isLoading} onClick={() => reset()}>
+						<Button
+							type='button'
+							variant='outline'
+							disabled={isLoading}
+							onClick={() => {
+								reset();
+							}}>
 							Cancel
 						</Button>
 						<ButtonLoading

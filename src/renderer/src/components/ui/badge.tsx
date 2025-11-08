@@ -1,4 +1,4 @@
-import { cva, type VariantProps } from "class-variance-authority";
+import { type VariantProps, cva } from "class-variance-authority";
 import * as React from "react";
 
 import { cn } from "@renderer/lib/utils";
@@ -12,6 +12,7 @@ const badgeVariants = cva(
 				secondary: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
 				destructive: "border-destructive bg-destructive/20 text-destructive-foreground shadow hover:bg-destructive/30",
 				outline: "text-foreground",
+				pre: "text-muted-foreground bg-muted/20 border-muted/40 font-mono",
 			},
 			size: {
 				default: "px-2.5 py-0.5 text-xs gap-2 [&_svg]:size-4",
