@@ -1,6 +1,6 @@
 import { cn } from "@renderer/lib/utils";
 import { type VariantProps, cva } from "class-variance-authority";
-import * as React from "react";
+import React from "react";
 
 // Inset input variants
 const insetInputVariants = cva(
@@ -24,9 +24,10 @@ const insetInputVariants = cva(
 	},
 );
 
-export interface InputInsetProps extends React.InputHTMLAttributes<HTMLInputElement>, VariantProps<typeof insetInputVariants> {
-	insetElement?: React.ReactNode; // Icon or element for the inset
-}
+export type InputInsetProps = React.InputHTMLAttributes<HTMLInputElement> &
+	VariantProps<typeof insetInputVariants> & {
+		insetElement?: React.ReactNode; // Icon or element for the inset
+	};
 
 export const InputInset = React.forwardRef<HTMLInputElement, InputInsetProps>(({ className, inset, size, insetElement, ...props }, ref) => {
 	return (

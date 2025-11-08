@@ -54,7 +54,6 @@ export default function SettingsTab() {
 							<SettingsInput
 								name='features.concurrentDownloads'
 								type='number'
-								variant={"horizontal"}
 								min={1}
 								max={window.api.maxParallelism}
 								title={"Max concurrent downloads"}

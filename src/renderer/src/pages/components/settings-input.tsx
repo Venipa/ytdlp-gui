@@ -7,7 +7,7 @@ type SettingsToggleProps = {
 	name: string;
 	onChange?: (value: any) => void;
 	title: any;
-	hint?: string | ReactNode;
+	hint?: string | React.ReactNode;
 } & Omit<InputProps, "title">;
 export default forwardRef<HTMLInputElement, SettingsToggleProps>(function SettingsInput({ className, name: key, title: placeholder, hint, ...props }, ref) {
 	const form = useSettingsForm();
