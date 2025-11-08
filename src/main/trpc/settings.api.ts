@@ -1,4 +1,5 @@
 import EventEmitter from "events";
+import platform from "@main/lib/platform";
 import { AppStore } from "@main/stores/AppStore";
 import { appStore } from "@main/stores/app.store";
 import config from "@shared/config";
@@ -9,6 +10,9 @@ import { z } from "zod";
 import { publicProcedure, router } from "./trpc";
 const settingsChangeEmitter = new EventEmitter();
 const handleKey = `settings_change`;
+appStore.onDidChange("ytdlp.useGlobal", (value) => {
+	if (value && platform.isWindows) appStore.set("ytdlp.useGlobal", false);
+});
 export const settingsRouter = router({
 	index: publicProcedure.query(async () => {
 		return appStore.store;

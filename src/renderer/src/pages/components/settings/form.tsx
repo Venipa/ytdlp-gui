@@ -21,6 +21,11 @@ const settingsSchema = z.object({
 				.string()
 				.nullish()
 				.transform((val) => val?.trim() ?? ""),
+			nomtime: z.coerce.boolean(),
+		}),
+		useGlobal: z.coerce.boolean().transform((val) => {
+			if (window.api.platform.isWindows) return false;
+			return val;
 		}),
 	}),
 });
@@ -44,7 +49,9 @@ export function SettingsFormProvider({ children }: PropsWithChildren) {
 				ytdlp: {
 					flags: {
 						custom: settings.ytdlp.flags?.custom ?? "",
+						nomtime: settings.ytdlp.flags?.nomtime ?? false,
 					},
+					useGlobal: settings.ytdlp.useGlobal ?? false,
 				},
 			};
 		},
