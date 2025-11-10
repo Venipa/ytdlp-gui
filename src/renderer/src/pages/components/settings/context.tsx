@@ -1,5 +1,5 @@
 import { atom, getDefaultStore, useAtom } from "jotai";
-import { Provider, createContext, useCallback, useContext, useEffect } from "react";
+import { createContext, useCallback, useContext, useEffect } from "react";
 
 type SettingsContextType = {
 	open: boolean;
@@ -15,7 +15,7 @@ const setShowSettings = (open: boolean) => {
 	console.log("setShowSettings", v);
 };
 const SettingsContext = createContext<SettingsContextType>({} as any);
-const SettingsContextProvider: Provider<SettingsContextType> = ({ value, ...props }) => {
+const SettingsContextProvider = ({ value, ...props }) => {
 	const [settings, setSettings] = useAtom(settingsContext);
 	const showSettings = useCallback(() => {
 		setSettings((s) => ({ ...s, open: true }));
