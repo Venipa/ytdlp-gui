@@ -1,6 +1,8 @@
 import { ThemeProvider } from "@renderer/components/app/theme-provider";
 import { Toaster } from "@renderer/components/ui/sonner";
+import { TooltipProvider } from "@renderer/components/ui/tooltip";
 import { client, trpc } from "@renderer/lib/trpc-link";
+import SettingsDialogWrapper from "@renderer/pages/components/settings/dialog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Provider as JotaiProvider } from "jotai";
 import { PropsWithChildren, Suspense, useState } from "react";
@@ -16,29 +18,32 @@ export default function AppProviders({ children }: PropsWithChildren) {
 	return (
 		<>
 			<ThemeProvider attribute='class' defaultTheme='system' enableColorScheme disableTransitionOnChange enableSystem>
-				<Suspense fallback={<SuspenseLoader />}>
-					<trpc.Provider client={trpcClient} queryClient={queryClient as any}>
-						<QueryClientProvider client={queryClient}>
-							<JotaiProvider>
-								<AppContextProvider value={{ selected: null } as any}>
-									<SettingsContextProvider>
-										<LogsContextProvider
-											value={
-												{
-													data: [],
-												} as any
-											}>
-											<YTDLContextProvider value={{} as any}>
-												{children}
-												<YTLDPObserver />
-											</YTDLContextProvider>
-										</LogsContextProvider>
-									</SettingsContextProvider>
-								</AppContextProvider>
-							</JotaiProvider>
-						</QueryClientProvider>
-					</trpc.Provider>
-				</Suspense>
+				<TooltipProvider>
+					<Suspense fallback={<SuspenseLoader />}>
+						<trpc.Provider client={trpcClient} queryClient={queryClient as any}>
+							<QueryClientProvider client={queryClient}>
+								<JotaiProvider>
+									<AppContextProvider value={{ selected: null } as any}>
+										<SettingsContextProvider value={{ open: false } as any}>
+											<LogsContextProvider
+												value={
+													{
+														data: [],
+													} as any
+												}>
+												<YTDLContextProvider value={{} as any}>
+													{children}
+													<YTLDPObserver />
+												</YTDLContextProvider>
+											</LogsContextProvider>
+											<SettingsDialogWrapper />
+										</SettingsContextProvider>
+									</AppContextProvider>
+								</JotaiProvider>
+							</QueryClientProvider>
+						</trpc.Provider>
+					</Suspense>
+				</TooltipProvider>
 				<Toaster />
 			</ThemeProvider>
 		</>

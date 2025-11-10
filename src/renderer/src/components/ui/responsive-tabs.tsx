@@ -73,7 +73,10 @@ function TabNavbar({ children, defaultTab, orientation = "horizontal", indicator
 		<TabContext.Provider value={contextValue}>
 			<nav
 				className={cn(
-					`relative flex select-none ${isMobile ? "items-stretch" : isVertical ? "flex-col items-stretch pb-10" : "items-center "} border-border ${isMobile && !isVertical ? "" : isVertical ? "border-r h-full pr-2" : "border-b"}`,
+					`relative flex select-none border-border`,
+					isMobile && "items-stretch",
+					!isMobile && isVertical ? "flex-col items-stretch pb-10" : "items-center",
+					!isMobile && isVertical ? "border-r h-full" : "border-b",
 					className,
 				)}>
 				{isMobile && orientation === "horizontal" ? (
@@ -97,7 +100,7 @@ function TabNavbar({ children, defaultTab, orientation = "horizontal", indicator
 					</Sheet>
 				) : (
 					<>
-						<div className={cn(`flex ${orientation === "vertical" ? "flex-col space-y-1 truncate flex-auto" : "items-center flex-auto space-x-1"}`)}>{children}</div>
+						<div className={cn(`flex ${orientation === "vertical" ? "flex-col space-y-1 flex-auto" : "items-center flex-auto space-x-1"}`)}>{children}</div>
 						<ActiveTabIndicator />
 					</>
 				)}
@@ -190,7 +193,7 @@ function ActiveTabIndicator() {
 		!isInitialRender && (
 			<>
 				<motion.div
-					className='bg-primary absolute rounded-full'
+					className='bg-primary absolute rounded-full -z-1'
 					initial={false}
 					animate={getIndicatorStyles()}
 					transition={{
@@ -201,7 +204,7 @@ function ActiveTabIndicator() {
 				/>
 				{orientation === "vertical" && (
 					<motion.div
-						className='bg-gradient-to-r from-primary/0 to-primary/40 blur absolute rounded-full'
+						className='bg-linear-to-r from-primary/0 to-primary/40 blur absolute rounded-full -z-1'
 						style={{
 							[indicatorPosition !== "right" ? "marginLeft" : "marginRight"]: "-" + getIndicatorStyles().width,
 						}}

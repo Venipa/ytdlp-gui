@@ -8,25 +8,34 @@ import { z } from "zod";
 import { useApp } from "../app-context";
 
 const settingsSchema = z.object({
-	beta: z.boolean(),
-	startMinimized: z.boolean(),
+	beta: z.coerce.boolean(),
+	startMinimized: z.coerce.boolean(),
+	startOnBoot: z.coerce.boolean(),
 	features: z.object({
 		concurrentDownloads: z.coerce.number().min(1).max(window.api.maxParallelism),
 		clipboardMonitor: z.coerce.boolean(),
 		clipboardMonitorAutoAdd: z.coerce.boolean(),
+		advancedView: z.coerce.boolean(),
 	}),
 	ytdlp: z.object({
-		flags: z.object({
-			custom: z
-				.string()
-				.nullish()
-				.transform((val) => val?.trim() ?? ""),
-			nomtime: z.coerce.boolean(),
-		}),
-		useGlobal: z.coerce.boolean().transform((val) => {
-			if (window.api.platform.isWindows) return false;
-			return val;
-		}),
+		flags: z
+			.object({
+				custom: z
+					.string()
+					.nullish()
+					.transform((val) => val?.trim() ?? ""),
+				nomtime: z.coerce.boolean(),
+			})
+			.nullish()
+			.transform(
+				(val) =>
+					val ?? {
+						custom: "",
+						nomtime: true,
+					},
+			),
+		useGlobal: z.coerce.boolean(),
+		checkForUpdate: z.coerce.boolean(),
 	}),
 });
 type SettingsValues = z.infer<typeof settingsSchema>;
@@ -38,22 +47,8 @@ export function SettingsFormProvider({ children }: PropsWithChildren) {
 		resolver: zodResolver(settingsSchema),
 		async defaultValues() {
 			const settings = await utils.settings.index.fetch();
-			return {
-				beta: !!settings.beta,
-				startMinimized: !!settings.startMinimized,
-				features: {
-					concurrentDownloads: settings.features.concurrentDownloads ?? 2,
-					clipboardMonitor: !!settings.features.clipboardMonitor,
-					clipboardMonitorAutoAdd: !!settings.features.clipboardMonitorAutoAdd,
-				},
-				ytdlp: {
-					flags: {
-						custom: settings.ytdlp.flags?.custom ?? "",
-						nomtime: settings.ytdlp.flags?.nomtime ?? false,
-					},
-					useGlobal: settings.ytdlp.useGlobal ?? false,
-				},
-			};
+			const parsedSettings = settingsSchema.parse(settings);
+			return parsedSettings;
 		},
 	});
 	const onSubmit: SubmitHandler<SettingsValues> = useCallback(

@@ -48,8 +48,9 @@ export default function SettingsWindow() {
 									value={title!}
 									key={title}
 									onClick={(ev) => {
-										const result = onClick?.(ev) as unknown as string | undefined;
-										if (result === "settings") {
+										if (title === "Settings") {
+											ev.preventDefault();
+											if (selectedMeta!.title === title!) setSelectedTab(sectionTabs[0].title);
 											settings.showSettings();
 										}
 									}}>

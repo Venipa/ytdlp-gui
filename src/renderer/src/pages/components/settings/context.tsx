@@ -1,6 +1,5 @@
 import { atom, getDefaultStore, useAtom } from "jotai";
-import { PropsWithChildren, createContext, useCallback, useContext, useEffect } from "react";
-import SettingsDialog from "./dialog";
+import { Provider, createContext, useCallback, useContext, useEffect } from "react";
 
 type SettingsContextType = {
 	open: boolean;
@@ -16,7 +15,7 @@ const setShowSettings = (open: boolean) => {
 	console.log("setShowSettings", v);
 };
 const SettingsContext = createContext<SettingsContextType>({} as any);
-const SettingsContextProvider = ({ children }: PropsWithChildren) => {
+const SettingsContextProvider: Provider<SettingsContextType> = ({ value, ...props }) => {
 	const [settings, setSettings] = useAtom(settingsContext);
 	const showSettings = useCallback(() => {
 		setSettings((s) => ({ ...s, open: true }));
@@ -27,12 +26,7 @@ const SettingsContextProvider = ({ children }: PropsWithChildren) => {
 	useEffect(() => {
 		console.log("settings", settings);
 	}, [settings]);
-	return (
-		<SettingsContext.Provider value={{ open: settings.open, showSettings, closeSettings }}>
-			{children}
-			<SettingsDialog />
-		</SettingsContext.Provider>
-	);
+	return <SettingsContext.Provider value={{ ...value, open: settings.open, showSettings, closeSettings }} {...props} />;
 };
 
 const useSettings = () => {

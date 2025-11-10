@@ -2,6 +2,7 @@ import ButtonLoading from "@renderer/components/ui/ButtonLoading";
 import { Button } from "@renderer/components/ui/button";
 import { Tab, TabNavbar } from "@renderer/components/ui/responsive-tabs";
 import { Sheet, SheetContent } from "@renderer/components/ui/sheet";
+import { QTooltip } from "@renderer/components/ui/tooltip";
 import { cn } from "@renderer/lib/utils";
 import { XIcon } from "lucide-react";
 import { motion } from "motion/react";
@@ -9,7 +10,7 @@ import { HTMLProps, PropsWithChildren, ReactElement, createElement, useMemo, use
 import { useApp } from "../app-context";
 import { useSettings } from "./context";
 import { SettingsFormProvider, useSettingsForm } from "./form";
-import { PageContextProvider, usePageContext } from "./page-context";
+import { PageContextProvider } from "./page-context";
 import { SectionMeta } from "./utils";
 type Element = <T extends HTMLProps<HTMLDivElement> = HTMLProps<HTMLDivElement>>(props?: T) => ReactElement<T, any>;
 type Module = {
@@ -20,7 +21,7 @@ const SETTINGS_SECTION_TABS = import.meta.glob<Module>(`./sections/*.tsx`, { eag
 const sectionValues = Object.values(SETTINGS_SECTION_TABS).filter((d) => d.default);
 const sectionTabs = sectionValues.map(({ meta }, i) => ({ ...meta, index: meta.index !== undefined ? meta.index : i })).sort((a, b) => a.index - b.index);
 
-function SettingsDialog({ children }: PropsWithChildren) {
+function SettingsDialog() {
 	const { open, showSettings, closeSettings } = useSettings();
 	const [isLoading, setLoading] = useState(false);
 	const [selectedTab, setSelectedTab] = useState<string>(sectionTabs[0].title);
@@ -33,61 +34,49 @@ function SettingsDialog({ children }: PropsWithChildren) {
 		}
 		return null;
 	}, [selectedTab]);
-	const { current } = usePageContext();
+	const form = useSettingsForm();
+	const closeIsDisabled = form.formState.isDirty || form.formState.isSubmitting || form.formState.isLoading;
 	return (
 		<Sheet
 			open={open}
 			onOpenChange={(_open) => {
 				if (!_open) {
+					if (closeIsDisabled) return;
 					closeSettings();
 				} else {
 					showSettings();
 				}
 			}}
 			modal>
-			<SheetContent side='bottom' closeButton={false} className='flex flex-col mx-auto max-w-3xl xl:max-w-4xl 2xl:max-w-5xl h-[70vh] rounded-t-lg border border-t-muted pb-0'>
+			<SheetContent
+				side='right'
+				closeButton={false}
+				className='flex flex-col my-auto min-h-[500px] h-[85vh] min-w-[620px] w-[860px] max-w-[100vw] rounded-l-lg border border-t-muted pb-0'>
 				<div className={cn("flex flex-col px-0 h-full relative")}>
-					<div className='grid grid-rows-[80px_1fr] h-full flex-auto -mt-6 -mx-6'>
-						<TabNavbar
-							defaultTab={selectedTab}
-							onValueChange={setSelectedTab}
-							orientation='horizontal'
-							indicatorPosition='bottom'
-							className='bg-background-2 items-end px-4 flex-auto'>
+					<div className='grid grid-cols-[80px_1fr] h-full flex-auto -mt-6 -mx-6'>
+						<TabNavbar defaultTab={selectedTab} onValueChange={setSelectedTab} orientation='vertical' indicatorPosition='right' className='pt-8'>
 							{sectionTabs.map(({ title, icon: Icon, description }) => {
-								const richTab = title && description && true;
-								if (richTab) {
-									return (
-										<Tab value={title!} key={title}>
-											<div className='flex items-start gap-x-2'>
-												{Icon && <Icon className='size-4 mt-1' />}
-												<div className='flex flex-col gap-y-0'>
-													<div>{title}</div>
-													{description && <div className='text-xs text-muted-foreground line-clamp-2'>{description}</div>}
-												</div>
-											</div>
-										</Tab>
-									);
-								}
 								return (
-									<Tab value={title!} key={title}>
-										<div className='flex items-center flex-row-reverse gap-x-2'>
-											{Icon && <Icon className='size-4' />}
-											<div>{title}</div>
-										</div>
+									<Tab value={title!} key={title} className='w-full py-4 justify-center items-center flex flex-col gap-2'>
+										<div className='flex items-center justify-center gap-x-2'>{Icon && <Icon className='size-4' />}</div>
+										<div className='text-xs text-muted-foreground'>{title}</div>
 									</Tab>
 								);
 							})}
-							<div className='flex-auto'></div>
-							<Button variant='ghost' size='icon-circle' className='size-6 p-1 self-start' onClick={closeSettings}>
-								<XIcon className='size-full' />
-							</Button>
+							<div className='flex flex-col items-center justify-end mt-auto'>
+								<QTooltip content='Close settings'>
+									<Button variant='outline' size='default' className='rounded-full p-2 size-10' onClick={closeSettings} disabled={closeIsDisabled}>
+										<XIcon className='size-4' />
+									</Button>
+								</QTooltip>
+							</div>
 						</TabNavbar>
-						<div className='px-6 pt-6 overflow-auto h-full pb-40'>
+
+						<div className='px-6 overflow-auto h-full pb-24'>
 							{selectedContent ?? <div className='flex flex-col items-center justify-center h-20'>Nothing here ?.?</div>}
 						</div>
+						<DialogFormActionControls />
 					</div>
-					<DialogFormActionControls />
 				</div>
 			</SheetContent>
 		</Sheet>
@@ -113,7 +102,7 @@ function DialogFormActionControls() {
 		},
 		hide: {
 			opacity: 0,
-			y: 30,
+			y: 10,
 			scale: 0.98,
 		},
 	};
@@ -123,7 +112,7 @@ function DialogFormActionControls() {
 			animate={shouldShowControls ? "show" : "hide"}
 			variants={animationState}
 			transition={{ type: "spring", bounce: 0.18, duration: 0.36 }}
-			className='absolute left-0 right-0 bottom-0 z-50 w-full px-0 py-0'
+			className='absolute left-12 right-0 bottom-0 z-50 px-0 py-0'
 			style={{ pointerEvents: "auto" }}>
 			<div className='mx-auto w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl px-4 pb-5'>
 				<div className='flex items-center justify-between gap-x-4 bg-background border shadow-lg rounded-xl px-6 py-3'>

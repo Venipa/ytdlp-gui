@@ -6,6 +6,7 @@ import config from "@shared/config";
 import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { app, dialog } from "electron";
+import { merge } from "lodash-es";
 import { z } from "zod";
 import { publicProcedure, router } from "./trpc";
 const settingsChangeEmitter = new EventEmitter();
@@ -59,7 +60,7 @@ export const settingsRouter = router({
 			return { key, value };
 		}),
 	updateMany: publicProcedure.input(z.record(z.any())).mutation(async ({ ctx, input: settings }) => {
-		appStore.set(settings);
+		appStore.set(merge(appStore.store, settings));
 		Object.keys(settings).forEach((key) => {
 			settingsChangeEmitter.emit(handleKey, { key });
 		});

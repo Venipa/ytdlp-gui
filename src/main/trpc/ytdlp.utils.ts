@@ -9,6 +9,7 @@ import { Logger } from "@shared/logger";
 import { resulter } from "@shared/promises/helper";
 import { nt as calvNewerThan } from "calver";
 import { app } from "electron";
+import { stat, unlink } from "fs/promises";
 import { VideoInfo } from "yt-dlp-wrap/types";
 import { pushLogToClient } from "./events.ee";
 const YTDLP_PLATFORM = platform();
@@ -95,6 +96,9 @@ export class YTDLP {
 	}
 	private async downloadUpdate(release: GithubRelease & { version: string }): Promise<{ version: string; path: string }> {
 		const newYtdlPath = path.join(ytdlpPath, appPlatform.isWindows ? "ytdlp.exe" : "ytdlp");
+		if (await stat(newYtdlPath).then((stats) => stats.isFile())) {
+			await unlink(newYtdlPath);
+		}
 		await YTDLWrapper.downloadFromGithub(newYtdlPath, release.version, YTDLP_PLATFORM);
 		return { version: release.version, path: newYtdlPath };
 	}

@@ -8,7 +8,7 @@ import PageContent from "../page-content";
 import { SectionMeta } from "../utils";
 
 export const meta: SectionMeta = {
-	title: "Downloader",
+	title: "Download",
 	icon: LucideDownload,
 	index: 1,
 	show: true,

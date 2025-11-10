@@ -235,9 +235,11 @@ export default function LinkList(props: { className?: string }) {
 			}
 		},
 	});
+	const noResults = useMemo(() => !filteredItems.length, [filteredItems]);
+	const hasSearch = useMemo(() => !!search?.length, [search]);
 	return (
 		<div className={cn("flex flex-col gap-2 relative", props.className)}>
-			<VList className='flex-grow relative flex flex-col py-2.5 px-2' style={{ height: "100%" }}>
+			<VList className='grow relative flex flex-col py-2.5 px-2' style={{ height: "100%" }}>
 				{isFetching && <SuspenseLoader className='absolute bg-background inset-0' />}
 				{filteredItems?.map((d) => (
 					<div className='h-12' key={d.id}>
@@ -245,9 +247,9 @@ export default function LinkList(props: { className?: string }) {
 					</div>
 				))}
 			</VList>
-			{!filteredItems.length && (
+			{noResults && (
 				<div className='absolute bg-background inset-0 flex items-center justify-center text-muted-foreground gap-4 flex-col'>
-					<span>No results found. Try a different search.</span>
+					{hasSearch ? <span>No results found. Try a different search.</span> : <span>No downloads found. Add a link to start downloading.</span>}
 					<pre className='flex flex-col bg-muted/20 border border-muted/40 p-2 rounded-md'>
 						{["type:video|audio", "size:<100mb, <=10gb, etc", "status:success|error|active"].map((line) => (
 							<span key={line} className='text-xs text-muted-foreground'>
@@ -255,16 +257,18 @@ export default function LinkList(props: { className?: string }) {
 							</span>
 						))}
 					</pre>
-					<Button
-						variant={"ghost"}
-						size={"sm"}
-						className='px-2'
-						onClick={() => {
-							setSearch("");
-						}}>
-						<LucideRefreshCcw />
-						<span>Clear search</span>
-					</Button>
+					{hasSearch && (
+						<Button
+							variant={"ghost"}
+							size={"sm"}
+							className='px-2'
+							onClick={() => {
+								setSearch("");
+							}}>
+							<LucideRefreshCcw />
+							<span>Clear search</span>
+						</Button>
+					)}
 				</div>
 			)}
 		</div>

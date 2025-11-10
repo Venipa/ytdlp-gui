@@ -23,7 +23,7 @@ export default function YTDLPTab() {
 				</div>
 				<div className='flex flex-col flex-auto min-h-0'>
 					<AddLink />
-					<LinkList className='flex-grow' />
+					<LinkList className='grow' />
 				</div>
 			</div>
 		</div>
