@@ -49,7 +49,7 @@ function SettingsDialog() {
 			}}
 			modal>
 			<SheetContent
-				side='right'
+				side='right_scaled'
 				closeButton={false}
 				className='flex flex-col my-auto min-h-[500px] h-[85vh] min-w-[620px] w-[860px] max-w-[100vw] rounded-l-lg border border-t-muted pb-0'>
 				<div className={cn("flex flex-col px-0 h-full relative")}>
