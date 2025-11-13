@@ -19,7 +19,7 @@ const resolveOptions: { resolve: ResolveOptions & { alias: AliasOptions } } = {
 		},
 	},
 };
-const externalizedEsmDeps = ["lodash-es", "@faker-js/faker", "@trpc-limiter/memory", "got", "encryption.js", "filenamify", "yt-dlp-wrap", "p-queue", "@libsql/client", "@libsql/client/sqlite3"];
+const externalizedEsmDeps = ["lodash-es", "@faker-js/faker", "@trpc-limiter/memory", "got", "encryption.js", "filenamify", "yt-dlp-wrap", "p-queue"];
 const isMac = !!process.env.ACTION_RUNNER?.startsWith("macos-");
 const isProduction = process.env.NODE_ENV === "production";
 export default defineConfig({

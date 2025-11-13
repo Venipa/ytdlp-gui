@@ -55,17 +55,13 @@ mac:
 dmg:
   title: "Install or Update ${productName} ${version}"
   backgroundColor: "#101010"
-# linux:
-#   target:
-#     - target: appImage
-#       arch: x64
-#     - target: appImage
-#       arch: arm64
-#     - target: deb
-#       arch: x64
-#   maintainer: ytdlpd.venipa.net
-#   category: Music
-#   icon: build/icon.icns
+linux:
+  target:
+    - target: appImage
+    - target: deb
+  maintainer: ytdlp.venipa.net
+  category: Music
+  icon: build/icon.icns
 # appx:
 #   electronUpdaterAware: true
 #   addAutoLaunchExtension: true
