@@ -35,7 +35,7 @@ export class YTDLP {
 	constructor() {}
 	async initialize() {
 		log.info("initializing...");
-		const ytdVersion = await this._ytd.getVersion();
+		const ytdVersion = await this._ytd.getVersion().then((s) => s.trim().replace(/\r?\n$/, ""));
 		log.debug({ ytdVersion });
 		if (appPlatform.isWindows) appStore.store.ytdlp.useGlobal = false;
 		const ytdlpPath = appStore.store.ytdlp.useGlobal ? executableIsAvailable("yt-dlp") : appStore.store.ytdlp.path && fileExists(appStore.store.ytdlp.path);
