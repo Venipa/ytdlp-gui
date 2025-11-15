@@ -153,7 +153,6 @@ app.whenReady().then(async () => {
 	ytdl.initialize(); // init asynchronously
 
 	createWindow().then((w) => {
-		const isWindowFocused = () => w!.isFocused();
 		const clipboardWatcher = new ClipboardMonitor(w!, {
 			distinct: true,
 			onHttpsText(value) {
@@ -165,8 +164,9 @@ app.whenReady().then(async () => {
 				}
 			},
 		});
-		appStore.onDidChange("features", (features) => {
-			if (features?.clipboardMonitor) clipboardWatcher.start();
+		appStore.onDidChange("features.clipboardMonitor", (clipboardMonitor, oldClipboardMonitor) => {
+			const clipEnabled = clipboardMonitor === true && oldClipboardMonitor === false;
+			if (clipEnabled) clipboardWatcher.start();
 			else clipboardWatcher.stop();
 		});
 		appStore.onDidChange("ytdlp.useGlobal", (useGlobal) => {

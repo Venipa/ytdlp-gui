@@ -46,6 +46,7 @@ mac:
   notarize: false
   hardenedRuntime: true
   gatekeeperAssess: false
+  artifactName: ytdlp-gui-${version}-macos-${arch}.${ext}
   target:
     - target: zip
       arch: arm64
@@ -59,6 +60,7 @@ linux:
   target:
     - target: appImage
     - target: deb
+  artifactName: ytdlp-gui-${version}-${os}-${arch}.${ext}
   maintainer: ytdlp.venipa.net
   category: Music
   icon: build/icon.icns
