@@ -1,7 +1,6 @@
 import { Badge } from "@renderer/components/ui/badge";
 import GroupSection from "@renderer/pages/components/group-section";
 import SettingsInput from "@renderer/pages/components/settings-input";
-import SettingsToggle from "@renderer/pages/components/settings-toggle";
 import { useSettingsForm } from "@renderer/pages/components/settings/form";
 import { LucideDownload } from "lucide-react";
 import PageContent from "../page-content";
@@ -30,24 +29,6 @@ export default function DownloaderSection({ meta }: { meta: SectionMeta }) {
 						title={"Max concurrent downloads"}
 						hint={`Recommended: 2`}></SettingsInput>
 				</div>
-			</GroupSection>
-			<GroupSection title='YTDLP Flags'>
-				<SettingsToggle name='ytdlp.useGlobal' disabled={window.api.platform.isWindows}>
-					<div className='flex flex-col gap-2 text-pretty'>
-						<span className='font-bold'>Use machine installed yt-dlp</span>
-						<span className='text-muted-foreground leading-4 align-middle'>This only works if you've already installed yt-dlp globally.</span>
-						<span className='text-yellow-400 text-xs'>(only supported for: MacOS, Linux)</span>
-					</div>
-				</SettingsToggle>
-				<SettingsToggle name='ytdlp.flags.mtime'>
-					<div className='flex flex-col gap-2 text-pretty'>
-						<span className='font-bold'>--no-mtime</span>
-						<span className='text-muted-foreground leading-4 align-middle'>
-							The <code className='text-xs border border-primary/10 rounded p-px bg-input'>--no-mtime</code> flag in yt-dlp is used to prevent the program from
-							setting the modification time of the downloaded file to the original upload time of the video
-						</span>
-					</div>
-				</SettingsToggle>
 			</GroupSection>
 			<GroupSection title='YTDLP Commmand Flags'>
 				<div className='flex flex-col gap-2'>

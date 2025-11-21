@@ -41,7 +41,7 @@ function TooltipContent({ className, sideOffset = 0, children, ...props }: React
 
 const QTooltip = React.forwardRef<
 	React.ElementRef<typeof Tooltip>,
-	React.ComponentPropsWithoutRef<typeof TooltipContent> & React.PropsWithChildren<{ content: string | React.ReactNode }>
+	React.ComponentPropsWithoutRef<typeof TooltipContent> & React.PropsWithChildren<{ content: string | React.ReactElement | React.ReactNode | React.ComponentType }>
 >(({ className, children, content, asChild, side, ...props }, ref) => {
 	const TriggerSlot = asChild ? Slot : "button";
 	return (

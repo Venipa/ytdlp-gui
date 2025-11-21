@@ -18,6 +18,8 @@ const settingsSchema = z.object({
 		advancedView: z.coerce.boolean(),
 	}),
 	ytdlp: z.object({
+		updateChannel: z.enum(["stable", "nightly", "source"]),
+		autoUpdate: z.enum(["prompt", "auto", "manual"]),
 		flags: z
 			.object({
 				custom: z
