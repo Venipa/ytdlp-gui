@@ -1,7 +1,6 @@
 import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
 import path, { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { parseJson, stringifyJson } from "@shared/json";
 import { createLogger } from "@shared/logger";
 import { app } from "electron";
@@ -12,21 +11,6 @@ let initialized = false;
 // Helper: Generate a unique ID for RPC calls
 function genId(): string {
 	return Math.random().toString(36).substr(2, 9);
-}
-
-function resolveWorkerScriptPath(workerPath: string): string {
-	if (!workerPath.startsWith("file:")) {
-		return workerPath;
-	}
-	try {
-		return fileURLToPath(workerPath);
-	} catch {
-		const withoutScheme = workerPath.replace(/^file:(\/\/\/|\/\/|\\|\/)?/i, "");
-		if (process.platform === "win32") {
-			return withoutScheme.replace(/\//g, "\\");
-		}
-		return `/${withoutScheme}`;
-	}
 }
 
 function buildPythonPath(workerScriptPath: string): string | undefined {
@@ -105,7 +89,7 @@ class YtdlpPythonService {
 			this.resolveReadyPromise = resolve;
 			this.rejectReadyPromise = reject;
 		});
-		const workerScriptPath = resolveWorkerScriptPath(ytdlPyWorker);
+		const workerScriptPath = ytdlPyWorker;
 		const pythonPathEnv = buildPythonPath(workerScriptPath);
 		this.pyshell = new PythonShell(workerScriptPath, {
 			pythonPath: options.pythonPath,

@@ -18,15 +18,14 @@ files:
   - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
   - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,tsconfig*.json}"
   - "!*.py"
-  - "!requirements.txt"
   - "!test*.mjs"
   - "!test*.js"
   - "!{out}/*.{db,meta.bin,db-shm,db-wal}"
-  - "!{drizzle,scripts}/**"
-  - "!{lefthook.yml,package.json,pnpm-workspace.yaml,biome.json,git-config.cjs,components.json,requirements.txt,git.json}"
+  - "!{scripts}/**"
+  - "!{lefthook.yml,pnpm-workspace.yaml,git-config.cjs,requirements.txt}"
 asarUnpack:
   - resources/**
-  - "**/*.pyc"
+  - out/main/**/*.pyc
   - build/*.ico
   - build/*.png
   - build/*.jpg

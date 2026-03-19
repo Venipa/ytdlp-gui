@@ -5,7 +5,7 @@ import react from "@vitejs/plugin-react-swc";
 import { bytecodePlugin, defineConfig, externalizeDepsPlugin } from "electron-vite";
 import { merge } from "lodash-es";
 import { execSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, relative, resolve } from "path";
 import type { Plugin } from "vite";
@@ -212,7 +212,13 @@ import { fileURLToPath } from "node:url";
 const rawPath = import.meta.ROLLUP_FILE_URL_${ref};
 const normalizedPath = rawPath.startsWith("file:") ? fileURLToPath(rawPath) : rawPath;
 const unpackedPath = normalizedPath.replace(/([\\\\/])app\\.asar([\\\\/])/i, "$1app.asar.unpacked$2");
-export default existsSync(normalizedPath) ? normalizedPath : unpackedPath;`;
+const resolvedPath = existsSync(normalizedPath) ? normalizedPath : unpackedPath;
+console.log("PyWorker:", {
+	resolvedPath,
+	normalizedPath,
+	unpackedPath,
+});
+export default resolvedPath;`;
 		},
 		closeBundle() {
 			if (depsTmpDir) {
