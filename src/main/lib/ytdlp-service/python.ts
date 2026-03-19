@@ -1,11 +1,11 @@
 import { EventEmitter } from "node:events";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import path, { dirname, join, resolve } from "node:path";
 import { parseJson, stringifyJson } from "@shared/json";
 import { createLogger } from "@shared/logger";
 import { app } from "electron";
 import { PythonShell } from "python-shell";
-import ytdlPyWorker from "./worker.py?asset&asarUnpack";
+import ytdlPyWorkerPath from "./worker.py?asset";
 const log = createLogger("ytdlp-py-service");
 let initialized = false;
 // Helper: Generate a unique ID for RPC calls
@@ -89,11 +89,17 @@ class YtdlpPythonService {
 			this.resolveReadyPromise = resolve;
 			this.rejectReadyPromise = reject;
 		});
-		const workerScriptPath = ytdlPyWorker;
+		const workerScriptPath = ytdlPyWorkerPath;
+		let cwd = options.cwd ?? path.join(app.getPath("userData"), "ytdlp_cache");
+		try {
+			if (!existsSync(cwd)) mkdirSync(cwd, { recursive: true });
+		} finally {
+			cwd = undefined as any;
+		}
 		const pythonPathEnv = buildPythonPath(workerScriptPath);
 		this.pyshell = new PythonShell(workerScriptPath, {
 			pythonPath: options.pythonPath,
-			cwd: options.cwd ?? path.join(app.getPath("userData"), "ytdlp_cache"),
+			cwd,
 			pythonOptions: options.pythonOptions || ["-u"],
 			env: {
 				...process.env,
