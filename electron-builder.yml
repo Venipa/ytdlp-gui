@@ -46,6 +46,7 @@ mac:
   notarize: false
   hardenedRuntime: true
   gatekeeperAssess: false
+  artifactName: ytdlp-gui-${version}-macos-${arch}.${ext}
   target:
     - target: zip
       arch: arm64
@@ -55,17 +56,14 @@ mac:
 dmg:
   title: "Install or Update ${productName} ${version}"
   backgroundColor: "#101010"
-# linux:
-#   target:
-#     - target: appImage
-#       arch: x64
-#     - target: appImage
-#       arch: arm64
-#     - target: deb
-#       arch: x64
-#   maintainer: ytdlpd.venipa.net
-#   category: Music
-#   icon: build/icon.icns
+linux:
+  target:
+    - target: appImage
+    - target: deb
+  artifactName: ytdlp-gui-${version}-${os}-${arch}.${ext}
+  maintainer: ytdlp.venipa.net
+  category: Music
+  icon: build/icon.icns
 # appx:
 #   electronUpdaterAware: true
 #   addAutoLaunchExtension: true

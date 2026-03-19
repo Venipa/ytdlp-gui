@@ -1,10 +1,10 @@
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
-import { migrate } from "drizzle-orm/libsql/migrator";
-import { app } from "electron";
 import { mkdirSync } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
+import { createClient } from "@libsql/client/sqlite3";
+import { drizzle } from "drizzle-orm/libsql";
+import { migrate } from "drizzle-orm/libsql/migrator";
+import { app } from "electron";
 import * as schema from "./app-database.schema";
 // You can specify any property from the libsql connection options
 const dbPath = import.meta.env.DEV ? path.join("out", "sqlite.db") : path.join(app.getPath("userData"), "data.db");

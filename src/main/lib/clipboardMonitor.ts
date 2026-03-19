@@ -39,6 +39,10 @@ export class ClipboardMonitor {
 		}
 	}
 	destroy() {
-		this.stop();
+		try {
+			this.stop();
+		} catch (error) {
+			log.error("error destroying clipboard monitor", error);
+		}
 	}
 }

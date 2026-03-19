@@ -11,8 +11,8 @@ jobs:
     # Platforms to build on/for
     strategy:
       matrix:
-        os: [windows-latest, macos-13]
-        node-version: [20.18.0]
+        os: [windows-latest, macos-15, ubuntu-22.04]
+        node-version: [22.13.1]
 
     steps:
       - name: Check out Git repository
@@ -44,16 +44,17 @@ jobs:
           file: package.json
           field: version
           value: ${{ steps.getVersion.outputs.value }}
-      - name: Install dependencies
+      - if: matrix.os != 'macos-15'
+        name: Install dependencies for windows, linux and intel macos runners
         run: |
-          # yarn config set ignore-engines true
           pnpm i --frozen-lockfile
 
-      - if: matrix.os == 'macos-13'
-        name: rebuild deps for macos
+      - if: matrix.os == 'macos-15'
+        name: Install dependencies for macos arm64 runner
         run: |
-          # rebuild libsql deps for macos
-          pnpm rebuild --config.platform=darwin --config.arch=arm64
+          # rebuild libsql deps for macos arm64
+          pnpm install --config.platform=darwin --config.arch=arm64 --config.target_arch=arm64 --frozen-lockfile
+          pnpm rebuild --config.platform=darwin --config.arch=arm64 --config.target_arch=arm64
 
       - name: Build Electron release
         run: |
