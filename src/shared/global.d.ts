@@ -1,6 +1,17 @@
 declare module "ytdlp-gui" {
 	export {};
 }
+
+declare module "*?asset" {
+	const src: string;
+	export default src;
+}
+
+declare module "*?asset&asarUnpack" {
+	const src: string;
+	export default src;
+}
+
 declare module "ytdlp-gui/types" {
 	export type YTDLMediaType = "video" | "audio" | "auto";
 	export type YTDLState = "progressing" | "done";

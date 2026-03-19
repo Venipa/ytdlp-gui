@@ -13,7 +13,6 @@ import icon from "~/build/icon_24x24.png?asset";
 // @ts-ignore
 // @ts-ignore
 import builderConfig from "../../electron-builder.yml";
-import { executableIsAvailable } from "./lib/bin.utils";
 import { ClipboardMonitor } from "./lib/clipboardMonitor";
 import contextMenu from "./lib/contextMenu";
 import { wrapWindowHandler } from "./lib/windowUtils";
@@ -168,12 +167,6 @@ app.whenReady().then(async () => {
 			const clipEnabled = clipboardMonitor === true && oldClipboardMonitor === false;
 			if (clipEnabled) clipboardWatcher.start();
 			else clipboardWatcher.stop();
-		});
-		appStore.onDidChange("ytdlp.useGlobal", (useGlobal) => {
-			if (useGlobal) {
-				const newPath = executableIsAvailable("yt-dlp");
-				ytdl.ytdlp.setBinaryPath(newPath ?? ytdl.currentDownloadPath);
-			} else ytdl.ytdlp.setBinaryPath(ytdl.currentDownloadPath);
 		});
 		if (!isProduction)
 			appStore.onDidAnyChange(() => {

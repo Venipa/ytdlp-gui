@@ -43,6 +43,11 @@ const QTooltip = React.forwardRef<
 	React.ElementRef<typeof Tooltip>,
 	React.ComponentPropsWithoutRef<typeof TooltipContent> & React.PropsWithChildren<{ content: string | React.ReactElement | React.ReactNode | React.ComponentType }>
 >(({ className, children, content, asChild, side, ...props }, ref) => {
+	const contentElement = React.useMemo(() => {
+		if (typeof content === "string") return <div>{content}</div>;
+		if (React.isValidElement(content)) return content;
+		return null;
+	}, [content]);
 	const TriggerSlot = asChild ? Slot : "button";
 	return (
 		<Tooltip delayDuration={350} defaultOpen={false} {...props}>
@@ -56,7 +61,7 @@ const QTooltip = React.forwardRef<
 				updatePositionStrategy='optimized'
 				ref={ref}
 				className='bg-white dark:bg-background border border-muted fill-muted dark:border-muted/60 shadow-md text-primary'>
-				{typeof content === "string" ? <div>{content}</div> : content}
+				{contentElement}
 			</TooltipContent>
 		</Tooltip>
 	);

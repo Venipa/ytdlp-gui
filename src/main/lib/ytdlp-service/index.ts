@@ -8,6 +8,15 @@ const createYtdlpService = () => {
 	const service = new YtdlpPythonService({
 		pythonPath: pythonPath,
 	});
+	process.on("exit", () => {
+		service.shutdown();
+	});
+	process.on("SIGINT", () => {
+		service.shutdown();
+	});
+	process.on("SIGTERM", () => {
+		service.shutdown();
+	});
 	return service;
 };
 

@@ -8,7 +8,6 @@ import { autoUpdater } from "electron-updater";
 import { z } from "zod";
 import { mainProcedure, publicProcedure, router } from "./trpc";
 import { ytdl } from "./ytdlp.core";
-import { YTDLP_STATE } from "./ytdlp.utils";
 let appInitialized = false;
 export const internalRouter = router({
 	getAll: mainProcedure.query(() => secureStore.getAll()),
@@ -85,9 +84,8 @@ export const internalRouter = router({
 	initializeApp: publicProcedure.mutation(async () => {
 		if (appInitialized) throw new TRPCError({ message: "App already initialized", code: "INTERNAL_SERVER_ERROR" });
 		await ytdl.initialize();
-		await ytdl.checkUpdates(ytdl.state === YTDLP_STATE.MISSING_BINARY);
 		await checkForUpdatesAndNotify();
 		appInitialized = true;
-		return appStore.store.ytdlp.version ? appStore.store.ytdlp.version : await ytdl.ytdlp.getVersion();
+		return appStore.store.ytdlp.version ?? "Unknown State";
 	}),
 } as const);

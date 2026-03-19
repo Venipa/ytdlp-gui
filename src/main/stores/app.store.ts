@@ -13,9 +13,8 @@ const store = createYmlStore<AppStore>("app-settings", {
 	migrations: appStoreMigrations,
 	defaults: {
 		ytdlp: {
-			checkForUpdate: true,
-			useGlobal: false,
 			flags: { nomtime: true },
+			path: "internal",
 		} as AppStore["ytdlp"],
 		download: {
 			paths: [defaultDownloadsPath],

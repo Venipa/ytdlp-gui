@@ -9,7 +9,7 @@
     "src/shared/**/*.ts",
     "src/main/trpc/trpc.ts"
   ],
-  "exclude": ["src/main/worker/**/*.ts"],
+  "exclude": ["src/main/worker/**/*.ts", "src/main/lib/**/*.py"],
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",

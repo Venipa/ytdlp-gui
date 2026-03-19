@@ -17,6 +17,13 @@ files:
   - "!{.*rc,*.config.js,*.config.ts,*config.json,.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
   - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
   - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,tsconfig*.json}"
+  - "!*.py"
+  - "!requirements.txt"
+  - "!test*.mjs"
+  - "!test*.js"
+  - "!{out}/*.{db,meta.bin,db-shm,db-wal}"
+  - "!{drizzle,scripts}/**"
+  - "!{lefthook.yml,package.json,pnpm-workspace.yaml,biome.json,git-config.cjs,components.json,requirements.txt,git.json}"
 asarUnpack:
   - resources/**
   - "**/*.pyc"

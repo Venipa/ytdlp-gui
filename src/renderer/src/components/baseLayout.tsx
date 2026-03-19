@@ -16,7 +16,7 @@ export function BaseLayoutComponent({ children }: PropsWithChildren) {
 	return (
 		<TooltipProvider>
 			<motion.div className={cn("flex flex-col h-full transition-transform scale-100 ease-out", windowState?.hasChild && "blur-md scale-95")}>
-				<AppNavBar variant={isTranslucentRoute ? "transparent" : "default"} className={cn("flex-shrink-0", isTranslucentRoute && "-mb-10 z-50")} />
+				<AppNavBar variant={isTranslucentRoute ? "transparent" : "default"} className={cn("shrink-0", isTranslucentRoute && "-mb-10 z-50")} />
 				<div className='relative flex flex-col h-full overflow-auto'>{children}</div>
 			</motion.div>
 		</TooltipProvider>

@@ -205,9 +205,14 @@ function pythonBytecodePlugin(): Plugin {
 			}
 
 			const pycBuffer = compilePyToPyc(pyPath);
-			const name = basename(pyPath, ".py") + ".pyc";
-			const ref = this.emitFile({ type: "asset", name, source: pycBuffer });
-			return `export default import.meta.ROLLUP_FILE_URL_${ref}`;
+			const workerAssetName = `${relative(resolve("src/main"), pyPath).replace(/\\/g, "/").replace(/\//g, "__").replace(/\.py$/, "")}.pyc`;
+			const ref = this.emitFile({ type: "asset", fileName: `resources/python-workers/${workerAssetName}`, source: pycBuffer });
+			return `import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+const rawPath = import.meta.ROLLUP_FILE_URL_${ref};
+const normalizedPath = rawPath.startsWith("file:") ? fileURLToPath(rawPath) : rawPath;
+const unpackedPath = normalizedPath.replace(/([\\\\/])app\\.asar([\\\\/])/i, "$1app.asar.unpacked$2");
+export default existsSync(normalizedPath) ? normalizedPath : unpackedPath;`;
 		},
 		closeBundle() {
 			if (depsTmpDir) {
