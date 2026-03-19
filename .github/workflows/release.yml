@@ -11,8 +11,8 @@ jobs:
     # Platforms to build on/for
     strategy:
       matrix:
-        os: [windows-latest, macos-15, ubuntu-22.04]
-        node-version: [22.13.1]
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        node-version: [24.14.0]
 
     steps:
       - name: Check out Git repository
@@ -25,7 +25,12 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9.12.2
+          version: 10.32.1
+      - name: Install Python3
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.13'
+          cache: 'pip'
       - if: github.ref_type == 'tag'
         id: getVersion
         uses: actions/github-script@v7.0.1
@@ -44,18 +49,20 @@ jobs:
           file: package.json
           field: version
           value: ${{ steps.getVersion.outputs.value }}
-      - if: matrix.os != 'macos-15'
+      - if: matrix.os != 'macos-latest'
         name: Install dependencies for windows, linux and intel macos runners
         run: |
           pnpm i --frozen-lockfile
-
-      - if: matrix.os == 'macos-15'
+      - if: matrix.os == 'macos-latest'
         name: Install dependencies for macos arm64 runner
         run: |
           # rebuild libsql deps for macos arm64
           pnpm install --config.platform=darwin --config.arch=arm64 --config.target_arch=arm64 --frozen-lockfile
           pnpm rebuild --config.platform=darwin --config.arch=arm64 --config.target_arch=arm64
 
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
       - name: Build Electron release
         run: |
           pnpm run release
@@ -66,25 +73,3 @@ jobs:
           ACTION_RUNNER: ${{ matrix.os }}
           VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           VITE_GITHUB_REPOSITORY: ${{ github.repository }}
-      # - if: matrix.os == 'ubuntu-latest'
-      #   name: Upload release source maps to sentry
-      #   continue-on-error: true
-      #   env:
-      #     SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-      #     SENTRY_PROJECT: ytdlp-gui
-      #     SENTRY_ORG: venipa.net
-      #     SENTRY_DEPLOY_ENVIRONMENT: production
-      #     SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-      #     SENTRY_URL: ${{ secrets.SENTRY_URL }}
-      #   run: |
-      #     # Install Sentry CLI
-      #     curl -sL https://sentry.io/get-cli/ | bash
-
-      #     # Create new Sentry release
-      #     export SENTRY_RELEASE=$(sentry-cli releases propose-version)
-      #     sentry-cli releases new --project $SENTRY_PROJECT $SENTRY_RELEASE
-      #     sentry-cli releases set-commits --auto $SENTRY_RELEASE
-      #     sentry-cli releases finalize $SENTRY_RELEASE
-
-      #     # Create new deploy for this Sentry release
-      #     sentry-cli releases deploys $SENTRY_RELEASE new -e $SENTRY_DEPLOY_ENVIRONMENT

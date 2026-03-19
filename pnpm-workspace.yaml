@@ -1,0 +1,9 @@
+allowBuilds:
+  '@biomejs/biome': true
+  '@swc/core': true
+  better-sqlite3: true
+  electron: true
+  esbuild: true
+  lefthook: true
+nodeLinker: hoisted
+shamefullyHoist: true

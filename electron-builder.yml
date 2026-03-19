@@ -19,6 +19,7 @@ files:
   - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,tsconfig*.json}"
 asarUnpack:
   - resources/**
+  - "**/*.pyc"
   - build/*.ico
   - build/*.png
   - build/*.jpg

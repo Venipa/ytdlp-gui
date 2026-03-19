@@ -1,22 +1,10 @@
-import { platform } from "os";
-import path from "path";
 import { platform as appPlatform } from "@electron-toolkit/utils";
-import { executableIsAvailable, fileExists } from "@main/lib/bin.utils";
-import ytdlpService from "@main/lib/ytdlp-service";
-import YTDLWrapper from "@main/lib/ytdlp-wrapper";
+import createYtdlpService from "@main/lib/ytdlp-service";
+import YtdlpPythonService, { YtdlpOutputEvent } from "@main/lib/ytdlp-service/python";
 import { appStore } from "@main/stores/app.store";
-import { Endpoints } from "@octokit/types";
 import { Logger } from "@shared/logger";
-import { resulter } from "@shared/promises/helper";
-import { nt as calvNewerThan } from "calver";
-import { app } from "electron";
-import { stat, unlink } from "fs/promises";
 import { VideoInfo } from "yt-dlp-wrap/types";
-import { pushLogToClient } from "./events.ee";
-const YTDLP_PLATFORM = platform();
-const ytdlpPath = app.getPath("userData");
 const log = new Logger("YTDLP");
-type GithubRelease = Endpoints["GET /repos/{owner}/{repo}/releases"]["response"]["data"][0];
 export enum YTDLP_STATE {
 	NONE,
 	READY,
@@ -29,96 +17,83 @@ export enum YTDLP_STATE {
 }
 export class YTDLP {
 	private _state: YTDLP_STATE = YTDLP_STATE.NONE;
-	private _ytd: YTDLWrapper = new YTDLWrapper();
+	private _service!: YtdlpPythonService;
 	get state() {
 		return this._state;
 	}
 	constructor() {}
 	async initialize() {
 		log.info("initializing...");
-		const ytdVersion = await this._ytd.getVersion().then((s) => s.trim().replace(/\r?\n$/, ""));
-		log.debug({ ytdVersion });
-		if (appPlatform.isWindows) appStore.store.ytdlp.useGlobal = false;
-		const ytdlpPath = appStore.store.ytdlp.useGlobal ? executableIsAvailable("yt-dlp") : appStore.store.ytdlp.path && fileExists(appStore.store.ytdlp.path);
-		if (!ytdlpPath) this._state = YTDLP_STATE.MISSING_BINARY;
-		else {
-			this._ytd.setBinaryPath(ytdlpPath);
-			appStore.store.ytdlp.path = ytdlpPath;
-		}
-		ytdlpService();
-	}
-	async checkUpdates(forceLatestUpdate?: boolean) {
-		this._state = YTDLP_STATE.UPDATE_CHECKING;
-		const currentYtdlp = appStore.get("ytdlp");
-		log.info("checking for ytdlp updates...");
-		const latestRelease =
-			((forceLatestUpdate || currentYtdlp.checkForUpdate) &&
-				(await YTDLWrapper.getGithubReleases(1, 1).then(([grelease]: [GithubRelease]) => {
-					return {
-						...grelease,
-						version: grelease.tag_name.replace(/^yt-dlp /, ""),
-					};
-				}))) ||
-			null;
-		log.debug("ytdlp version compare...", {
-			latest: latestRelease?.version,
-			current: currentYtdlp.version,
-			config: currentYtdlp,
-			platform: YTDLP_PLATFORM,
+		this._service = createYtdlpService();
+		await this._service.waitReady().catch((err) => {
+			log.error("failed to wait for ytdlp service to be ready:", err);
+			this._state = YTDLP_STATE.ERROR;
 		});
-		let updated = false;
-		let previousVersion = currentYtdlp?.version ?? "-";
-		if (
-			latestRelease &&
-			(forceLatestUpdate ||
-				!currentYtdlp?.version ||
-				(currentYtdlp.version !== latestRelease.version && !calvNewerThan(currentYtdlp.version.replace(/\./g, "-"), latestRelease.version.replace(/\./g, "-"))))
-		) {
-			log.debug("found new version of ytdlp, trying to download...", {
-				tag_name: latestRelease.tag_name,
-				version: latestRelease.version,
-			});
-			await this.downloadUpdate(latestRelease)
-				.then(({ path, version }) => {
-					appStore.set("ytdlp", { path, version, checkForUpdate: true });
-					log.debug("downloaded new ytdlp executable:", path, version);
-					updated = true;
-				})
-				.catch((err) => {
-					log.error("failed to download update...\n", err);
-				});
-		}
-		if (appStore.store.ytdlp?.path) this.ytdlp.setBinaryPath(appStore.store.ytdlp.path);
+		const version = await this._service.getVersion();
+		appStore.set("ytdlp", { path: "internal", version, checkForUpdate: false });
 		this._state = YTDLP_STATE.READY;
+		log.debug("ytdlp python version:", { version });
+	}
+	async checkUpdates() {
 		return {
-			updated,
+			updated: false,
 			currentVersion: appStore.store.ytdlp.version,
-			previousVersion,
+			previousVersion: appStore.store.ytdlp.version ?? "-",
 		};
 	}
-	private async downloadUpdate(release: GithubRelease & { version: string }): Promise<{ version: string; path: string }> {
-		const newYtdlPath = path.join(ytdlpPath, appPlatform.isWindows ? "ytdlp.exe" : "ytdlp");
-		if (await stat(newYtdlPath).then((stats) => stats.isFile())) {
-			await unlink(newYtdlPath);
+	async extractInfo(url: string, options?: Record<string, unknown>): Promise<VideoInfo> {
+		if (!this._service) {
+			throw new Error("Ytdlp Python service is not initialized");
 		}
-		await YTDLWrapper.downloadFromGithub(newYtdlPath, release.version, YTDLP_PLATFORM);
-		return { version: release.version, path: newYtdlPath };
+		return (await this._service.extractInfo(url, options)) as VideoInfo;
 	}
-	async getVideoInfo(...args: string[]) {
-		const ignoreGenericUrls = ["--ies", "default,-generic"];
-		const platformFilenames = [appPlatform.isWindows ? "--windows-filenames" : "--restrict-filenames"];
-		const videoArgs = [...args]
-			.concat((args.includes("--ies") && ignoreGenericUrls) || "")
-			.concat((args.includes(platformFilenames[0]) && platformFilenames) || "")
-			.filter(Boolean);
-		pushLogToClient(`yt-dlp ${videoArgs.join(" ")}`);
-		return await resulter<VideoInfo>(this._ytd.getVideoInfo(videoArgs));
+	async download(url: string, options?: Record<string, unknown>): Promise<void> {
+		if (!this._service) {
+			throw new Error("Ytdlp Python service is not initialized");
+		}
+		await this._service.download(url, options);
 	}
-	readonly exec: typeof this._ytd.exec = this._ytd.exec.bind(this._ytd);
-	get ytdlp() {
-		return this._ytd;
+	onOutput(listener: (event: YtdlpOutputEvent) => void): () => void {
+		if (!this._service) {
+			throw new Error("Ytdlp Python service is not initialized");
+		}
+		return this._service.onOutput(listener);
+	}
+	async downloadWithOutput(url: string, options?: Record<string, unknown>, onRequestCreated?: (requestId: string) => void): Promise<void> {
+		if (!this._service) {
+			throw new Error("Ytdlp Python service is not initialized");
+		}
+		await this._service.download(url, options, { onRequestCreated });
 	}
 	get currentDownloadPath() {
 		return appStore.store.download?.selected;
 	}
+}
+export function sanitizeId(id: string) {
+	return id.replace(/[^a-zA-Z0-9\-]/g, "_");
+}
+export function sanitizeFilename(filename: string) {
+	// Cross-platform filename sanitization:
+	// - On Windows: Reserved characters include <>:"/\|?* and ASCII control chars (\x00-\x1F), and some reserved device names are disallowed.
+	// - On macOS: Only : (colon) is NOT allowed in filenames, / is path separator.
+	// - On Linux: Only / is not allowed (it's the separator), but NULL (\0) is forbidden everywhere.
+	//
+	// We'll allow more for macOS/Linux, stricter (but still East Asian friendly) for Windows.
+	// We'll omit device name checks for brevity and focus on invalid characters.
+	//
+	// Also, allow common East Asian ranges as before.
+
+	let pattern: RegExp = /[^a-zA-Z0-9]/g;
+	if (appPlatform.isWindows) {
+		// Windows: Remove <>:"/\\|?*, control chars, NUL (\0-\x1F, \x7F)
+		pattern = /[<>:"/\\|?*\x00-\x1F\x7F]|[^\w\u4e00-\u9fff\u3400-\u4dbf\u3040-\u309f\u30a0-\u30ff\u3000-\u303f\uac00-\ud7af\uff00-\uffef]/g;
+	} else if (appPlatform.isMacOS) {
+		// macOS: Remove colon (:) and NUL (\0); allow everything else except /
+		pattern = /[:\/\x00]|[^\w\u4e00-\u9fff\u3400-\u4dbf\u3040-\u309f\u30a0-\u30ff\u3000-\u303f\uac00-\ud7af\uff00-\uffef]/g;
+	} else if (appPlatform.isLinux) {
+		// Linux and others: Only / and NULL (\0); be permissive with Unicode
+		pattern = /[\/\x00]|[^\w\u4e00-\u9fff\u3400-\u4dbf\u3040-\u309f\u30a0-\u30ff\u3000-\u303f\uac00-\ud7af\uff00-\uffef]/g;
+	}
+
+	return filename.replace(pattern, "_");
 }

@@ -1,22 +1,23 @@
 import { statSync } from "fs";
 import path from "path";
-import { Progress } from "@main/lib/ytdlp-wrapper";
+import { YtdlpOptions } from "@main/lib/ytdlp-service/ytdlp-options";
 import { db } from "@main/stores/app-database";
 import { SelectDownload, queries } from "@main/stores/app-database.helpers";
 import { downloads } from "@main/stores/app-database.schema";
 import { appStore } from "@main/stores/app.store";
+import { sanitizeFilename, sanitizeId } from "@main/trpc/ytdlp.utils";
 import { logger } from "@shared/logger";
 import { queuePromiseStack } from "@shared/promises/helper";
 import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { desc } from "drizzle-orm";
-import { omit, uniq } from "lodash";
+import { omit } from "lodash";
 import { VideoInfo } from "yt-dlp-wrap/types";
 import { YTDLDownloadStatus, YTDLItem, YTDLMediaType, YTDLStatus } from "ytdlp-gui/types";
 import { z } from "zod";
 import { pushLogToClient } from "./events.ee";
 import { publicProcedure, router } from "./trpc";
-import { MAX_PARALLEL_DOWNLOADS, MAX_STREAM_CONCURRENT_FRAGMENTS, YTDLP_CACHE_PATH, ytdl } from "./ytdlp.core";
+import { MAX_PARALLEL_DOWNLOADS, ytdl } from "./ytdlp.core";
 import { pushToastToClient, ytdlpDownloadQueue, ytdlpEvents } from "./ytdlp.ee";
 
 class DownloadQueueManager {
@@ -120,17 +121,26 @@ class DownloadQueueManager {
 
 	private async fetchNewMetadata(dbFile: SelectDownload): Promise<{ dbFile: SelectDownload; videoInfo: VideoInfo }> {
 		const { url } = dbFile;
-		const { value: videoInfo, error: videoInfoError } = await ytdl.getVideoInfo(url, ...(dbFile.type === "audio" ? `-f bestaudio` : ``).split(" "));
+		let videoInfo: VideoInfo | null = null;
+		try {
+			videoInfo = await ytdl.extractInfo(url, {
+				...(dbFile.type === "audio" && { format: "bestaudio/best" }),
+			});
+			log.debug("fetchNewMetadata", { videoInfoId: videoInfo.id });
+		} catch (videoInfoError) {
+			log.error("extractInfo", videoInfoError);
+		}
 
-		if (videoInfoError || !videoInfo) {
-			if (videoInfoError) log.error("getVideoInfo", videoInfoError);
+		if (!videoInfo) {
 			await this.deleteDownloadItem(dbFile);
 			throw new TRPCError({
 				code: "NOT_FOUND",
 				message: "URL not supported or video not found",
 			});
 		}
-
+		if (!videoInfo.filename) {
+			videoInfo.filename = `[${dbFile.source}_${sanitizeId(videoInfo.id)}] ${sanitizeFilename(videoInfo.title)}.${videoInfo.ext}`;
+		}
 		const trimmedVideoInfo = this.trimVideoInfo(videoInfo);
 		dbFile.meta = trimmedVideoInfo;
 		dbFile.metaId = videoInfo.id;
@@ -199,50 +209,90 @@ class DownloadQueueManager {
 
 	private async executeDownload(dbFile: SelectDownload, videoInfo: VideoInfo, controller: AbortController) {
 		const settings = appStore.store.ytdlp;
-		const execArgs = [dbFile.url, "-f", "best", "-o", dbFile.filepath];
+		const ytdlpOptions: YtdlpOptions = {
+			format: dbFile.type === "audio" ? "bestaudio/best" : "best",
+			outtmpl: dbFile.filepath,
+		};
 
-		if (dbFile.type === "audio") execArgs.push(..."--extract-audio --audio-format mp3".split(" "));
-		if (settings.flags?.nomtime) execArgs.push("--no-mtime");
-		if (settings.flags?.custom) execArgs.push(...settings.flags.custom.split(" "));
-		execArgs.push("--concurrent-fragments", String(MAX_STREAM_CONCURRENT_FRAGMENTS), "--cache-dir", YTDLP_CACHE_PATH);
+		if (dbFile.type === "audio") {
+			ytdlpOptions.postprocessors = [
+				{
+					key: "FFmpegExtractAudio",
+					preferredcodec: "mp3",
+				},
+			];
+		}
+		if (settings.flags?.nomtime) {
+			ytdlpOptions.updatetime = false;
+		}
 
-		const stream = ytdl.ytdlp.exec(uniq(execArgs), {}, controller.signal);
+		if (controller.signal.aborted) {
+			throw new Error("cancelled by user");
+		}
 
-		this.setupStreamHandlers(stream, dbFile, videoInfo);
-		await new Promise((resolve) => stream.once("close", resolve));
-	}
+		let activeRequestId: string | null = null;
+		const stopOutputListener = ytdl.onOutput((event) => {
+			if (activeRequestId && event.requestId && event.requestId !== activeRequestId) {
+				return;
+			}
+			if (!activeRequestId && event.requestId) {
+				activeRequestId = event.requestId;
+			}
+			if (event.videoId && dbFile.metaId && event.videoId !== dbFile.metaId) {
+				return;
+			}
 
-	private setupStreamHandlers(stream: any, dbFile: SelectDownload, videoInfo: VideoInfo) {
-		stream.on("progress", (ev: Progress) => {
+			if (event.type === "download_status") {
+				ytdlpEvents.emit("status", {
+					id: dbFile.id,
+					action: "download",
+					data: event,
+					state: "progressing",
+				});
+				ytdlpEvents.emit("download", {
+					id: dbFile.id,
+					percent: event.percent ?? 0,
+					speed: event.speed,
+					eta: event.eta,
+					fragmentIndex: event.fragmentIndex,
+					fragmentCount: event.fragmentCount,
+					message: event.message,
+				});
+				return;
+			}
+
+			if (event.type === "completed") {
+				ytdlpEvents.emit("status", {
+					id: dbFile.id,
+					action: "download",
+					data: event,
+					state: "done",
+				});
+				ytdlpEvents.emit("download", { id: dbFile.id, percent: 100, message: event.message });
+				return;
+			}
+
 			ytdlpEvents.emit("status", {
 				id: dbFile.id,
 				action: "download",
-				data: ev,
+				data: event,
 				state: "progressing",
 			});
-			ytdlpEvents.emit("download", { ...ev, id: dbFile.id });
 		});
 
-		stream.once("progress", () => {
-			ytdlpEvents.emit("list", [dbFile]);
+		ytdlpEvents.emit("status", {
+			id: dbFile.id,
+			action: "download",
+			data: videoInfo,
+			state: "progressing",
 		});
-
-		stream.once("close", () => {
-			ytdlpEvents.emit("status", {
-				id: dbFile.id,
-				action: "download",
-				data: videoInfo,
-				state: "done",
+		try {
+			await ytdl.downloadWithOutput(dbFile.url, ytdlpOptions, (requestId) => {
+				activeRequestId = requestId;
 			});
-			ytdlpEvents.emit("download", { id: dbFile.id, percent: 100 });
-		});
-
-		stream.on("error", (error: any) => {
-			ytdlpEvents.emit("status", { id: dbFile.id, action: "download", error, state: "error" });
-			ytdlpEvents.emit("download", { id: dbFile.id, percent: 100, error });
-			dbFile.state = "error";
-			dbFile.error = error;
-		});
+		} finally {
+			stopOutputListener();
+		}
 	}
 
 	private async finalizeDownload(dbFile: SelectDownload) {
@@ -379,8 +429,13 @@ export const ytdlpRouter = router({
 					return;
 				}
 				ytdlpEvents.emit("autoAddCapture", url);
-				const { value: videoInfo, error: videoInfoError } = await ytdl.getVideoInfo(url);
-				if (videoInfoError || !videoInfo?.url) return;
+				let videoInfo: VideoInfo | null = null;
+				try {
+					videoInfo = await ytdl.extractInfo(url);
+				} catch {
+					videoInfo = null;
+				}
+				if (!videoInfo?.url) return;
 				emit.next(url);
 			}
 
