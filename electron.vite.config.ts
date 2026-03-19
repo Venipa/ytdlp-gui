@@ -2,7 +2,7 @@ import generouted from "@generouted/react-router/plugin";
 import ViteYaml from "@modyfi/vite-plugin-yaml";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
-import { bytecodePlugin, defineConfig, externalizeDepsPlugin } from "electron-vite";
+import { defineConfig } from "electron-vite";
 import { merge } from "lodash-es";
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
@@ -52,9 +52,7 @@ function compilePyToPyc(pyPath: string): Buffer {
 			}
 		}
 		if (!existsSync(outFile)) {
-			throw new Error(
-				`[python-bytecode] Failed to compile ${pyPath}. Ensure Python is installed (python/python3/py) and the file exists.`,
-			);
+			throw new Error(`[python-bytecode] Failed to compile ${pyPath}. Ensure Python is installed (python/python3/py) and the file exists.`);
 		}
 		return readFileSync(outFile);
 	} finally {
@@ -148,11 +146,7 @@ function installRequirementsToTarget(requirementLines: readonly string[], target
 	}
 }
 
-function emitDirectoryAssets(
-	emitAsset: (assetName: string, sourceBuffer: Buffer) => void,
-	rootDir: string,
-	currentDir: string = rootDir,
-): void {
+function emitDirectoryAssets(emitAsset: (assetName: string, sourceBuffer: Buffer) => void, rootDir: string, currentDir: string = rootDir): void {
 	const entries = readdirSync(currentDir);
 	for (const entry of entries) {
 		const fullPath = join(currentDir, entry);
@@ -204,21 +198,22 @@ function pythonBytecodePlugin(): Plugin {
 				depsEmitted = true;
 			}
 
-			const pycBuffer = compilePyToPyc(pyPath);
-			const workerAssetName = `${relative(resolve("src/main"), pyPath).replace(/\\/g, "/").replace(/\//g, "__").replace(/\.py$/, "")}.pyc`;
-			const ref = this.emitFile({ type: "asset", fileName: `resources/python-workers/${workerAssetName}`, source: pycBuffer });
-			return `import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-const rawPath = import.meta.ROLLUP_FILE_URL_${ref};
-const normalizedPath = rawPath.startsWith("file:") ? fileURLToPath(rawPath) : rawPath;
-const unpackedPath = normalizedPath.replace(/([\\\\/])app\\.asar([\\\\/])/i, "$1app.asar.unpacked$2");
-const resolvedPath = existsSync(normalizedPath) ? normalizedPath : unpackedPath;
-console.log("PyWorker:", {
-	resolvedPath,
-	normalizedPath,
-	unpackedPath,
-});
-export default resolvedPath;`;
+						const pycBuffer = compilePyToPyc(pyPath);
+						const workerAssetName = `${relative(resolve("src/main"), pyPath).replace(/\\/g, "/").replace(/\//g, "__").replace(/\.py$/, "")}.pyc`;
+						const ref = this.emitFile({ type: "asset", fileName: `resources/python-workers/${workerAssetName}`, source: pycBuffer });
+						return `import { existsSync } from "node:fs";
+			import { fileURLToPath } from "node:url";
+			const rawPath = import.meta.ROLLUP_FILE_URL_${ref};
+			const normalizedPath = rawPath.startsWith("file:") ? fileURLToPath(rawPath) : rawPath;
+			const unpackedPath = normalizedPath.replace(/([\\\\/])app\\.asar([\\\\/])/i, "$1app.asar.unpacked$2");
+			const resolvedPath = existsSync(normalizedPath) ? normalizedPath : unpackedPath;
+			console.log("PyWorker:", {
+				resolvedPath,
+				normalizedPath,
+				unpackedPath,
+			});
+			export default resolvedPath;`;
+			return null;
 		},
 		closeBundle() {
 			if (depsTmpDir) {
@@ -231,13 +226,10 @@ export default resolvedPath;`;
 export default defineConfig({
 	main: {
 		...resolveOptions,
-		plugins: [
-			externalizeDepsPlugin({ exclude: [...externalizedEsmDeps] }),
-			ViteYaml(),
-			...((!isMac && isProduction && [bytecodePlugin({ transformArrowFunctions: false })]) || []),
-			pythonBytecodePlugin()
-		],
+		plugins: [ViteYaml(), pythonBytecodePlugin()],
 		build: {
+      bytecode: isProduction ? { transformArrowFunctions: false } : false,
+			externalizeDeps: { exclude: [...externalizedEsmDeps] },
 			rollupOptions: {
 				output: {
 					manualChunks: (id: string): any => {
@@ -246,15 +238,12 @@ export default defineConfig({
 				},
 			},
 		},
-		publicDir: "./resources"
+		publicDir: "./resources",
 	},
 	preload: {
 		...resolveOptions,
-		plugins: [
-			externalizeDepsPlugin({ exclude: [...externalizedEsmDeps] }),
-			ViteYaml(),
-			...((!isMac && isProduction && [bytecodePlugin({ transformArrowFunctions: false })]) || []),
-		],
+		plugins: [ViteYaml()],
+		build: { externalizeDeps: { exclude: [...externalizedEsmDeps] }, bytecode: isProduction ? { transformArrowFunctions: false } : false },
 	},
 	renderer: {
 		...merge(resolveOptions, {
@@ -267,12 +256,7 @@ export default defineConfig({
 		plugins: [
 			ViteYaml(),
 			react({
-				plugins: [
-					[
-						"@swc/plugin-styled-jsx",
-						{},
-					],
-				],
+				plugins: [["@swc/plugin-styled-jsx", {}]],
 			}),
 			tailwindcss({ optimize: isProduction }),
 			generouted({

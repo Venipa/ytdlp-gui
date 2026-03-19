@@ -3,6 +3,7 @@ allowBuilds:
   '@swc/core': true
   better-sqlite3: true
   electron: true
+  electron-winstaller: true
   esbuild: true
   lefthook: true
 nodeLinker: hoisted

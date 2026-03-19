@@ -5,7 +5,7 @@ import { parseJson, stringifyJson } from "@shared/json";
 import { createLogger } from "@shared/logger";
 import { app } from "electron";
 import { PythonShell } from "python-shell";
-import ytdlPyWorkerPath from "./worker.py?asset";
+import ytdlPyWorkerPath from "./worker.py?asset&asarUnpack";
 const log = createLogger("ytdlp-py-service");
 let initialized = false;
 // Helper: Generate a unique ID for RPC calls
