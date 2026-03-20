@@ -45,7 +45,7 @@ function compilePyToPyc(pyPath: string): Buffer {
 			try {
 				execSync(
 					// explicitly set PYTHONIOENCODING to utf-8 for output
-					`PYTHONIOENCODING=utf-8 ${py} "${scriptPath}" "${pyPath}" "${outFile}"`,
+					`${py} "${scriptPath}" "${pyPath}" "${outFile}"`,
 					{
 						stdio: "pipe",
 						windowsHide: true,
