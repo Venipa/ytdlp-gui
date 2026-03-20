@@ -219,7 +219,7 @@ function pythonBytecodePlugin(): Plugin {
 			}
 
 			// const pycBuffer = compilePyToPyc(pyPath);
-			const workerAssetName = `${relative(resolve("src/main"), pyPath).replace(/\\/g, "/").replace(/\//g, "__").replace(/\.py$/, "")}.${COMPILE_EXT}`;
+			const workerAssetName = `${relative(resolve("src/main"), pyPath).replace(/\\/g, "/").replace(/\//g, "__").replace(/\.py$/, "")}.py`;
 			const ref = this.emitFile({ type: "asset", fileName: `resources/python-workers/${workerAssetName}`, source: Buffer.from(readFileSync(pyPath)) });
 			return `import { existsSync } from "node:fs";
 			import { fileURLToPath } from "node:url";
