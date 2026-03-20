@@ -33,10 +33,10 @@ const PY_ASSET_RE = /\.py\?asset(&asarUnpack)?(?=&|$)/;
 const PY_REQUIREMENTS_PATH = resolve("requirements.txt");
 const PY_DEPS_ASSET_DIR = "resources/python-deps";
 
-const COMPILE_SCRIPT = `import py_compile\nimport sys\npy_compile.compile(sys.argv[1], cfile=sys.argv[2], encoding="utf-8")\n`;
-
+const COMPILE_SCRIPT = `import py_compile\nimport sys\npy_compile.compile(sys.argv[1], cfile=sys.argv[2])\n`;
+const COMPILE_EXT = ".pyc";
 function compilePyToPyc(pyPath: string): Buffer {
-	const outFile = resolve(tmpdir(), `ytdlp-${basename(pyPath, ".py")}-${Date.now()}.pycw`);
+	const outFile = resolve(tmpdir(), `ytdlp-${basename(pyPath, ".py")}-${Date.now()}.${COMPILE_EXT}`);
 	const scriptPath = resolve(tmpdir(), "ytdlp-compile-worker.py");
 	writeFileSync(scriptPath, COMPILE_SCRIPT, { encoding: "utf8" }); // ensure UTF-8 script
 	try {
@@ -218,9 +218,9 @@ function pythonBytecodePlugin(): Plugin {
 				depsEmitted = true;
 			}
 
-			const pycBuffer = compilePyToPyc(pyPath);
-			const workerAssetName = `${relative(resolve("src/main"), pyPath).replace(/\\/g, "/").replace(/\//g, "__").replace(/\.py$/, "")}.pycw`;
-			const ref = this.emitFile({ type: "asset", fileName: `resources/python-workers/${workerAssetName}`, source: pycBuffer });
+			// const pycBuffer = compilePyToPyc(pyPath);
+			const workerAssetName = `${relative(resolve("src/main"), pyPath).replace(/\\/g, "/").replace(/\//g, "__").replace(/\.py$/, "")}.${COMPILE_EXT}`;
+			const ref = this.emitFile({ type: "asset", fileName: `resources/python-workers/${workerAssetName}`, source: Buffer.from(readFileSync(pyPath)) });
 			return `import { existsSync } from "node:fs";
 			import { fileURLToPath } from "node:url";
 			const rawPath = import.meta.ROLLUP_FILE_URL_${ref};
@@ -242,6 +242,7 @@ function pythonBytecodePlugin(): Plugin {
 		},
 	};
 }
+
 export default defineConfig({
 	main: {
 		...resolveOptions,
