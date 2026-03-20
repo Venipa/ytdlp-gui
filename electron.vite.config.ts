@@ -198,10 +198,10 @@ function pythonBytecodePlugin(): Plugin {
 				depsEmitted = true;
 			}
 
-						const pycBuffer = compilePyToPyc(pyPath);
-						const workerAssetName = `${relative(resolve("src/main"), pyPath).replace(/\\/g, "/").replace(/\//g, "__").replace(/\.py$/, "")}.pyc`;
-						const ref = this.emitFile({ type: "asset", fileName: `resources/python-workers/${workerAssetName}`, source: pycBuffer });
-						return `import { existsSync } from "node:fs";
+			const pycBuffer = compilePyToPyc(pyPath);
+			const workerAssetName = `${relative(resolve("src/main"), pyPath).replace(/\\/g, "/").replace(/\//g, "__").replace(/\.py$/, "")}.pyc`;
+			const ref = this.emitFile({ type: "asset", fileName: `chunks/resources/python-workers/${workerAssetName}`, source: pycBuffer });
+			return `import { existsSync } from "node:fs";
 			import { fileURLToPath } from "node:url";
 			const rawPath = import.meta.ROLLUP_FILE_URL_${ref};
 			const normalizedPath = rawPath.startsWith("file:") ? fileURLToPath(rawPath) : rawPath;
@@ -213,7 +213,6 @@ function pythonBytecodePlugin(): Plugin {
 				unpackedPath,
 			});
 			export default resolvedPath;`;
-			return null;
 		},
 		closeBundle() {
 			if (depsTmpDir) {
@@ -228,7 +227,7 @@ export default defineConfig({
 		...resolveOptions,
 		plugins: [ViteYaml(), pythonBytecodePlugin()],
 		build: {
-      bytecode: isProduction ? { transformArrowFunctions: false } : false,
+			bytecode: isProduction ? { transformArrowFunctions: false } : false,
 			externalizeDeps: { exclude: [...externalizedEsmDeps] },
 			rollupOptions: {
 				output: {
