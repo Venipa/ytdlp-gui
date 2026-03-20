@@ -206,7 +206,7 @@ function pythonBytecodePlugin(): Plugin {
 			const rawPath = import.meta.ROLLUP_FILE_URL_${ref};
 			const normalizedPath = rawPath.startsWith("file:") ? fileURLToPath(rawPath) : rawPath;
 			const unpackedPath = normalizedPath.replace(/([\\\\/])app\\.asar([\\\\/])/i, "$1app.asar.unpacked$2");
-			const resolvedPath = existsSync(normalizedPath) ? normalizedPath : unpackedPath;
+			const resolvedPath = existsSync(unpackedPath) ? unpackedPath : normalizedPath;
 			console.log("PyWorker:", {
 				resolvedPath,
 				normalizedPath,
