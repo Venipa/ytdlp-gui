@@ -33,7 +33,7 @@ const PY_ASSET_RE = /\.py\?asset(&asarUnpack)?(?=&|$)/;
 const PY_REQUIREMENTS_PATH = resolve("requirements.txt");
 const PY_DEPS_ASSET_DIR = "resources/python-deps";
 
-const COMPILE_SCRIPT = "import py_compile\nimport sys\npy_compile.compile(sys.argv[1], cfile=sys.argv[2])\n";
+const COMPILE_SCRIPT = `import py_compile\nimport sys\npy_compile.compile(sys.argv[1], cfile=sys.argv[2], encoding="utf-8")\n`;
 
 function compilePyToPyc(pyPath: string): Buffer {
 	const outFile = resolve(tmpdir(), `ytdlp-${basename(pyPath, ".py")}-${Date.now()}.pycw`);

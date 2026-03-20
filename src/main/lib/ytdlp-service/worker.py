@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# encoding: utf-8
+# -*- coding: utf-8 -*-
 # SPDX-License-Identifier: LicenseRef-Proprietary
 # Copyright (c) 2026 Venipa. All rights reserved.
 #
