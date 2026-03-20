@@ -46,7 +46,7 @@ export class YTDLP {
 			this._state = YTDLP_STATE.ERROR;
 		});
 		const version = await this._service.getVersion();
-		appStore.set("ytdlp", { path: "internal", version, checkForUpdate: false });
+		appStore.set("ytdlp", { path: "internal", version });
 		this._state = YTDLP_STATE.READY;
 		log.debug("ytdlp python version:", { version });
 	}

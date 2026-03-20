@@ -3,12 +3,14 @@ export interface AppStore {
 		path: string;
 		version: string;
 		checkForUpdate: boolean;
-		useGlobal: boolean;
 		flags: {
 			nomtime: boolean;
 			custom: string;
 		};
 	};
+	updateChannel: "stable" | "beta";
+	autoUpdate: "prompt" | "auto" | "manual";
+	checkForUpdate: boolean;
 	download: { paths: string[]; selected: string };
 	features: {
 		clipboardMonitor: boolean;
@@ -18,5 +20,4 @@ export interface AppStore {
 	};
 	startMinimized: boolean;
 	startOnBoot: boolean;
-	beta: boolean;
 }

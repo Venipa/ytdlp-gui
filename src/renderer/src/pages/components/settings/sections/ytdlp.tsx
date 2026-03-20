@@ -7,7 +7,6 @@ import PageContent from "@renderer/pages/components/settings/page-content";
 import { SectionMeta } from "@renderer/pages/components/settings/utils";
 import { LucideDownload } from "lucide-react";
 const exampleFlags = [
-	"--concurrent-fragments 16",
 	"--cache-dir /path/to/cache",
 	{
 		label: "--no-mtime",

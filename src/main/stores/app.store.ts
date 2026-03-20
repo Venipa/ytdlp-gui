@@ -26,9 +26,10 @@ const store = createYmlStore<AppStore>("app-settings", {
 			concurrentDownloads: MAX_PARALLEL_DOWNLOADS,
 			advancedView: false,
 		},
+		updateChannel: "stable",
+		autoUpdate: "prompt",
 		startMinimized: false,
 		startOnBoot: true,
-		beta: false,
 	},
 });
 

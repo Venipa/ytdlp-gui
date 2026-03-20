@@ -1,6 +1,5 @@
-import { FormControl, FormField, FormItem, FormMessage } from "@renderer/components/ui/form";
-import { CheckboxDescription, CheckboxLabel, SwitchButton } from "@renderer/components/ui/switch-button";
 import GroupSection from "@renderer/pages/components/group-section";
+import SettingsSelect, { SettingsSelectItem } from "@renderer/pages/components/settings-select";
 import SettingsToggle from "@renderer/pages/components/settings-toggle";
 import { logger } from "@shared/logger";
 import { LucideCog } from "lucide-react";
@@ -23,22 +22,19 @@ export default function GeneralSection({ meta }: { meta: SectionMeta }) {
 	return (
 		<PageContent icon={Icon} title={meta.title} description={meta.description} tabId={meta.title}>
 			<div className='flex flex-col gap-6'>
-				<FormField
-					control={form.control}
-					name='beta'
-					render={({ field }) => (
-						<FormItem>
-							<FormControl>
-								<SwitchButton checked={field.value} onCheckedChange={field.onChange} disabled={field.disabled}>
-									<CheckboxLabel>Beta</CheckboxLabel>
-									<CheckboxDescription>Switch to beta channel, some features may be unstable or not available in the stable channel.</CheckboxDescription>
-								</SwitchButton>
-							</FormControl>
-							<FormMessage />
-						</FormItem>
-					)}
-				/>
-
+				{" "}
+				<GroupSection title='Updates'>
+					<SettingsSelect name='updateChannel' title='Update channel'>
+						<SettingsSelectItem value='stable' label='Stable' />
+						<SettingsSelectItem value='nightly' label='Nightly' />
+						<SettingsSelectItem value='source' label='Directly from source' />
+					</SettingsSelect>
+					<SettingsSelect name='autoUpdate' title='Auto update'>
+						<SettingsSelectItem value='prompt' label='Prompt for update' />
+						<SettingsSelectItem value='auto' label='Automatically update' />
+						<SettingsSelectItem value='manual' label='Manual update' />
+					</SettingsSelect>
+				</GroupSection>
 				<GroupSection title='Clipboard Monitor'>
 					<div className='flex flex-col gap-2'>
 						<SettingsToggle name='features.clipboardMonitor'>

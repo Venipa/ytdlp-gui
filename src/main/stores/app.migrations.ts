@@ -32,6 +32,15 @@ const appStoreMigrations: Migration<AppStore>[] = [
 			removeProperty(instance.store.ytdlp, "checkForUpdate");
 		},
 	},
+	{
+		version: 4,
+		hook(instance, currentVersion) {
+			instance.store.updateChannel = "stable";
+			instance.store.autoUpdate = "prompt";
+			removeProperty(instance.store, "checkForUpdate");
+			removeProperty(instance.store.ytdlp, "checkForUpdate");
+		},
+	},
 ];
 
 export default appStoreMigrations;
