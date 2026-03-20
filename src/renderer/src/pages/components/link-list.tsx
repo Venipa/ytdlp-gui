@@ -1,4 +1,14 @@
 import ButtonLoading from "@renderer/components/ui/ButtonLoading";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@renderer/components/ui/alert-dialog";
 import { Button } from "@renderer/components/ui/button";
 import ClickableText from "@renderer/components/ui/clickable-text";
 import { ProgressCircle } from "@renderer/components/ui/progress-circle";
@@ -30,9 +40,18 @@ import { YTDLDownloadStatus, YTDLItem } from "ytdlp-gui/types";
 import { useSearchStore } from "./add-link.store";
 import FileSheet from "./file-sheet";
 const log = createLogger("LinkListItem");
+const padStatusItem = (status: string | number, type: "percent" | "speed" | "eta") => {
+	const statusString = String(status);
+	if (type === "percent") return statusString.padStart(6, " ") + "%";
+	if (type === "speed") return statusString.padStart(12, " ");
+	if (type === "eta") return statusString.padStart(8, " ") + "ETA";
+	return statusString;
+};
+
 export function LinkListItem(props: YTDLItem & { key: any }) {
 	const { id, error: ytderror, state, filesize: fsize, type, source, title, filepath, url } = props;
 	const error = useMemo(() => ytderror, [ytderror]);
+	const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
 	const [status, setDownloadStatus] = useState<YTDLDownloadStatus>();
 	const { mutateAsync: openPath } = trpc.internals.openPath.useMutation();
 	const { mutateAsync: retryFromId } = trpc.ytdl.retry.useMutation();
@@ -49,9 +68,29 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
 	const downloading = useMemo(() => state === "downloading", [state, status]);
 	const processingMeta = useMemo(() => state === "fetching_meta", [state, status]);
 	const queued = useMemo(() => state === "queued", [state, status]);
+	const isDownloadedItem = useMemo(() => completed && !!filepath, [completed, filepath]);
 	const faviconUrl = useMemo(() => source && `https://icons.duckduckgo.com/ip3/${source.replace(TrimSubdomainRegex, "")}.ico`, [source]);
+	const handleDeleteDbOnly = () => deleteFromId({ id, deleteFile: false });
+	const handleDeleteWithFile = () => deleteFromId({ id, deleteFile: true });
+	const handleDeleteClick = () => {
+		if (isDownloadedItem) {
+			setShowDeleteDialog(true);
+			return;
+		}
+		handleDeleteDbOnly();
+	};
+	const downloadStatus = useMemo(() => {
+		if (queued) return null;
+		if (downloading && status)
+			return {
+				percent: padStatusItem(status.percent?.toFixed(0) ?? "", "percent"),
+				speed: padStatusItem(status.speed ?? "", "speed"),
+				eta: padStatusItem(status.eta ?? "", "eta"),
+			};
+		return null;
+	}, [queued, downloading, status]);
 	return (
-		<div className='h-10 rounded-md hover:bg-muted/60 grid grid-cols-[40px_1fr_minmax(100px,_auto)] gap-2 items-center relative cursor-default group/item flex-shrink-0 select-none'>
+		<div className='h-12 hover:bg-muted/60 grid grid-cols-[40px_1fr_minmax(100px,auto)] gap-2 items-center relative cursor-default group/item shrink-0 select-none'>
 			<div className='flex flex-col size-10 items-center justify-center'>
 				{error ? (
 					<QTooltip side='right' content={"An error occurred while downloading."}>
@@ -96,6 +135,24 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
 				<div className='grid grid-rows-[20px_12px] items-center cursor-pointer'>
 					<div className='text-sm truncate leading-none'>{title}</div>
 					<div className='flex gap-1 items-center text-xs text-muted-foreground leading-none'>
+						{downloadStatus && (
+							<>
+								<span className='w-[40px] text-right'>{downloadStatus.percent}</span>
+								<DotIcon className='size-2' />
+								{downloadStatus.speed && (
+									<>
+										<span className='w-[80px] text-right'>{downloadStatus.speed}</span>
+										<DotIcon className='size-2' />
+									</>
+								)}
+								{downloadStatus.eta && (
+									<>
+										<span className='w-[80px] text-right'>{downloadStatus.eta}</span>
+										<DotIcon className='size-2' />
+									</>
+								)}
+							</>
+						)}
 						{!error && filesize ? (
 							<>
 								<span className='w-[60px]'>{filesize}</span>
@@ -170,7 +227,7 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
 						variant={"ghost"}
 						size={"sm"}
 						className='px-2 text-red-500 hover:text-red-400 opacity-0 group-hover/item:opacity-100'
-						onClick={() => deleteFromId(id)}
+						onClick={handleDeleteClick}
 						loading={deleteLoading}
 						fixWidth>
 						<LucideFileX className='stroke-current' />
@@ -181,13 +238,49 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
 						variant={"ghost"}
 						size={"sm"}
 						className='px-2 text-red-500 hover:text-red-400 opacity-0 group-hover/item:opacity-100'
-						onClick={() => deleteFromId(id)}
+						onClick={handleDeleteClick}
 						loading={deleteLoading}
 						fixWidth>
 						<LucideX className='stroke-current' />
 					</ButtonLoading>
 				)}
 			</div>
+			<AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Delete downloaded file too?</AlertDialogTitle>
+						<AlertDialogDescription>
+							Choose whether to also remove the file from disk. If you skip this, only the download entry is removed from the list.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel
+							className='h-10'
+							onClick={(ev) => {
+								ev.preventDefault();
+								setShowDeleteDialog(false);
+							}}>
+							Cancel
+						</AlertDialogCancel>
+						<AlertDialogAction
+							className='h-10'
+							onClick={(ev) => {
+								ev.preventDefault();
+								handleDeleteWithFile().finally(() => setShowDeleteDialog(false));
+							}}>
+							Delete File & Entry
+						</AlertDialogAction>
+						<AlertDialogAction
+							className='h-10'
+							onClick={(ev) => {
+								ev.preventDefault();
+								handleDeleteDbOnly().finally(() => setShowDeleteDialog(false));
+							}}>
+							Keep File
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }
@@ -239,7 +332,7 @@ export default function LinkList(props: { className?: string }) {
 	const hasSearch = useMemo(() => !!search?.length, [search]);
 	return (
 		<div className={cn("flex flex-col gap-2 relative", props.className)}>
-			<VList className='grow relative flex flex-col py-2.5 px-2' style={{ height: "100%" }}>
+			<VList className='grow relative flex flex-col pb-6' style={{ height: "100%" }}>
 				{isFetching && <SuspenseLoader className='absolute bg-background inset-0' />}
 				{filteredItems?.map((d) => (
 					<div className='h-12' key={d.id}>

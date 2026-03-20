@@ -33,3 +33,7 @@ $ pnpm build:mac
 # For Linux
 $ pnpm build:linux
 ```
+
+## License
+
+Licensing is split: most of the project is **AGPL-3.0** ([LICENSE](LICENSE)); specific files are proprietary. See [LICENSING.md](LICENSING.md) for the list and terms.

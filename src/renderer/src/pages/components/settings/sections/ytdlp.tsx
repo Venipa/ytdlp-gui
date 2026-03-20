@@ -29,6 +29,10 @@ const exampleFlags = [
 		label: "--concurrent-fragments 16",
 		hint: "The --concurrent-fragments 16 flag in yt-dlp is used to set the number of concurrent fragments to 16",
 	},
+	{
+		label: "--cookies",
+		hint: "The --cookies flag in yt-dlp is used to set the cookies for the downloaded file",
+	},
 ];
 
 export const meta: SectionMeta = {
@@ -44,8 +48,9 @@ export default function YtdlpSection({ meta }: { meta: SectionMeta }) {
 	return (
 		<PageContent icon={Icon} title={meta.title} description={meta.description} tabId={meta.title}>
 			<div className='flex flex-col gap-6'>
-				<div className='flex flex-col gap-2'>
-					<h2 className='text-lg font-medium'>YTDLP</h2>
+				<div className='flex flex-col gap-0'>
+					<h2 className='text-lg font-medium'>{meta.title}</h2>
+					<p className='text-xs text-muted-foreground'>{meta.description}</p>
 				</div>
 
 				<GroupSection title='Flags' className='gap-6'>

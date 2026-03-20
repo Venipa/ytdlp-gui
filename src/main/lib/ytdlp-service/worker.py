@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-Proprietary
+# Copyright (c) 2026 Venipa. All rights reserved.
+#
+# This file is proprietary. It may not be copied, modified, distributed, or used
+# except by the copyright holder (Venipa) without explicit written permission.
+# Repository licensing: see LICENSING.md at the project root.
+
 """
 JSON-RPC worker for yt-dlp operations.
 Communicates via JSON typed RPC protocol over stdin/stdout.
 """
-import sys
 import json
+import os
+import sys
 import traceback
-from typing import Dict, Any, Optional, Callable, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 # Assume we have yt-dlp installed
 try:
@@ -15,6 +23,80 @@ try:
 except ImportError:
     YoutubeDL = None
     YTDLP_VERSION = None
+
+WORKER_ID = os.environ.get("YTDLP_WORKER_ID")
+
+
+def write_json(payload: Dict[str, Any]) -> None:
+    """Write a JSON object as one line and flush."""
+    sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    sys.stdout.flush()
+
+
+def create_progress_hook(request_id: str):
+    def _progress_hook(progress: Dict[str, Any]) -> None:
+        status = progress.get("status")
+        info = progress.get("info_dict") or {}
+        video_id = info.get("id") or "unknown"
+        total_bytes = progress.get("total_bytes") or progress.get("total_bytes_estimate")
+        downloaded_bytes = progress.get("downloaded_bytes")
+        percent_value = None
+        speed = None
+        eta = None
+        if isinstance(total_bytes, (int, float)) and total_bytes > 0 and isinstance(downloaded_bytes, (int, float)):
+            percent_value = max(0.0, min(100.0, (float(downloaded_bytes) / float(total_bytes)) * 100.0))
+
+        if status == "finished":
+            filename = progress.get("filename") or info.get("title") or "file"
+            line = f"[download] {video_id}: 100% of {filename} in 00:00"
+        elif status == "downloading":
+            percent = (progress.get("_percent_str") or (f"{percent_value:.1f}%" if percent_value is not None else "0.0%")).strip()
+            total = (progress.get("_total_bytes_str") or progress.get("_total_bytes_estimate_str") or "").strip()
+            speed = (progress.get("_speed_str") or "").strip()
+            eta = (progress.get("_eta_str") or "").strip()
+            if eta.upper().startswith("ETA"):
+                eta = eta[3:].lstrip(": ").strip()
+            if eta.upper().endswith("ETA"):
+                eta = eta[:-3].rstrip()
+
+            message_parts = [f"{percent} of {total}".strip()]
+            if speed:
+                message_parts.append(f"at {speed}")
+            if eta:
+                message_parts.append(f"ETA {eta}")
+            fragment_index = progress.get("_fragment_index")
+            fragment_count = progress.get("_fragment_count")
+            if fragment_index is not None and fragment_count is not None:
+                message_parts.append(f"(frag {fragment_index}/{fragment_count})")
+            line = f"[download] {video_id}: {' '.join(message_parts)}"
+        else:
+            return
+
+        write_json(
+            {
+                "__ytdlp_progress__": True,
+                "id": request_id,
+                "line": line,
+                "workerId": WORKER_ID,
+                "status": status,
+                "videoId": video_id,
+                "percent": percent_value,
+                "speed": speed,
+                "eta": eta,
+                "fragmentIndex": progress.get("_fragment_index"),
+                "fragmentCount": progress.get("_fragment_count"),
+            }
+        )
+
+    return _progress_hook
+
+
+def merge_options(options: Any) -> Dict[str, Any]:
+    """Normalize options and keep yt-dlp stderr/stdout clean for RPC parsing."""
+    opts = dict(options) if isinstance(options, dict) else {}
+    opts.setdefault("quiet", True)
+    opts.setdefault("no_warnings", True)
+    return opts
 
 
 
@@ -59,7 +141,7 @@ def handle_ready(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
 def handle_extract_info(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """Handle extract_info RPC call."""
     url = params.get("url")
-    options = params.get("options", {})
+    options = merge_options(params.get("options", {}))
 
     if not url:
         return rpc_response(id, error="Missing required parameter: url")
@@ -97,7 +179,7 @@ def handle_quit(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
 def handle_download(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """Handle download RPC call."""
     url = params.get("url")
-    options = params.get("options", {})
+    options = merge_options(params.get("options", {}))
 
     if not url:
         return rpc_response(id, error="Missing required parameter: url")
@@ -106,6 +188,8 @@ def handle_download(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
         return rpc_response(id, error="yt-dlp not installed.")
 
     try:
+        existing_hooks = options.get("progress_hooks") if isinstance(options.get("progress_hooks"), list) else []
+        options["progress_hooks"] = [*existing_hooks, create_progress_hook(id)]
         with YoutubeDL(options) as ydl:
             ydl.download([url])
         return rpc_response(id, result="Download completed")
@@ -154,8 +238,7 @@ def main() -> None:
                 # Startup handshake for the TS wrapper.
                 # The wrapper waits for id="ready" before sending calls.
                 resp = rpc_response(id="ready", result={"version": version})
-                sys.stdout.write(json.dumps(resp, ensure_ascii=False) + "\n")
-                sys.stdout.flush()
+                write_json(resp)
                 initialized = True
 
             line = sys.stdin.readline()
@@ -174,8 +257,7 @@ def main() -> None:
                     id="",
                     error=f"Invalid JSON: {str(e)}"
                 )
-                sys.stdout.write(json.dumps(resp, ensure_ascii=False) + "\n")
-                sys.stdout.flush()
+                write_json(resp)
                 continue
 
             # Extract RPC request fields
@@ -220,8 +302,7 @@ def main() -> None:
                         )
 
             # Send JSON response
-            sys.stdout.write(json.dumps(resp, ensure_ascii=False) + "\n")
-            sys.stdout.flush()
+            write_json(resp)
 
         except KeyboardInterrupt:
             break
@@ -232,8 +313,7 @@ def main() -> None:
                 error=f"Fatal error: {type(e).__name__}: {str(e)}\n{tb}"
             )
             try:
-                sys.stdout.write(json.dumps(resp) + "\n")
-                sys.stdout.flush()
+                write_json(resp)
             except Exception:
                 pass
             break

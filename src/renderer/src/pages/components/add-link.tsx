@@ -50,9 +50,15 @@ export default function AddLink({ showDownloadPath, children }: { showDownloadPa
 	}, [mediaUrl, mediaType]);
 	const [{ showAddLink }, setAddConfig] = useAddLinkStore();
 	logger.debug("add-link", { mediaUrl });
+	const handlePaste = useCallback((ev: React.ClipboardEvent<HTMLTextAreaElement>) => {
+		ev.preventDefault();
+		const textData = ev.clipboardData.getData("text");
+		if (!textData) return;
+		setMediaUrl((s) => s.replace(/\r?\n$/, "") + "\n" + textData.trim() + "\n");
+	}, []);
 	return (
 		<>
-			<div className={cn("flex flex-col gap-4 pt-4", showAddLink && " bg-muted/20 border-b border-b-muted")}>
+			<div className={cn("flex flex-col gap-4 pt-4", (showAddLink && " bg-muted/20 border-b border-b-muted") || "mb-4")}>
 				<div className='flex justify-start items-center px-4 gap-2'>
 					<Input placeholder='Search...' value={search ?? ""} onChange={(ev) => setSearch(ev.target.value)} />
 					<div className='w-px h-[80%] bg-muted/60'></div>
@@ -70,6 +76,7 @@ export default function AddLink({ showDownloadPath, children }: { showDownloadPa
 									className='placeholder:text-xs text-[0.775rem]'
 									value={mediaUrl}
 									onChange={(ev) => setMediaUrl(ev.target.value)}
+									onPaste={handlePaste}
 									rows={5}
 									role='textbox'
 								/>

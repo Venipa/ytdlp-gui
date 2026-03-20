@@ -23,23 +23,45 @@ export default function SelectDownloadBox({ value: defaultValue, onValueChange, 
 	const { settings, setSetting } = useApp();
 	const [open, setOpen] = React.useState(false);
 	const [value, setValue] = React.useState(settings.download.selected ?? defaultValue);
+	const triggerRef = React.useRef<HTMLButtonElement | null>(null);
+	const [popoverWidth, setPopoverWidth] = React.useState<number>();
 	const form = useFormContext();
 	const { mutateAsync: addDownloadPath, isLoading: addDownloadPathLoading } = trpc.settings.addDownloadPath.useMutation();
 	const { mutateAsync: deleteDownloadPath, isLoading: deleteDownloadPathLoading } = trpc.settings.deleteDownloadPath.useMutation();
 	const setDownloadPath = React.useMemo(() => (path: string) => setSetting("download.selected", path), [setSetting]);
 	const { mutateAsync: openPath } = trpc.internals.openPath.useMutation();
 
+	React.useEffect(() => {
+		const element = triggerRef.current;
+		if (!element) return;
+
+		const syncPopoverWidth = () => setPopoverWidth(element.getBoundingClientRect().width);
+		syncPopoverWidth();
+
+		const resizeObserver = new ResizeObserver(syncPopoverWidth);
+		resizeObserver.observe(element);
+		window.addEventListener("resize", syncPopoverWidth);
+
+		return () => {
+			resizeObserver.disconnect();
+			window.removeEventListener("resize", syncPopoverWidth);
+		};
+	}, []);
+
 	const isMutating = deleteDownloadPathLoading || addDownloadPathLoading;
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
-				<Button variant='outline' role='combobox' aria-expanded={open} className='flex gap-2 items-center flex-auto w-full justify-start'>
-					<LucideFolder className='flex-shrink-0 size-4 stroke-none fill-current' />
+				<Button ref={triggerRef} variant='outline' role='combobox' aria-expanded={open} className='flex gap-2 items-center flex-auto w-full justify-start'>
+					<LucideFolder className='shrink-0 size-4 stroke-none fill-current' />
 					<span className='flex-auto text-start truncate text-xs'>{value ? settings.download.selected : "Select download path..."}</span>
 					<CaretSortIcon className='opacity-50 size-4' />
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent sideOffset={-64} className='p-0 w-[390px]'>
+			<PopoverContent
+				sideOffset={6}
+				style={popoverWidth ? { width: `${popoverWidth}px` } : undefined}
+				className='z-50 p-0 data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100 data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[side=bottom]:slide-in-from-top-2'>
 				<Command>
 					<CommandInput placeholder='Select download path...' className='h-9' />
 					<CommandList>

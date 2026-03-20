@@ -1,4 +1,3 @@
-import { Badge } from "@renderer/components/ui/badge";
 import GroupSection from "@renderer/pages/components/group-section";
 import SettingsInput from "@renderer/pages/components/settings-input";
 import { useSettingsForm } from "@renderer/pages/components/settings/form";
@@ -28,33 +27,6 @@ export default function DownloaderSection({ meta }: { meta: SectionMeta }) {
 						max={window.api.maxParallelism}
 						title={"Max concurrent downloads"}
 						hint={`Recommended: 2`}></SettingsInput>
-				</div>
-			</GroupSection>
-			<GroupSection title='YTDLP Commmand Flags'>
-				<div className='flex flex-col gap-2'>
-					<SettingsInput
-						name='ytdlp.flags.custom'
-						title={"Custom arguments, check yt-dlp docs for more info ..."}
-						hint={
-							<div className='text-muted-foreground text-xs flex flex-wrap gap-1'>
-								{exampleFlags.map((flag) => (
-									<Badge
-										variant='pre'
-										className='cursor-pointer hover:bg-muted/40'
-										onClick={() =>
-											form.setValue("ytdlp.flags.custom", form.getValues().ytdlp.flags.custom ? `${form.getValues().ytdlp.flags.custom} ${flag}` : flag, {
-												shouldDirty: true,
-												shouldTouch: true,
-												shouldValidate: true,
-											})
-										}
-										key={flag}>
-										{flag}
-									</Badge>
-								))}
-							</div>
-						}
-					/>
 				</div>
 			</GroupSection>
 		</PageContent>

@@ -1,11 +1,11 @@
-import YtdlpPythonService from "@main/lib/ytdlp-service/python";
+import YtdlpWorkerManager from "@main/lib/ytdlp-service/manager";
 import { executableIsAvailable } from "../bin.utils";
 const createYtdlpService = () => {
 	const pythonPath = executableIsAvailable("python");
 	if (!pythonPath) {
 		throw new Error("Python not found");
 	}
-	const service = new YtdlpPythonService({
+	const service = new YtdlpWorkerManager({
 		pythonPath: pythonPath,
 	});
 	process.on("exit", () => {

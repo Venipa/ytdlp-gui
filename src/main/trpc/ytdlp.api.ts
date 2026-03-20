@@ -1,4 +1,4 @@
-import { statSync } from "fs";
+import { existsSync, rmSync, statSync } from "fs";
 import path from "path";
 import { YtdlpOptions } from "@main/lib/ytdlp-service/ytdlp-options";
 import { db } from "@main/stores/app-database";
@@ -18,7 +18,28 @@ import { z } from "zod";
 import { pushLogToClient } from "./events.ee";
 import { publicProcedure, router } from "./trpc";
 import { MAX_PARALLEL_DOWNLOADS, ytdl } from "./ytdlp.core";
-import { pushToastToClient, ytdlpDownloadQueue, ytdlpEvents } from "./ytdlp.ee";
+import { pushToastToClient, ytdlpEvents } from "./ytdlp.ee";
+
+const AUDIO_MEDIA_TYPES = ["audio-bestaudio", "audio-mp3", "audio-m4a", "audio-opus"] as const;
+
+const MEDIA_TYPE_TO_FORMAT: Record<YTDLMediaType, string | null> = {
+	auto: null,
+	"video-best": "bestvideo*+bestaudio/best",
+	"video-4k": "bestvideo*[height<=2160]+bestaudio/best",
+	"video-2k": "bestvideo*[height<=2048]+bestaudio/best",
+	"video-1440p": "bestvideo*[height<=1440]+bestaudio/best",
+	"video-1080p": "bestvideo*[height<=1080]+bestaudio/best",
+	"video-720p": "bestvideo*[height<=720]+bestaudio/best",
+	"video-480p": "bestvideo*[height<=480]+bestaudio/best",
+	"audio-bestaudio": "bestaudio/best",
+	"audio-mp3": "bestaudio/best",
+	"audio-m4a": "bestaudio[ext=m4a]/bestaudio/best",
+	"audio-opus": "bestaudio[acodec*=opus]/bestaudio/best",
+};
+
+function isAudioMediaType(type: YTDLMediaType): boolean {
+	return AUDIO_MEDIA_TYPES.includes(type as (typeof AUDIO_MEDIA_TYPES)[number]);
+}
 
 class DownloadQueueManager {
 	private activeDownloads = new Map<number, AbortController>();
@@ -37,18 +58,15 @@ class DownloadQueueManager {
 			MAX_PARALLEL_DOWNLOADS,
 		).then((files) => files.filter((s) => !!s));
 
-		const asyncResult = ytdlpDownloadQueue.addAll(
-			files.map(
-				(f) => () =>
-					this.processDownload(f.dbFile, f.videoInfo).catch((err) => {
-						log.error("failed to download media", err);
-						return Promise.reject(err);
-					}),
+		await Promise.all(
+			files.map((f) =>
+				this.processDownload(f.dbFile, f.videoInfo).catch((err) => {
+					log.error("failed to download media", err);
+					return Promise.reject(err);
+				}),
 			),
 		);
-
-		if (ytdlpDownloadQueue.isPaused) ytdlpDownloadQueue.start();
-		return await asyncResult;
+		return files;
 	}
 
 	private async addToDatabase(urls: string[], type: YTDLMediaType = "auto"): Promise<SelectDownload[]> {
@@ -124,7 +142,7 @@ class DownloadQueueManager {
 		let videoInfo: VideoInfo | null = null;
 		try {
 			videoInfo = await ytdl.extractInfo(url, {
-				...(dbFile.type === "audio" && { format: "bestaudio/best" }),
+				...(isAudioMediaType((dbFile.type ?? "auto") as YTDLMediaType) && { format: "bestaudio/best" }),
 			});
 			log.debug("fetchNewMetadata", { videoInfoId: videoInfo.id });
 		} catch (videoInfoError) {
@@ -133,9 +151,11 @@ class DownloadQueueManager {
 
 		if (!videoInfo) {
 			await this.deleteDownloadItem(dbFile);
+			const videoNotFoundMessage = "URL not supported, video not found or authentication required";
+			pushToastToClient(`${dbFile.title}`, "error", videoNotFoundMessage);
 			throw new TRPCError({
 				code: "NOT_FOUND",
-				message: "URL not supported or video not found",
+				message: videoNotFoundMessage,
 			});
 		}
 		if (!videoInfo.filename) {
@@ -159,7 +179,7 @@ class DownloadQueueManager {
 
 	private async deleteDownloadItem(dbFile: SelectDownload) {
 		const result = await queries.downloads.deleteDownload(dbFile.id);
-		if (result.rowsAffected === 1) {
+		if (result.length) {
 			dbFile.state = "deleted";
 			ytdlpEvents.emit("list", [dbFile]);
 			ytdlpEvents.emit("status", {
@@ -209,12 +229,14 @@ class DownloadQueueManager {
 
 	private async executeDownload(dbFile: SelectDownload, videoInfo: VideoInfo, controller: AbortController) {
 		const settings = appStore.store.ytdlp;
+		const selectedMediaType = (dbFile.type ?? "auto") as YTDLMediaType;
+		const selectedFormat = MEDIA_TYPE_TO_FORMAT[selectedMediaType] ?? "best";
 		const ytdlpOptions: YtdlpOptions = {
-			format: dbFile.type === "audio" ? "bestaudio/best" : "best",
+			format: selectedFormat,
 			outtmpl: dbFile.filepath,
 		};
 
-		if (dbFile.type === "audio") {
+		if (selectedMediaType === "audio-mp3") {
 			ytdlpOptions.postprocessors = [
 				{
 					key: "FFmpegExtractAudio",
@@ -252,8 +274,8 @@ class DownloadQueueManager {
 				ytdlpEvents.emit("download", {
 					id: dbFile.id,
 					percent: event.percent ?? 0,
-					speed: event.speed,
-					eta: event.eta,
+					speed: event.speed ?? "",
+					eta: event.eta ?? "",
 					fragmentIndex: event.fragmentIndex,
 					fragmentCount: event.fragmentCount,
 					message: event.message,
@@ -348,12 +370,26 @@ const downloadQueueManager = new DownloadQueueManager();
 const log = logger.child("ytdlp.api");
 export const ytdlpRouter = router({
 	state: publicProcedure.query(() => ytdl.state.toString()),
-	checkUpdates: publicProcedure.mutation(() => ytdl.checkUpdates()),
 	downloadMedia: publicProcedure
 		.input(
 			z.object({
 				url: z.string().url().array(),
-				type: z.enum(["video", "audio", "auto"]).default("auto"),
+				type: z
+					.enum([
+						"auto",
+						"video-best",
+						"video-4k",
+						"video-2k",
+						"video-1440p",
+						"video-1080p",
+						"video-720p",
+						"video-480p",
+						"audio-bestaudio",
+						"audio-mp3",
+						"audio-m4a",
+						"audio-opus",
+					])
+					.default("auto"),
 			}),
 		)
 		.mutation(async ({ input: { url: urls, type } }) => {
@@ -383,18 +419,40 @@ export const ytdlpRouter = router({
 			},
 		});
 		if (!dbFile) throw new TRPCError({ code: "NOT_FOUND", message: "id not found in database" });
-		ytdlpEvents.emit("add", dbFile.url);
+		ytdlpEvents.emit("add", dbFile.url, dbFile.type);
 	}),
-	delete: publicProcedure.input(z.number()).mutation(async ({ input: id }) => {
-		const result = await queries.downloads.deleteDownload(id);
-		if (!result.rowsAffected) throw new TRPCError({ code: "NOT_FOUND", message: "id not found in database" });
-		ytdlpEvents.emit("list", [
-			{
-				id: id,
-				state: "deleted",
-			},
-		]);
-	}),
+	delete: publicProcedure
+		.input(
+			z
+				.union([
+					z.number(),
+					z.object({
+						id: z.number(),
+						deleteFile: z.boolean().default(false),
+					}),
+				])
+				.transform((input) => (typeof input === "number" ? { id: input, deleteFile: false } : input)),
+		)
+		.mutation(async ({ input: { id, deleteFile } }) => {
+			const dbFile = await queries.downloads.findDownloadById(id);
+			if (!dbFile) throw new TRPCError({ code: "NOT_FOUND", message: "id not found in database" });
+			if (deleteFile && dbFile.filepath && existsSync(dbFile.filepath)) {
+				try {
+					rmSync(dbFile.filepath, { force: true });
+				} catch (error) {
+					log.error("failed to delete file from disk", { id, filepath: dbFile.filepath, error });
+					throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "failed to delete file from disk" });
+				}
+			}
+			const result = await queries.downloads.deleteDownload(id);
+			if (!result.length) throw new TRPCError({ code: "NOT_FOUND", message: "id not found in database" });
+			ytdlpEvents.emit("list", [
+				{
+					id: id,
+					state: "deleted",
+				},
+			]);
+		}),
 	onDownload: publicProcedure.subscription(() => {
 		return observable<YTDLDownloadStatus>((emit) => {
 			function onStatusChange(data: any) {
@@ -527,8 +585,8 @@ export const ytdlpRouter = router({
 	}),
 } as const);
 
-async function handleYtAddEvent(url: string) {
-	await downloadQueueManager.addToQueue([url], "auto");
+async function handleYtAddEvent(url: string, type: YTDLMediaType = "auto") {
+	await downloadQueueManager.addToQueue([url], type);
 }
 
 ytdlpEvents.on("add", handleYtAddEvent);

@@ -1,6 +1,7 @@
 import { platform as appPlatform } from "@electron-toolkit/utils";
 import createYtdlpService from "@main/lib/ytdlp-service";
-import YtdlpPythonService, { YtdlpOutputEvent } from "@main/lib/ytdlp-service/python";
+import YtdlpWorkerManager from "@main/lib/ytdlp-service/manager";
+import { YtdlpOutputEvent } from "@main/lib/ytdlp-service/python";
 import { appStore } from "@main/stores/app.store";
 import { Logger } from "@shared/logger";
 import { VideoInfo } from "yt-dlp-wrap/types";
@@ -17,12 +18,27 @@ export enum YTDLP_STATE {
 }
 export class YTDLP {
 	private _state: YTDLP_STATE = YTDLP_STATE.NONE;
-	private _service!: YtdlpPythonService;
+	private _service!: YtdlpWorkerManager;
+	private initializePromise: Promise<void> | null = null;
 	get state() {
 		return this._state;
 	}
 	constructor() {}
 	async initialize() {
+		if (this._state === YTDLP_STATE.READY && this._service) {
+			return;
+		}
+		if (this.initializePromise) {
+			return await this.initializePromise;
+		}
+		this.initializePromise = this.initializeInternal();
+		try {
+			await this.initializePromise;
+		} finally {
+			this.initializePromise = null;
+		}
+	}
+	private async initializeInternal() {
 		log.info("initializing...");
 		this._service = createYtdlpService();
 		await this._service.waitReady().catch((err) => {
@@ -33,13 +49,6 @@ export class YTDLP {
 		appStore.set("ytdlp", { path: "internal", version, checkForUpdate: false });
 		this._state = YTDLP_STATE.READY;
 		log.debug("ytdlp python version:", { version });
-	}
-	async checkUpdates() {
-		return {
-			updated: false,
-			currentVersion: appStore.store.ytdlp.version,
-			previousVersion: appStore.store.ytdlp.version ?? "-",
-		};
 	}
 	async extractInfo(url: string, options?: Record<string, unknown>): Promise<VideoInfo> {
 		if (!this._service) {

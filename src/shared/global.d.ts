@@ -13,17 +13,27 @@ declare module "*?asset&asarUnpack" {
 }
 
 declare module "ytdlp-gui/types" {
-	export type YTDLMediaType = "video" | "audio" | "auto";
+	export type YTDLMediaType =
+		| "auto"
+		| "video-best"
+		| "video-4k"
+		| "video-2k"
+		| "video-1440p"
+		| "video-1080p"
+		| "video-720p"
+		| "video-480p"
+		| "audio-bestaudio"
+		| "audio-mp3"
+		| "audio-m4a"
+		| "audio-opus";
 	export type YTDLState = "progressing" | "done";
 	export type YTDLStatus = { action: string; data?: any; state: YTDLState } | { action: string; error: any; state: YTDLState };
-	export type YTDLDownloadStatus =
-		| {
-				percent?: number;
-				totalSize?: string;
-				currentSpeed?: string;
-				eta?: string;
-		  }
-		| { percent: number; error: any };
+	export type YTDLDownloadStatus = {
+		percent: number;
+		totalSize?: string;
+		speed: string;
+		eta: string;
+	};
 
 	export interface YTDLItem {
 		id: number;

@@ -8,9 +8,10 @@ import { z } from "zod";
 import { useApp } from "../app-context";
 
 const settingsSchema = z.object({
-	beta: z.coerce.boolean(),
 	startMinimized: z.coerce.boolean(),
 	startOnBoot: z.coerce.boolean(),
+	updateChannel: z.enum(["stable", "beta"]).default("stable"),
+	autoUpdate: z.enum(["prompt", "auto", "manual"]).default("prompt"),
 	features: z.object({
 		concurrentDownloads: z.coerce.number().min(1).max(window.api.maxParallelism),
 		clipboardMonitor: z.coerce.boolean(),
@@ -18,8 +19,6 @@ const settingsSchema = z.object({
 		advancedView: z.coerce.boolean(),
 	}),
 	ytdlp: z.object({
-		updateChannel: z.enum(["stable", "nightly", "source"]),
-		autoUpdate: z.enum(["prompt", "auto", "manual"]),
 		flags: z
 			.object({
 				custom: z
@@ -36,8 +35,6 @@ const settingsSchema = z.object({
 						nomtime: true,
 					},
 			),
-		useGlobal: z.coerce.boolean(),
-		checkForUpdate: z.coerce.boolean(),
 	}),
 });
 type SettingsValues = z.infer<typeof settingsSchema>;

@@ -38,6 +38,9 @@ const AppContextProvider: Provider<AppContext> = (({ value, ...props }) => {
 			if (!messageType) return;
 			if (messageType === "default") toast(message, { description });
 			else toast[messageType](message, { description });
+			if (messageType === "error") {
+				logger.error("An error occurred", { message, description });
+			}
 		},
 	});
 	const [, setAddLinkContent] = useLinkBoxStore();

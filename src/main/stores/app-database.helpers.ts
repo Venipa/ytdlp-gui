@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, InferInsertModel, InferSelectModel, isNotNull, like, not } from "drizzle-orm";
+import { InferInsertModel, InferSelectModel, and, desc, eq, inArray, isNotNull, like, not } from "drizzle-orm";
 import { omit } from "lodash";
 import { db } from "./app-database";
 import { downloads } from "./app-database.schema";
@@ -41,7 +41,7 @@ function updateDownload(id: SelectDownload["id"], item: SelectDownload) {
 		.then(([s]) => s);
 }
 function deleteDownload(id: SelectDownload["id"]) {
-	return db.delete(downloads).where(eq(downloads.id, id));
+	return db.delete(downloads).where(eq(downloads.id, id)).returning();
 }
 
 export const queries = {
