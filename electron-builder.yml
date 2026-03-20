@@ -41,7 +41,7 @@ asar:
   smartUnpack: true
 asarUnpack:
   - resources/**
-  - out/main/**/*.pyc
+  - out/main/**/*.pycw
   - build/*.ico
   - build/*.png
   - build/*.jpg

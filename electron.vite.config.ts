@@ -36,7 +36,7 @@ const PY_DEPS_ASSET_DIR = "resources/python-deps";
 const COMPILE_SCRIPT = "import py_compile\nimport sys\npy_compile.compile(sys.argv[1], cfile=sys.argv[2])\n";
 
 function compilePyToPyc(pyPath: string): Buffer {
-	const outFile = resolve(tmpdir(), `ytdlp-${basename(pyPath, ".py")}-${Date.now()}.pyc`);
+	const outFile = resolve(tmpdir(), `ytdlp-${basename(pyPath, ".py")}-${Date.now()}.pycw`);
 	const scriptPath = resolve(tmpdir(), "ytdlp-compile-worker.py");
 	writeFileSync(scriptPath, COMPILE_SCRIPT);
 	try {
@@ -199,8 +199,8 @@ function pythonBytecodePlugin(): Plugin {
 			}
 
 			const pycBuffer = compilePyToPyc(pyPath);
-			const workerAssetName = `${relative(resolve("src/main"), pyPath).replace(/\\/g, "/").replace(/\//g, "__").replace(/\.py$/, "")}.pyc`;
-			const ref = this.emitFile({ type: "asset", fileName: `chunks/resources/python-workers/${workerAssetName}`, source: pycBuffer });
+			const workerAssetName = `${relative(resolve("src/main"), pyPath).replace(/\\/g, "/").replace(/\//g, "__").replace(/\.py$/, "")}.pycw`;
+			const ref = this.emitFile({ type: "asset", fileName: `resources/python-workers/${workerAssetName}`, source: pycBuffer });
 			return `import { existsSync } from "node:fs";
 			import { fileURLToPath } from "node:url";
 			const rawPath = import.meta.ROLLUP_FILE_URL_${ref};
