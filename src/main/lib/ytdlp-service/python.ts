@@ -7,7 +7,6 @@
  * Repository licensing: see LICENSING.md at the project root.
  */
 
-import { execSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { existsSync, mkdirSync } from "node:fs";
 import path, { dirname, join, resolve } from "node:path";
@@ -111,9 +110,14 @@ class YtdlpPythonWorkerService {
 			throw new Error("Python path not found");
 		}
 		const pythonPath = join(pythonPathEnv, platform.isWindows ? "Scripts" : "bin", platform.isWindows ? "python.exe" : "python");
-		if (!platform.isWindows) {
-			execSync(`chmod +x ${pythonPath}`, { stdio: "inherit" });
-		}
+		// TODO: Uncomment this when we have a way to chmod +x the Python executable
+		// if (!platform.isWindows && executableIsAvailable("chmod")) {
+		// 	try {
+		// 		execSync(`chmod +x "${pythonPath}"`, { stdio: "inherit" });
+		// 	} catch (error) {
+		// 		log.error("Failed to chmod +x Python executable", { error });
+		// 	}
+		// }
 		log.info("Python path", { pythonPath });
 		this.pyshell = new PythonShell(workerScriptPath, {
 			pythonPath: options.pythonPath ?? pythonPath,

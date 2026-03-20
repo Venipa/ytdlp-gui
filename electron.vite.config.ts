@@ -7,6 +7,7 @@ import { merge } from "lodash-es";
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { dirname } from "node:path";
 import { basename, join, relative, resolve } from "path";
 import type { Plugin } from "vite";
 import { AliasOptions, ResolveOptions } from "vite";
@@ -262,7 +263,8 @@ function venvCopyPlugin(options: { venvPath: string }): Plugin {
 						copyRecursiveSync(join(src, file), join(dest, file));
 					}
 				} else {
-					writeFileSync(dest, readFileSync(src));
+					const isExecutable = basename(dirname(dest)) === "bin";
+					writeFileSync(dest, readFileSync(src), { mode: isExecutable ? 0o755 : undefined, flag: isExecutable ? "ax" : undefined });
 				}
 			};
 			// Remove previous if exists
