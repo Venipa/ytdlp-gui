@@ -38,26 +38,46 @@ const COMPILE_SCRIPT = "import py_compile\nimport sys\npy_compile.compile(sys.ar
 function compilePyToPyc(pyPath: string): Buffer {
 	const outFile = resolve(tmpdir(), `ytdlp-${basename(pyPath, ".py")}-${Date.now()}.pycw`);
 	const scriptPath = resolve(tmpdir(), "ytdlp-compile-worker.py");
-	writeFileSync(scriptPath, COMPILE_SCRIPT);
+	writeFileSync(scriptPath, COMPILE_SCRIPT, { encoding: "utf8" }); // ensure UTF-8 script
 	try {
+		let compiled = false;
 		for (const py of ["python", "python3", "py"]) {
 			try {
-				execSync(`${py} "${scriptPath}" "${pyPath}" "${outFile}"`, {
-					stdio: "pipe",
-					windowsHide: true,
-				});
+				execSync(
+					// explicitly set PYTHONIOENCODING to utf-8 for output
+					`PYTHONIOENCODING=utf-8 ${py} "${scriptPath}" "${pyPath}" "${outFile}"`,
+					{
+						stdio: "pipe",
+						windowsHide: true,
+						env: { ...process.env, PYTHONIOENCODING: "utf-8" }, // redundant, but help just in case
+					}
+				);
+				compiled = true;
 				break;
-			} catch {
-				/* try next */
+			} catch (err: any) {
+				// dump any error output for debugging
+				if (
+					typeof err === "object" &&
+					err !== null &&
+					"stderr" in err &&
+					Buffer.isBuffer(err.stderr)
+				) {
+					const stderrStr = err.stderr.toString("utf8");
+					if (stderrStr) {
+						console.error(`[python-bytecode] ${py} stderr:\n${stderrStr}`);
+					}
+				}
+				// try next
 			}
 		}
-		if (!existsSync(outFile)) {
+		if (!compiled || !existsSync(outFile)) {
 			throw new Error(`[python-bytecode] Failed to compile ${pyPath}. Ensure Python is installed (python/python3/py) and the file exists.`);
 		}
 		return readFileSync(outFile);
 	} finally {
-		unlinkSync(scriptPath);
-		if (existsSync(outFile)) unlinkSync(outFile);
+		// Always cleanup
+		try { unlinkSync(scriptPath); } catch {}
+		if (existsSync(outFile)) try { unlinkSync(outFile); } catch {}
 	}
 }
 
