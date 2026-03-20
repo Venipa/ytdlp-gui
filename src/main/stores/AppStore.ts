@@ -10,7 +10,6 @@ export interface AppStore {
 	};
 	updateChannel: "stable" | "beta";
 	autoUpdate: "prompt" | "auto" | "manual";
-	checkForUpdate: boolean;
 	download: { paths: string[]; selected: string };
 	features: {
 		clipboardMonitor: boolean;

@@ -10,7 +10,7 @@ export const setUpdateHandledByFrontend = (value: boolean) => (updateQueuedInFro
 export function isUpdateInRange(ver: string) {
 	if (!isProduction) return true;
 	return semver.gtr(ver, app.getVersion(), {
-		includePrerelease: appStore.store.beta,
+		includePrerelease: appStore.store.updateChannel === "beta",
 	});
 }
 export function checkForUpdates() {
