@@ -5,7 +5,7 @@ import react from "@vitejs/plugin-react-swc";
 import { defineConfig } from "electron-vite";
 import { merge } from "lodash-es";
 import { execSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, relative, resolve } from "path";
 import type { Plugin } from "vite";
@@ -50,18 +50,13 @@ function compilePyToPyc(pyPath: string): Buffer {
 						stdio: "pipe",
 						windowsHide: true,
 						env: { ...process.env, PYTHONIOENCODING: "utf-8" }, // redundant, but help just in case
-					}
+					},
 				);
 				compiled = true;
 				break;
 			} catch (err: any) {
 				// dump any error output for debugging
-				if (
-					typeof err === "object" &&
-					err !== null &&
-					"stderr" in err &&
-					Buffer.isBuffer(err.stderr)
-				) {
+				if (typeof err === "object" && err !== null && "stderr" in err && Buffer.isBuffer(err.stderr)) {
 					const stderrStr = err.stderr.toString("utf8");
 					if (stderrStr) {
 						console.error(`[python-bytecode] ${py} stderr:\n${stderrStr}`);
@@ -76,8 +71,13 @@ function compilePyToPyc(pyPath: string): Buffer {
 		return readFileSync(outFile);
 	} finally {
 		// Always cleanup
-		try { unlinkSync(scriptPath); } catch {}
-		if (existsSync(outFile)) try { unlinkSync(outFile); } catch {}
+		try {
+			unlinkSync(scriptPath);
+		} catch {}
+		if (existsSync(outFile))
+			try {
+				unlinkSync(outFile);
+			} catch {}
 	}
 }
 
@@ -187,15 +187,15 @@ function pythonBytecodePlugin(): Plugin {
 	return {
 		name: "python-bytecode",
 		enforce: "pre",
-		buildStart() {
-			if (!existsSync(PY_REQUIREMENTS_PATH)) {
-				return;
-			}
-			if (depsTmpDir) {
-				return;
-			}
-			depsTmpDir = mkdtempSync(join(tmpdir(), "ytdlp-pydeps-"));
-		},
+		// buildStart() {
+		// 	if (!existsSync(PY_REQUIREMENTS_PATH)) {
+		// 		return;
+		// 	}
+		// 	if (depsTmpDir) {
+		// 		return;
+		// 	}
+		// 	depsTmpDir = mkdtempSync(join(tmpdir(), "ytdlp-pydeps-"));
+		// },
 		async resolveId(source, importer) {
 			if (!PY_ASSET_RE.test(source)) return null;
 			const pyPath = source.replace(/\?.*$/, "");
@@ -207,16 +207,16 @@ function pythonBytecodePlugin(): Plugin {
 			if (!id.startsWith(PY_BYTECODE_PREFIX)) return null;
 			const pyPath = id.slice(PY_BYTECODE_PREFIX.length);
 
-			if (depsTmpDir && !depsEmitted) {
-				const requirementLines = getRequiredRequirementLines(pyPath, PY_REQUIREMENTS_PATH);
-				if (requirementLines.length > 0) {
-					installRequirementsToTarget(requirementLines, depsTmpDir);
-					emitDirectoryAssets((assetName, sourceBuffer) => {
-						this.emitFile({ type: "asset", name: assetName, source: sourceBuffer });
-					}, depsTmpDir);
-				}
-				depsEmitted = true;
-			}
+			// if (depsTmpDir && !depsEmitted) {
+			// 	const requirementLines = getRequiredRequirementLines(pyPath, PY_REQUIREMENTS_PATH);
+			// 	if (requirementLines.length > 0) {
+			// 		installRequirementsToTarget(requirementLines, depsTmpDir);
+			// 		emitDirectoryAssets((assetName, sourceBuffer) => {
+			// 			this.emitFile({ type: "asset", name: assetName, source: sourceBuffer });
+			// 		}, depsTmpDir);
+			// 	}
+			// 	depsEmitted = true;
+			// }
 
 			// const pycBuffer = compilePyToPyc(pyPath);
 			const workerAssetName = `${relative(resolve("src/main"), pyPath).replace(/\\/g, "/").replace(/\//g, "__").replace(/\.py$/, "")}.py`;
@@ -243,10 +243,54 @@ function pythonBytecodePlugin(): Plugin {
 	};
 }
 
+function venvCopyPlugin(options: { venvPath: string }): Plugin {
+	const { venvPath } = options;
+	return {
+		name: "copy-venv-to-main-resources",
+		apply: "build",
+		async closeBundle() {
+			const outVenvPath = resolve("out/main/resources/venv");
+			// Only copy if .venv exists and we're not already inside out/main/resources/venv
+			if (!existsSync(venvPath)) {
+				console.warn("[copy-venv-to-main-resources] No .venv directory found, skipping venv copy.");
+				return;
+			}
+			const copyRecursiveSync = (src, dest) => {
+				if (statSync(src).isDirectory()) {
+					if (!existsSync(dest)) mkdirSync(dest, { recursive: true });
+					for (const file of readdirSync(src)) {
+						copyRecursiveSync(join(src, file), join(dest, file));
+					}
+				} else {
+					writeFileSync(dest, readFileSync(src));
+				}
+			};
+			// Remove previous if exists
+			if (existsSync(outVenvPath)) {
+				const deleteRecursiveSync = (dir) => {
+					for (const file of readdirSync(dir)) {
+						const curPath = join(dir, file);
+						if (statSync(curPath).isDirectory()) {
+							deleteRecursiveSync(curPath);
+							rmSync(curPath, { recursive: true, force: true });
+						} else {
+							unlinkSync(curPath);
+						}
+					}
+					rmSync(dir, { recursive: true, force: true });
+				};
+				deleteRecursiveSync(outVenvPath);
+			}
+			copyRecursiveSync(venvPath, outVenvPath);
+			console.log("[copy-venv-to-main-resources] Copied .venv to out/main/resources/venv");
+		},
+	};
+}
+
 export default defineConfig({
 	main: {
 		...resolveOptions,
-		plugins: [ViteYaml(), pythonBytecodePlugin()],
+		plugins: [ViteYaml(), pythonBytecodePlugin(), venvCopyPlugin({ venvPath: resolve(".venv") })],
 		build: {
 			bytecode: isProduction ? { transformArrowFunctions: false } : false,
 			externalizeDeps: { exclude: [...externalizedEsmDeps] },

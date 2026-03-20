@@ -1,13 +1,6 @@
 import YtdlpWorkerManager from "@main/lib/ytdlp-service/manager";
-import { executableIsAvailable } from "../bin.utils";
 const createYtdlpService = () => {
-	const pythonPath = executableIsAvailable("python");
-	if (!pythonPath) {
-		throw new Error("Python not found");
-	}
-	const service = new YtdlpWorkerManager({
-		pythonPath: pythonPath,
-	});
+	const service = new YtdlpWorkerManager({});
 	process.on("exit", () => {
 		service.shutdown();
 	});

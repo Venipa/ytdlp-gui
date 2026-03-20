@@ -2,6 +2,7 @@ import { dirname } from "node:path";
 import secureStore from "@main/secureStore";
 import { appStore } from "@main/stores/app.store";
 import { checkForUpdates, checkForUpdatesAndNotify, setUpdateHandledByFrontend } from "@main/updater";
+import { nextTick } from "@shared/promises/helper";
 import { TRPCError } from "@trpc/server";
 import { shell } from "electron";
 import { autoUpdater } from "electron-updater";
@@ -83,6 +84,7 @@ export const internalRouter = router({
 	}),
 	initializeApp: publicProcedure.mutation(async () => {
 		if (appInitialized) throw new TRPCError({ message: "App already initialized", code: "INTERNAL_SERVER_ERROR" });
+		await nextTick();
 		await ytdl.initialize();
 		await checkForUpdatesAndNotify();
 		appInitialized = true;

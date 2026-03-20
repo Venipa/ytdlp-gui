@@ -8,7 +8,7 @@ const log = createLogger("bin.utils");
 export function executableIsAvailable(name: string) {
 	try {
 		const whichCmd = platform.isWindows ? "where" : "which";
-		const execPath = shell(`${whichCmd} ${name}`)?.trim();
+		const execPath = shell(`${whichCmd} ${name}`)?.trim().split("\n")[0]?.trim();
 		log.debug("executableIsAvailable", { name, execPath });
 		return (statSync(execPath) && execPath) || null;
 	} catch (error) {

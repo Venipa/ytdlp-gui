@@ -60,8 +60,17 @@ jobs:
           pnpm install --config.platform=darwin --config.arch=arm64 --config.target_arch=arm64 --frozen-lockfile
           pnpm rebuild --config.platform=darwin --config.arch=arm64 --config.target_arch=arm64
 
-      - name: Install Python dependencies
+      - if: matrix.os != 'windows-latest'
+        name: Install Python dependencies (unix)
         run: |
+          python -m venv --copies .venv
+          source .venv/Scripts/activate
+          pip install -r requirements.txt
+      - if: matrix.os == 'windows-latest'
+        name: Install Python dependencies (win32)
+        run: |
+          python -m venv --copies .venv
+          & .\.venv\Scripts\Activate.ps1
           pip install -r requirements.txt
       - name: Build Electron release
         run: |

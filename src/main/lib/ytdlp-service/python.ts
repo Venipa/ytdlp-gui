@@ -10,6 +10,7 @@
 import { EventEmitter } from "node:events";
 import { existsSync, mkdirSync } from "node:fs";
 import path, { dirname, join, resolve } from "node:path";
+import { platform } from "@electron-toolkit/utils";
 import { parseJson, stringifyJson } from "@shared/json";
 import { createLogger } from "@shared/logger";
 import { app } from "electron";
@@ -22,15 +23,16 @@ function genId(): string {
 }
 
 function buildPythonPath(workerScriptPath: string): string | undefined {
-	const candidateDirs: string[] = [
-		resolve(dirname(workerScriptPath), "..", "resources", "python-deps"),
-		join(process.resourcesPath, "app.asar.unpacked", "resources", "python-deps"),
-	];
+	const candidateDirs = [
+		import.meta.env.DEV && resolve(process.cwd(), ".venv"), // dev mode uses the project root .venv
+		resolve(dirname(workerScriptPath), "..", "venv"),
+		join(process.resourcesPath, "out/main/resources/venv"),
+	].filter(Boolean) as string[];
 	const existingDirs = candidateDirs.filter((directoryPath) => existsSync(directoryPath));
+	log.debug("buildPythonPath", { existingDirs, candidateDirs, resourcesPath: process.resourcesPath });
 	if (existingDirs.length === 0) {
 		return process.env.PYTHONPATH;
 	}
-
 	const delimiter = process.platform === "win32" ? ";" : ":";
 	const existingPythonPath = process.env.PYTHONPATH ? [process.env.PYTHONPATH] : [];
 	return [...existingDirs, ...existingPythonPath].join(delimiter);
@@ -104,8 +106,13 @@ class YtdlpPythonWorkerService {
 		const cwd = options.cwd ?? path.join(app.getPath("userData"), "ytdlp_cache");
 		if (!existsSync(cwd)) mkdirSync(cwd, { recursive: true });
 		const pythonPathEnv = buildPythonPath(workerScriptPath);
+		if (!pythonPathEnv) {
+			throw new Error("Python path not found");
+		}
+		const pythonPath = join(pythonPathEnv, "Scripts", platform.isWindows ? "python.exe" : "python");
+		log.info("Python path", { pythonPath });
 		this.pyshell = new PythonShell(workerScriptPath, {
-			pythonPath: options.pythonPath,
+			pythonPath: options.pythonPath ?? pythonPath,
 			cwd,
 			pythonOptions: options.pythonOptions || ["-u"],
 			env: {

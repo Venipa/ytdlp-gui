@@ -1,16 +1,17 @@
 import { electronApp, optimizer, platform } from "@electron-toolkit/utils";
 import { isDevelopmentOrDebug, isProduction } from "@shared/config";
-import { Logger, logger } from "@shared/logger";
+import { Logger } from "@shared/logger";
 import "@shared/primitivies";
+import { execSync } from "child_process";
+import { existsSync } from "fs";
 import { join } from "path";
-import { BrowserWindow, Menu, MenuItem, Tray, app, shell, systemPreferences } from "electron";
+import { BrowserWindow, Menu, MenuItem, Tray, app, shell } from "electron";
 // @ts-ignore
 import { autoUpdater } from "electron-updater";
 // @ts-ignore
 import iconWin from "~/build/icon.ico?asset";
 // @ts-ignore
 import icon from "~/build/icon_24x24.png?asset";
-// @ts-ignore
 // @ts-ignore
 import builderConfig from "../../electron-builder.yml";
 import { ClipboardMonitor } from "./lib/clipboardMonitor";
@@ -22,18 +23,25 @@ import { trpcIpcHandler } from "./trpc";
 import { loadUrlOfWindow } from "./trpc/dialog.utils";
 import { pushLogToClient } from "./trpc/events.ee";
 import { pushWindowState } from "./trpc/window.api";
-import { checkBrokenLinks, ytdl } from "./trpc/ytdlp.core";
+import { checkBrokenLinks } from "./trpc/ytdlp.core";
 import { ytdlpEvents } from "./trpc/ytdlp.ee";
 import { attachAutoUpdaterIPC } from "./updater";
 const log = new Logger("App");
 const trayIcon = platform.isWindows ? iconWin : icon;
 
-/**
- * required for clipboard monitoring for instant download feature
- */
-if (platform.isMacOS && !systemPreferences.isTrustedAccessibilityClient(true)) {
-	logger.warn("Missing trusted accessibility access, requesting...");
+if (import.meta.env.DEV) {
+	function createVenv() {
+		const venvPath = join(process.cwd(), ".venv");
+		if (existsSync(venvPath)) {
+			return;
+		}
+		execSync("python -m venv --copies " + venvPath, { stdio: "inherit" });
+		execSync("pip install -r requirements.txt", { env: { PYTHONPATH: venvPath }, stdio: "inherit" });
+	}
+
+	createVenv();
 }
+
 async function createWindow() {
 	// Create the browser window.
 	const tray = new Tray(trayIcon);
@@ -149,7 +157,7 @@ app.whenReady().then(async () => {
 	});
 	await runMigrate();
 	await checkBrokenLinks();
-	ytdl.initialize(); // init asynchronously
+	// ytdl.initialize(); // init asynchronously
 
 	createWindow().then((w) => {
 		const clipboardWatcher = new ClipboardMonitor(w!, {
