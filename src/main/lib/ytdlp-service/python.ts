@@ -22,7 +22,7 @@ function genId(): string {
 	return Math.random().toString(36).substr(2, 9);
 }
 
-function buildPythonPath(workerScriptPath: string): string | undefined {
+function buildPythonPath(workerScriptPath: string) {
 	const candidateDirs = [
 		import.meta.env.DEV && resolve(process.cwd(), ".venv"), // dev mode uses the project root .venv
 		resolve(dirname(workerScriptPath), "..", "venv"),
@@ -30,12 +30,11 @@ function buildPythonPath(workerScriptPath: string): string | undefined {
 	].filter(Boolean) as string[];
 	const existingDirs = candidateDirs.filter((directoryPath) => existsSync(directoryPath));
 	log.debug("buildPythonPath", { existingDirs, candidateDirs, resourcesPath: process.resourcesPath });
-	if (existingDirs.length === 0) {
-		return process.env.PYTHONPATH;
-	}
 	const delimiter = process.platform === "win32" ? ";" : ":";
-	const existingPythonPath = process.env.PYTHONPATH ? [process.env.PYTHONPATH] : [];
-	return [...existingDirs, ...existingPythonPath].join(delimiter);
+	return {
+		path: existingDirs.join(delimiter),
+		paths: existingDirs,
+	};
 }
 
 interface RpcRequest {
@@ -105,11 +104,13 @@ class YtdlpPythonWorkerService {
 		const workerScriptPath = ytdlPyWorkerPath;
 		const cwd = options.cwd ?? path.join(app.getPath("userData"), "ytdlp_cache");
 		if (!existsSync(cwd)) mkdirSync(cwd, { recursive: true });
-		const pythonPathEnv = buildPythonPath(workerScriptPath);
+		const { path: pythonPathEnv, paths: pythonPaths } = buildPythonPath(workerScriptPath);
 		if (!pythonPathEnv) {
 			throw new Error("Python path not found");
 		}
-		const pythonPath = join(pythonPathEnv, platform.isWindows ? "Scripts" : "bin", platform.isWindows ? "python.exe" : "python");
+		const firstPyPath = pythonPaths[0];
+
+		const pythonPath = join(firstPyPath, platform.isWindows ? "Scripts" : "bin", platform.isWindows ? "python.exe" : "python");
 		// TODO: Uncomment this when we have a way to chmod +x the Python executable
 		// if (!platform.isWindows && executableIsAvailable("chmod")) {
 		// 	try {
