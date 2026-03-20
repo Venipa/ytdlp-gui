@@ -1,7 +1,7 @@
 import YtdlpWorkerManager from "@main/lib/ytdlp-service/manager";
 import { executableIsAvailable } from "../bin.utils";
 const createYtdlpService = () => {
-	const pythonPath = executableIsAvailable("python");
+	const pythonPath = executableIsAvailable("python") || executableIsAvailable("python3");
 	if (!pythonPath) {
 		throw new Error("Python not found");
 	}

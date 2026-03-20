@@ -62,6 +62,8 @@ jobs:
 
       - name: Install Python dependencies
         run: |
+          python -m venv .venv
+          source .venv/bin/activate
           pip install -r requirements.txt
       - name: Build Electron release
         run: |
