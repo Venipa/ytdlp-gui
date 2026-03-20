@@ -109,7 +109,7 @@ class YtdlpPythonWorkerService {
 		if (!pythonPathEnv) {
 			throw new Error("Python path not found");
 		}
-		const pythonPath = join(pythonPathEnv, "Scripts", platform.isWindows ? "python.exe" : "python");
+		const pythonPath = join(pythonPathEnv, platform.isWindows ? "Scripts" : "bin", platform.isWindows ? "python.exe" : "python");
 		log.info("Python path", { pythonPath });
 		this.pyshell = new PythonShell(workerScriptPath, {
 			pythonPath: options.pythonPath ?? pythonPath,
