@@ -11,7 +11,11 @@ jobs:
     # Platforms to build on/for
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [
+          windows-latest,
+          # macos-latest,
+          # ubuntu-latest,
+         ]
         node-version: [24.14.0]
 
     steps:
