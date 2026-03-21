@@ -68,7 +68,6 @@ jobs:
         name: Install Python dependencies (unix)
         run: |
           python -m venv --copies .venv
-          source .venv/bin/activate
           # Copy Python executable for portability (might not work 😅)
           cp $(which python) .venv/bin/python
           source .venv/bin/activate
