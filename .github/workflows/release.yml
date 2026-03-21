@@ -69,13 +69,20 @@ jobs:
         run: |
           python -m venv --copies .venv
           source .venv/bin/activate
+          # Copy Python executable for portability (might not work 😅)
+          cp $(which python) .venv/bin/python
+          source .venv/bin/activate
           pip install -r requirements.txt
+          rm .venv/bin/pip*
       - if: matrix.os == 'windows-latest'
         name: Install Python dependencies (win32)
         run: |
           python -m venv --copies .venv
+          # Copy Python executable for portability (might not work 😅)
+          Copy-Item (Get-Command python).Source .\.venv\Scripts\python.exe
           & .\.venv\Scripts\Activate.ps1
           pip install -r requirements.txt
+          Remove-Item .\.venv\Scripts\pip*.exe
       - name: Build Electron release
         run: |
           pnpm run release

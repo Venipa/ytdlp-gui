@@ -21,12 +21,11 @@ const log = createLogger("ytdlp-py-service");
 function genId(): string {
 	return Math.random().toString(36).substr(2, 9);
 }
-
 function buildPythonPath(workerScriptPath: string) {
 	const candidateDirs = [
 		import.meta.env.DEV && resolve(process.cwd(), ".venv"), // dev mode uses the project root .venv
 		resolve(dirname(workerScriptPath), "..", "venv"),
-		join(process.resourcesPath, "out/main/resources/venv"),
+		join(process.resourcesPath, "app.asar.unpacked", "out/main/resources/venv"),
 	].filter(Boolean) as string[];
 	const existingDirs = candidateDirs.filter((directoryPath) => existsSync(directoryPath));
 	log.info("buildPythonPath", { existingDirs, candidateDirs, resourcesPath: process.resourcesPath });
