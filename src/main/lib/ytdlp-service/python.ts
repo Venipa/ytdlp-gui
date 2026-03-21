@@ -29,7 +29,7 @@ function buildPythonPath(workerScriptPath: string) {
 		join(process.resourcesPath, "out/main/resources/venv"),
 	].filter(Boolean) as string[];
 	const existingDirs = candidateDirs.filter((directoryPath) => existsSync(directoryPath));
-	log.debug("buildPythonPath", { existingDirs, candidateDirs, resourcesPath: process.resourcesPath });
+	log.info("buildPythonPath", { existingDirs, candidateDirs, resourcesPath: process.resourcesPath });
 	const delimiter = process.platform === "win32" ? ";" : ":";
 	return {
 		path: existingDirs.join(delimiter),
