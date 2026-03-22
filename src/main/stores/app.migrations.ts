@@ -1,4 +1,5 @@
 import { MAX_PARALLEL_DOWNLOADS } from "@main/trpc/ytdlp.core";
+import { DEFAULT_OUTTMPL } from "@main/trpc/ytdlp.utils";
 import { Migration } from "electron-conf";
 import { AppStore } from "./AppStore";
 const removeProperty = (instance: any, property: string) => {
@@ -39,6 +40,12 @@ const appStoreMigrations: Migration<AppStore>[] = [
 			instance.store.autoUpdate = "prompt";
 			removeProperty(instance.store, "checkForUpdate");
 			removeProperty(instance.store.ytdlp, "checkForUpdate");
+		},
+	},
+	{
+		version: 5,
+		hook(instance, currentVersion) {
+			instance.set("ytdlp.flags.outtmpl", DEFAULT_OUTTMPL);
 		},
 	},
 ];

@@ -6,7 +6,7 @@ import { SelectDownload, queries } from "@main/stores/app-database.helpers";
 import { downloads } from "@main/stores/app-database.schema";
 import { appStore } from "@main/stores/app.store";
 import { getYtdlpPostprocessors } from "@main/trpc/ytdlp.ppa";
-import { getDownloadPathWithFilename, getOuttmpl } from "@main/trpc/ytdlp.utils";
+import { getDownloadPathWithFilename, getOuttmpl, sanitizeFilename, sanitizeId } from "@main/trpc/ytdlp.utils";
 import { logger } from "@shared/logger";
 import queuePromise from "@shared/promises/helper";
 import { TRPCError } from "@trpc/server";
@@ -149,6 +149,10 @@ class DownloadQueueManager {
 				forcefilename: true,
 				filename: outtmpl,
 			});
+			// fallback to default filename if not set
+			if (!videoInfo.filename) {
+				videoInfo.filename = `[${dbFile.source}_${sanitizeId(videoInfo.id)}] ${sanitizeFilename(videoInfo.title)}.${videoInfo.ext}`;
+			}
 			log.debug("fetchNewMetadata", { videoInfoId: videoInfo.id });
 		} catch (videoInfoError) {
 			log.error("extractInfo", videoInfoError);
