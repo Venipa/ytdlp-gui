@@ -250,7 +250,10 @@ class DownloadQueueManager {
 			];
 		}
 		const postprocessors = getYtdlpPostprocessors(dbFile.url);
-		if (postprocessors) ytdlpOptions.postprocessor_args = postprocessors;
+		if (postprocessors) {
+			ytdlpOptions.postprocessors = [postprocessors.key];
+			ytdlpOptions.postprocessor_args = postprocessors.value;
+		}
 		if (settings.flags?.nomtime) {
 			ytdlpOptions.updatetime = false;
 		}

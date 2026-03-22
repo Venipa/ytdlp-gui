@@ -28,6 +28,7 @@ except ImportError:
     YoutubeDL = None
     YTDLP_VERSION = None
 
+
 WORKER_ID = os.environ.get("YTDLP_WORKER_ID")
 
 
@@ -180,10 +181,13 @@ def handle_extract_info(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
             if outtmpl:
                 info.update(
                     {
-                        "filename": (ydl.prepare_filename(
-                            info_dict=info,
-                            outtmpl=outtmpl,
-                        ) or None)
+                        "filename": (
+                            ydl.prepare_filename(
+                                info_dict=info,
+                                outtmpl=outtmpl,
+                            )
+                            or None
+                        )
                     }
                 )
         return rpc_response(id, result=info)
@@ -215,6 +219,7 @@ def ensure_download_success(exit_code: Any) -> None:
     if isinstance(exit_code, int) and exit_code != 0:
         raise RuntimeError(f"yt-dlp download failed with exit code {exit_code}")
 
+
 def handle_download(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """Handle download RPC call."""
     url = params.get("url")
@@ -236,23 +241,13 @@ def handle_download(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
         options["progress_hooks"] = [*existing_hooks, create_progress_hook(id)]
 
         with YoutubeDL(options) as ydl:
-            if info_ref:
-                try:
-                    exit_code = ydl.__download_wrapper(ydl.process_ie_result)(info_ref, download=True)
-                    ensure_download_success(exit_code)
-                except Exception:
-                    exit_code = ydl.download([url])
-                    ensure_download_success(exit_code)
-            else:
-                exit_code = ydl.download([url])
-                ensure_download_success(exit_code)
+            ydl.download([url])
+
         write_json(
             {
                 "__ytdlp_progress__": True,
                 "id": id,
-                "line": (
-                    "[download] postprocess: completed"
-                ),
+                "line": ("[download] postprocess: completed"),
                 "workerId": WORKER_ID,
                 "status": "completed",
                 "videoId": None,
