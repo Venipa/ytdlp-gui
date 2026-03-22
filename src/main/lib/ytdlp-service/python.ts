@@ -11,6 +11,8 @@ import { EventEmitter } from "node:events";
 import { existsSync, mkdirSync } from "node:fs";
 import path, { dirname, join, resolve } from "node:path";
 import { platform } from "@electron-toolkit/utils";
+import { checkDebugFlag } from "@main/lib/debug";
+import { YtdlpPyOptions } from "@main/lib/ytdlp-service/ytdlp-options";
 import { parseJson, stringifyJson } from "@shared/json";
 import { createLogger } from "@shared/logger";
 import { app } from "electron";
@@ -39,7 +41,7 @@ function buildPythonPath(workerScriptPath: string) {
 interface RpcRequest {
 	id: string;
 	method: string;
-	params?: string;
+	params?: YtdlpPyOptions;
 }
 
 interface RpcResponse {
@@ -89,6 +91,7 @@ class YtdlpPythonWorkerService {
 	private pyshell: PythonShell;
 	private pending: Record<string, PendingCall> = {};
 	private readonly outputEmitter = new EventEmitter();
+	private readonly lifecycleEmitter = new EventEmitter();
 	private readonly workerId: string | null;
 	private readonly readyPromise: Promise<void>;
 	private resolveReadyPromise: (() => void) | null = null;
@@ -122,6 +125,7 @@ class YtdlpPythonWorkerService {
 		this.pyshell = new PythonShell(workerScriptPath, {
 			pythonPath: options.pythonPath ?? pythonPath,
 			cwd,
+			encoding: "utf-8",
 			pythonOptions: options.pythonOptions || ["-u"],
 			env: {
 				...process.env,
@@ -138,27 +142,44 @@ class YtdlpPythonWorkerService {
 				log.error("PythonShell stderrParser", { param });
 				return param;
 			},
-			windowsHide: true,
+			...(import.meta.env.DEV ? { detached: true, windowsHide: false } : { windowsHide: true }),
 			mode: "text",
 		});
+		if (import.meta.env.DEV) {
+			// Attach a handler that pipes any output from the spawned Python process to the parent process's stdout/stderr for debugging/dev shells.
+			this.pyshell.childProcess?.stdout?.addListener("data", (data) => {
+				log.debug("PythonShell stdout", { data });
+			});
+			this.pyshell.childProcess?.stderr?.addListener("data", (data) => {
+				log.debug("PythonShell stderr", { data });
+			});
+		}
 		this.pyshell.on("message", this.onPythonMessage.bind(this));
 		this.pyshell.on("error", (err: Error) => {
 			this.rejectAllPending(err);
 			this.rejectReady(err);
+			this.lifecycleEmitter.emit("close", err);
 		});
 		this.pyshell.on("close", (err: Error | null) => {
 			const closeError = err ?? new Error("Python process closed");
 			this.rejectAllPending(closeError);
 			this.rejectReady(closeError);
+			this.lifecycleEmitter.emit("close", closeError);
 			log.warn("YtdlpPythonService closed", { error: err });
 		});
 		log.info("YtdlpPythonService initialized", { workerId: this.workerId });
 	}
 	// Sends a typed JSON RPC call to Python
-	call(method: string, params?: Record<string, unknown>, callOptions?: RpcCallOptions): Promise<unknown> {
+	call(method: string, params?: { options?: YtdlpPyOptions; [key: string]: unknown }, callOptions?: RpcCallOptions): Promise<unknown> {
 		const id = genId();
-		const req: RpcRequest = { id, method, params: stringifyJson(params ?? {}) };
-		log.debug("Sending RPC request", { id, method, params });
+
+		const reqParams = Object.assign({ options: {} }, params ?? {});
+		Object.assign(reqParams.options, {
+			quiet: true,
+			no_warnings: true,
+		} as YtdlpPyOptions);
+		const req: RpcRequest = { id, method, params: reqParams };
+		log.debug("Sending RPC request", { id, method, params: reqParams });
 		return new Promise((resolve, reject) => {
 			this.pending[id] = { method, resolve, reject };
 			callOptions?.onRequestCreated?.(id);
@@ -212,6 +233,12 @@ class YtdlpPythonWorkerService {
 			this.outputEmitter.off("output", listener);
 		};
 	}
+	onClose(listener: (error: Error) => void): () => void {
+		this.lifecycleEmitter.on("close", listener);
+		return () => {
+			this.lifecycleEmitter.off("close", listener);
+		};
+	}
 	private emitOutput(event: YtdlpOutputEvent): void {
 		this.outputEmitter.emit("output", event);
 	}
@@ -221,20 +248,6 @@ class YtdlpPythonWorkerService {
 	}
 	private parseDownloadStatus(progressLine: YtdlpProgressLine, rawLine: string, requestIdOverride: string | null): YtdlpOutputEvent {
 		const requestId = requestIdOverride ?? this.getActiveRequestIdByMethod("download");
-		const completedMatch = /^100(?:\.0+)?%\s+of\s+.+\sin\s+.+$/i.exec(progressLine.message);
-		if (completedMatch) {
-			return {
-				type: "completed",
-				raw: rawLine,
-				extractor: progressLine.extractor,
-				videoId: progressLine.id,
-				message: progressLine.message,
-				requestId,
-				workerId: this.workerId,
-				percent: 100,
-			};
-		}
-
 		const progressMatch = /^(\d+(?:\.\d+)?)%\s+of\s+.+?(?:\s+at\s+(.+?))?(?:\s+ETA\s+(.+?))?(?:\s+\(frag\s+(\d+)\/(\d+)\))?$/i.exec(progressLine.message);
 		if (!progressMatch) {
 			return {
@@ -405,6 +418,17 @@ class YtdlpPythonWorkerService {
 			};
 		} else if (status === "finished") {
 			outputEvent = {
+				type: "download_status",
+				raw: line,
+				extractor: "download",
+				videoId: normalizedVideoId,
+				message: line,
+				requestId,
+				workerId: this.workerId,
+				percent: 100,
+			};
+		} else if (status === "completed") {
+			outputEvent = {
 				type: "completed",
 				raw: line,
 				extractor: "download",
@@ -430,7 +454,7 @@ class YtdlpPythonWorkerService {
 		}
 
 		this.emitOutput(outputEvent);
-		log.debug("yt-dlp output", outputEvent);
+		if (checkDebugFlag("ytdlp")) log.debug("yt-dlp output", outputEvent);
 		return true;
 	}
 	// Internal: Handle mixed Python output from stdout
@@ -448,51 +472,58 @@ class YtdlpPythonWorkerService {
 			.split(/\r?\n/g)
 			.map((line) => line.trim())
 			.filter(Boolean);
-
-		for (const line of lines) {
-			const lineParts = this.splitMixedOutputLine(line);
-			for (const part of lineParts) {
-				const parsedJson = this.parseYtdlpPayload(part);
-				if (parsedJson) {
-					if (this.handleTaggedProgressPayload(parsedJson)) {
+		try {
+			for (const line of lines) {
+				const lineParts = this.splitMixedOutputLine(line);
+				for (const part of lineParts) {
+					const parsedJson = this.parseYtdlpPayload(part);
+					if (parsedJson) {
+						if (this.handleTaggedProgressPayload(parsedJson)) {
+							continue;
+						}
+						const resultObject = parsedJson.result && typeof parsedJson.result === "object" ? (parsedJson.result as { id?: string }) : null;
+						log.debug("yt-dlp JSON RPC response", { videoId: resultObject?.id ?? "unknown" });
+						this.onPythonRpcResponse(parsedJson as RpcResponse);
 						continue;
 					}
-					const resultObject = parsedJson.result && typeof parsedJson.result === "object" ? (parsedJson.result as { id?: string }) : null;
-					log.debug("yt-dlp JSON RPC response", { videoId: resultObject?.id ?? "unknown" });
-					this.onPythonRpcResponse(parsedJson as RpcResponse);
-					continue;
-				}
 
-				const progressLine = this.parseYtdlpProgressLine(part);
-				if (progressLine) {
-					const outputEvent = this.parseStatusOutputEvent(part, progressLine, null);
-					this.emitOutput(outputEvent);
-					log.debug("yt-dlp output", outputEvent);
-					continue;
-				}
+					const progressLine = this.parseYtdlpProgressLine(part);
+					if (progressLine) {
+						const outputEvent = this.parseStatusOutputEvent(part, progressLine, null);
+						this.emitOutput(outputEvent);
+						if (checkDebugFlag("ytdlp")) log.debug("yt-dlp output", outputEvent);
+						continue;
+					}
 
-				if (part.startsWith("Deleting original file ")) {
-					const outputEvent: YtdlpOutputEvent = {
-						type: "status",
-						raw: part,
-						extractor: "postprocess",
-						videoId: null,
-						message: part,
-						requestId: this.getActiveRequestIdByMethod("download"),
-						workerId: this.workerId,
-					};
-					this.emitOutput(outputEvent);
-					log.debug("yt-dlp output", outputEvent);
-					continue;
-				}
+					if (part.startsWith("Deleting original file ")) {
+						const outputEvent: YtdlpOutputEvent = {
+							type: "status",
+							raw: part,
+							extractor: "postprocess",
+							videoId: null,
+							message: part,
+							requestId: this.getActiveRequestIdByMethod("download"),
+							workerId: this.workerId,
+						};
+						this.emitOutput(outputEvent);
+						if (checkDebugFlag("ytdlp")) log.debug("yt-dlp output", outputEvent);
+						continue;
+					}
 
-				log.debug("Python non-JSON output", { line: part });
+					log.debug("Python non-JSON output", { line: part });
+				}
 			}
+		} catch (error) {
+			log.error("Error parsing Python output", { error, output: msg });
 		}
 	}
 
 	// Convenience wrapper for yt-dlp "extract_info"
-	extractInfo(url: string, options?: Record<string, unknown>): Promise<unknown> {
+	extractInfo(url: string, options?: YtdlpPyOptions): Promise<unknown> {
+		if (options?.filename) {
+			options.outtmpl = options.filename;
+			delete options.filename;
+		}
 		return this.call("extract_info", { url, options });
 	}
 
@@ -502,7 +533,11 @@ class YtdlpPythonWorkerService {
 	}
 
 	// Convenience wrapper for yt-dlp "download"
-	download(url: string, options?: Record<string, unknown>, callOptions?: RpcCallOptions): Promise<unknown> {
+	download(url: string, options?: YtdlpPyOptions, callOptions?: RpcCallOptions): Promise<unknown> {
+		if (options?.filename) {
+			options.outtmpl = options.filename;
+			delete options.filename;
+		}
 		return this.call("download", { url, options }, callOptions);
 	}
 

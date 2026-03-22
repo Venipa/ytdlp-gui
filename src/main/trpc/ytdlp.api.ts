@@ -1,13 +1,14 @@
 import { existsSync, rmSync, statSync } from "fs";
-import path from "path";
+import platform from "@main/lib/platform";
 import { YtdlpOptions } from "@main/lib/ytdlp-service/ytdlp-options";
 import { db } from "@main/stores/app-database";
 import { SelectDownload, queries } from "@main/stores/app-database.helpers";
 import { downloads } from "@main/stores/app-database.schema";
 import { appStore } from "@main/stores/app.store";
-import { sanitizeFilename, sanitizeId } from "@main/trpc/ytdlp.utils";
+import { getYtdlpPostprocessors } from "@main/trpc/ytdlp.ppa";
+import { getDownloadPathWithFilename, getOuttmpl } from "@main/trpc/ytdlp.utils";
 import { logger } from "@shared/logger";
-import { queuePromiseStack } from "@shared/promises/helper";
+import queuePromise from "@shared/promises/helper";
 import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { desc } from "drizzle-orm";
@@ -17,7 +18,7 @@ import { YTDLDownloadStatus, YTDLItem, YTDLMediaType, YTDLStatus } from "ytdlp-g
 import { z } from "zod";
 import { pushLogToClient } from "./events.ee";
 import { publicProcedure, router } from "./trpc";
-import { MAX_PARALLEL_DOWNLOADS, ytdl } from "./ytdlp.core";
+import { ytdl } from "./ytdlp.core";
 import { pushToastToClient, ytdlpEvents } from "./ytdlp.ee";
 
 const AUDIO_MEDIA_TYPES = ["audio-bestaudio", "audio-mp3", "audio-m4a", "audio-opus"] as const;
@@ -46,6 +47,7 @@ class DownloadQueueManager {
 	private finishedDownloads = new Map<string, "success" | "error" | "cancelled">();
 	private processingUrls = new Set<string>();
 	private metaCache = new Map<string, VideoInfo>();
+
 	async addToQueue(urls: string[], type: YTDLMediaType = "auto") {
 		const uniqueUrls = urls.filter((url) => !this.processingUrls.has(url));
 		if (uniqueUrls.length === 0) return [];
@@ -53,20 +55,19 @@ class DownloadQueueManager {
 		uniqueUrls.forEach((url) => this.processingUrls.add(url));
 		const dbEntries = await this.addToDatabase(uniqueUrls, type);
 
-		const files = await queuePromiseStack(
-			dbEntries.map((u) => () => this.checkMetadata(u).catch(() => null)),
-			MAX_PARALLEL_DOWNLOADS,
-		).then((files) => files.filter((s) => !!s));
+		const files = await queuePromise(dbEntries.map((u) => () => this.checkMetadata(u).catch(() => null))).then((files) => files.filter((s) => !!s));
 
-		await Promise.all(
-			files.map((f) =>
-				this.processDownload(f.dbFile, f.videoInfo).catch((err) => {
-					log.error("failed to download media", err);
-					return Promise.reject(err);
-				}),
-			),
-		);
+		this.startDownloads(files);
 		return files;
+	}
+
+	private startDownloads(items: Array<{ dbFile: SelectDownload; videoInfo: VideoInfo }>): void {
+		if (!items.length) return;
+		for (const item of items) {
+			void this.processDownload(item.dbFile, item.videoInfo).catch((err) => {
+				log.error("failed to download media", err);
+			});
+		}
 	}
 
 	private async addToDatabase(urls: string[], type: YTDLMediaType = "auto"): Promise<SelectDownload[]> {
@@ -89,7 +90,7 @@ class DownloadQueueManager {
 			}),
 		);
 
-		const [items] = await db.batch(batchItems as any);
+		const items = await db.batch(batchItems as any).then((s) => s.map(([item]) => item));
 		ytdlpEvents.emit("list", items);
 		log.debug("addToDatabase", { items });
 		return items as SelectDownload[];
@@ -132,17 +133,21 @@ class DownloadQueueManager {
 			error: null,
 			retryCount: 0,
 		});
-
 		await this.updateDownloadEntry(dbFile);
-		return { dbFile, videoInfo: existingDbFile.meta as VideoInfo };
+		return await this.fetchNewMetadata(dbFile);
+		// return { dbFile, videoInfo: existingDbFile.meta as VideoInfo };
 	}
 
 	private async fetchNewMetadata(dbFile: SelectDownload): Promise<{ dbFile: SelectDownload; videoInfo: VideoInfo }> {
 		const { url } = dbFile;
 		let videoInfo: VideoInfo | null = null;
+		const outtmpl = getOuttmpl();
 		try {
 			videoInfo = await ytdl.extractInfo(url, {
 				...(isAudioMediaType((dbFile.type ?? "auto") as YTDLMediaType) && { format: "bestaudio/best" }),
+				windowsfilenames: platform.isWindows,
+				forcefilename: true,
+				filename: outtmpl,
 			});
 			log.debug("fetchNewMetadata", { videoInfoId: videoInfo.id });
 		} catch (videoInfoError) {
@@ -158,9 +163,9 @@ class DownloadQueueManager {
 				message: videoNotFoundMessage,
 			});
 		}
-		if (!videoInfo.filename) {
-			videoInfo.filename = `[${dbFile.source}_${sanitizeId(videoInfo.id)}] ${sanitizeFilename(videoInfo.title)}.${videoInfo.ext}`;
-		}
+		// if (!videoInfo.filename) {
+		// 	videoInfo.filename = `[${dbFile.source}_${sanitizeId(videoInfo.id)}] ${sanitizeFilename(videoInfo.title)}.${videoInfo.ext}`;
+		// }
 		const trimmedVideoInfo = this.trimVideoInfo(videoInfo);
 		dbFile.meta = trimmedVideoInfo;
 		dbFile.metaId = videoInfo.id;
@@ -214,10 +219,8 @@ class DownloadQueueManager {
 	}
 
 	private async prepareDownload(dbFile: SelectDownload, videoInfo: VideoInfo) {
-		const filepath = path.join(ytdl.currentDownloadPath, videoInfo.filename);
 		dbFile.meta = this.trimVideoInfo(videoInfo);
 		dbFile.metaId = videoInfo.id;
-		dbFile.filepath = filepath;
 		dbFile.title = videoInfo.title;
 		dbFile.state = "downloading";
 		dbFile.filesize = videoInfo.filesize_approx || videoInfo.filesize || 0;
@@ -229,11 +232,13 @@ class DownloadQueueManager {
 
 	private async executeDownload(dbFile: SelectDownload, videoInfo: VideoInfo, controller: AbortController) {
 		const settings = appStore.store.ytdlp;
+		const downloadPath = getDownloadPathWithFilename(videoInfo.filename);
 		const selectedMediaType = (dbFile.type ?? "auto") as YTDLMediaType;
 		const selectedFormat = MEDIA_TYPE_TO_FORMAT[selectedMediaType] ?? "best";
 		const ytdlpOptions: YtdlpOptions = {
 			format: selectedFormat,
-			outtmpl: dbFile.filepath,
+			filename: downloadPath,
+			windowsfilenames: platform.isWindows,
 		};
 
 		if (selectedMediaType === "audio-mp3") {
@@ -244,6 +249,8 @@ class DownloadQueueManager {
 				},
 			];
 		}
+		const postprocessors = getYtdlpPostprocessors(dbFile.url);
+		if (postprocessors) ytdlpOptions.postprocessor_args = postprocessors;
 		if (settings.flags?.nomtime) {
 			ytdlpOptions.updatetime = false;
 		}
@@ -301,7 +308,9 @@ class DownloadQueueManager {
 				state: "progressing",
 			});
 		});
-
+		ytdlpOptions.filename = dbFile.filepath;
+		ytdlpOptions.windowsfilenames = platform.isWindows;
+		ytdlpOptions.info = videoInfo;
 		ytdlpEvents.emit("status", {
 			id: dbFile.id,
 			action: "download",
@@ -320,22 +329,47 @@ class DownloadQueueManager {
 	private async finalizeDownload(dbFile: SelectDownload) {
 		if (!dbFile.error) {
 			if (dbFile.type === "audio") dbFile.filepath = dbFile.filepath + ".mp3";
-			const fileStats = statSync(dbFile.filepath);
-			dbFile.filesize = fileStats.size;
-			dbFile.state = "completed";
-			this.finishedDownloads.set(dbFile.url, "success");
+			try {
+				const fileStats = statSync(dbFile.filepath);
+				dbFile.filesize = fileStats.size;
+				dbFile.state = "completed";
+				this.finishedDownloads.set(dbFile.url, "success");
+				pushLogToClient(`[${dbFile.id}=${dbFile.metaId}] finished download: ${dbFile.title}`, "success");
+			} catch (error) {
+				log.error("failed to get file stats", { error });
+				this.finishedDownloads.set(dbFile.url, "error");
+				dbFile.state = "error";
+				dbFile.error = error;
+				pushLogToClient(`[${dbFile.id}=${dbFile.metaId}] failed to download: ${dbFile.title}`, "error");
+				ytdlpEvents.emit("list", [dbFile]);
+
+				throw error;
+			}
 		}
 		ytdlpEvents.emit("list", [dbFile]);
-		pushLogToClient(`[${dbFile.id}=${dbFile.metaId}] finished download: ${dbFile.title}`, "success");
+
 		await this.updateDownloadEntry(dbFile);
 	}
 
 	private async handleDownloadError(dbFile: SelectDownload, error: any) {
+		const errorMessage = error instanceof Error ? error.message : typeof error === "string" ? error : "Unknown error";
+		const normalizedError = {
+			name: error instanceof Error ? error.name : "DownloadError",
+			message: errorMessage,
+			stack: error instanceof Error ? error.stack : undefined,
+		};
 		dbFile.state = "error";
-		dbFile.error = error;
+		dbFile.error = normalizedError;
 		this.finishedDownloads.set(dbFile.url, "error");
-		pushToastToClient(`${dbFile.title}`, "error", `Failed to download: ${error.message ?? "Unknown error"}`);
-
+		ytdlpEvents.emit("status", {
+			id: dbFile.id,
+			action: "download",
+			error: normalizedError,
+			state: "done",
+		});
+		ytdlpEvents.emit("download", { id: dbFile.id, percent: 100, speed: "", eta: "", message: `failed: ${errorMessage}` });
+		pushToastToClient(`${dbFile.title}`, "error", `Failed to download: ${errorMessage}`);
+		log.error("handleDownloadError", { error });
 		await this.updateDownloadEntry(dbFile);
 	}
 

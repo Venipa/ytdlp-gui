@@ -17,6 +17,7 @@ interface ManagedWorker {
 	busy: boolean;
 	retireWhenIdle: boolean;
 	disposeOutput: () => void;
+	disposeClose: () => void;
 }
 
 type TaskRunner<T> = (worker: ManagedWorker) => Promise<T>;
@@ -27,8 +28,8 @@ interface TaskItem {
 	reject: (reason: unknown) => void;
 }
 
-function normalizeConcurrency(value: number | null | undefined): number {
-	if (!Number.isFinite(value) || !value || value < 1) {
+function normalizeConcurrency(value: number): number {
+	if (!Number.isFinite(value) || value < 1) {
 		return 1;
 	}
 	return Math.floor(value);
@@ -42,13 +43,20 @@ class YtdlpWorkerManager {
 	private targetConcurrency = normalizeConcurrency(appStore.store.features.concurrentDownloads);
 	private readonly options: YtdlpWorkerManagerOptions;
 	private isShuttingDown = false;
+	private restartTimer: NodeJS.Timeout | null = null;
+
+	private static readonly WORKER_RECOVERY_DELAY_MS = 1500;
 
 	constructor(options: YtdlpWorkerManagerOptions = {}) {
 		this.options = options;
 		this.reconcileWorkers();
-		appStore.onDidChange("features.concurrentDownloads", (concurrentDownloads: unknown) => {
-			if (!concurrentDownloads || this.isShuttingDown) return;
-			this.targetConcurrency = normalizeConcurrency(concurrentDownloads as number);
+		appStore.onDidChange("features.concurrentDownloads", (concurrentDownloads: any) => {
+			if (this.isShuttingDown) return;
+			this.targetConcurrency = normalizeConcurrency(concurrentDownloads);
+			log.info("Updated ytdlp worker concurrency", {
+				raw: concurrentDownloads,
+				normalized: this.targetConcurrency,
+			});
 			this.reconcileWorkers();
 			this.schedule();
 		});
@@ -68,16 +76,46 @@ class YtdlpWorkerManager {
 			disposeOutput: service.onOutput((event: YtdlpOutputEvent) => {
 				this.outputEmitter.emit("output", event);
 			}),
+			disposeClose: () => {},
 		};
+		managedWorker.disposeClose = service.onClose((error) => {
+			this.handleWorkerCrash(managedWorker, error);
+		});
 		this.workers.set(workerId, managedWorker);
 		log.info("Created ytdlp worker", { workerId, totalWorkers: this.workers.size });
 		return managedWorker;
+	}
+
+	private handleWorkerCrash(worker: ManagedWorker, error: Error): void {
+		if (this.isShuttingDown) return;
+		if (!this.workers.has(worker.id)) return;
+		this.workers.delete(worker.id);
+		worker.disposeOutput();
+		worker.disposeClose();
+		worker.busy = false;
+		log.warn("ytdlp worker crashed, scheduling revive", {
+			workerId: worker.id,
+			error: error.message,
+		});
+		this.scheduleWorkerRecovery();
+	}
+
+	private scheduleWorkerRecovery(): void {
+		if (this.isShuttingDown) return;
+		if (this.restartTimer) return;
+		this.restartTimer = setTimeout(() => {
+			this.restartTimer = null;
+			if (this.isShuttingDown) return;
+			this.reconcileWorkers();
+			this.schedule();
+		}, YtdlpWorkerManager.WORKER_RECOVERY_DELAY_MS);
 	}
 
 	private shutdownWorker(worker: ManagedWorker): void {
 		if (!this.workers.has(worker.id)) return;
 		this.workers.delete(worker.id);
 		worker.disposeOutput();
+		worker.disposeClose();
 		worker.service.shutdown();
 		log.info("Stopped ytdlp worker", { workerId: worker.id, totalWorkers: this.workers.size });
 	}
@@ -215,6 +253,10 @@ class YtdlpWorkerManager {
 	shutdown(): void {
 		if (this.isShuttingDown) return;
 		this.isShuttingDown = true;
+		if (this.restartTimer) {
+			clearTimeout(this.restartTimer);
+			this.restartTimer = null;
+		}
 		const error = new Error("YtdlpWorkerManager shutdown");
 		while (this.taskQueue.length > 0) {
 			const task = this.taskQueue.shift();

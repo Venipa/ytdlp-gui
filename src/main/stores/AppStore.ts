@@ -6,6 +6,7 @@ export interface AppStore {
 		flags: {
 			nomtime: boolean;
 			custom: string;
+			outtmpl: string;
 		};
 	};
 	updateChannel: "stable" | "beta";

@@ -12,15 +12,17 @@
 JSON-RPC worker for yt-dlp operations.
 Communicates via JSON typed RPC protocol over stdin/stdout.
 """
+
 import json
 import os
 import sys
 import traceback
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # Assume we have yt-dlp installed
 try:
     from yt_dlp import YoutubeDL
+    from yt_dlp import parse_options as ytdlp_parse_options
     from yt_dlp.version import __version__ as YTDLP_VERSION
 except ImportError:
     YoutubeDL = None
@@ -40,20 +42,36 @@ def create_progress_hook(request_id: str):
         status = progress.get("status")
         info = progress.get("info_dict") or {}
         video_id = info.get("id") or "unknown"
-        total_bytes = progress.get("total_bytes") or progress.get("total_bytes_estimate")
+        total_bytes = progress.get("total_bytes") or progress.get(
+            "total_bytes_estimate"
+        )
         downloaded_bytes = progress.get("downloaded_bytes")
         percent_value = None
         speed = None
         eta = None
-        if isinstance(total_bytes, (int, float)) and total_bytes > 0 and isinstance(downloaded_bytes, (int, float)):
-            percent_value = max(0.0, min(100.0, (float(downloaded_bytes) / float(total_bytes)) * 100.0))
+        if (
+            isinstance(total_bytes, (int, float))
+            and total_bytes > 0
+            and isinstance(downloaded_bytes, (int, float))
+        ):
+            percent_value = max(
+                0.0, min(100.0, (float(downloaded_bytes) / float(total_bytes)) * 100.0)
+            )
 
         if status == "finished":
-            filename = progress.get("filename") or info.get("title") or "file"
-            line = f"[download] {video_id}: 100% of {filename} in 00:00"
+            # Do not emit completion-like progress here:
+            # postprocessors (e.g. merger) may still be running.
+            return
         elif status == "downloading":
-            percent = (progress.get("_percent_str") or (f"{percent_value:.1f}%" if percent_value is not None else "0.0%")).strip()
-            total = (progress.get("_total_bytes_str") or progress.get("_total_bytes_estimate_str") or "").strip()
+            percent = (
+                progress.get("_percent_str")
+                or (f"{percent_value:.1f}%" if percent_value is not None else "0.0%")
+            ).strip()
+            total = (
+                progress.get("_total_bytes_str")
+                or progress.get("_total_bytes_estimate_str")
+                or ""
+            ).strip()
             speed = (progress.get("_speed_str") or "").strip()
             eta = (progress.get("_eta_str") or "").strip()
             if eta.upper().startswith("ETA"):
@@ -96,17 +114,16 @@ def create_progress_hook(request_id: str):
 def merge_options(options: Any) -> Dict[str, Any]:
     """Normalize options and keep yt-dlp stderr/stdout clean for RPC parsing."""
     opts = dict(options) if isinstance(options, dict) else {}
-    opts.setdefault("quiet", True)
-    opts.setdefault("no_warnings", True)
-    return opts
+    opts["quiet"] = True
+    opts["no_warnings"] = True
+    ytdlOptions = dict(ytdlp_parse_options([]).ydl_opts)
+    ytdlOptions.update(opts)
+    return ytdlOptions
 
 
-
-
-
-
-
-def rpc_response(id: str, result: Optional[Any] = None, error: Optional[str] = None) -> Dict[str, Any]:
+def rpc_response(
+    id: str, result: Optional[Any] = None, error: Optional[str] = None
+) -> Dict[str, Any]:
     """Create a JSON-RPC compliant response."""
     resp: Dict[str, Any] = {"id": id}
     if error is not None:
@@ -114,6 +131,7 @@ def rpc_response(id: str, result: Optional[Any] = None, error: Optional[str] = N
     else:
         resp["result"] = result
     return resp
+
 
 def get_yt_dlp_version() -> str:
     """Get the version of yt-dlp."""
@@ -127,14 +145,18 @@ def get_yt_dlp_version() -> str:
         return str(instance_version)
     return "unknown"
 
+
 def handle_ready(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """Handle ready RPC call."""
     if not YoutubeDL:
         return rpc_response(id, error="yt-dlp not installed.")
     try:
-        return rpc_response(id, result={
-            "version": get_yt_dlp_version(),
-        })
+        return rpc_response(
+            id,
+            result={
+                "version": get_yt_dlp_version(),
+            },
+        )
     except Exception as e:
         tb = traceback.format_exc()
         return rpc_response(id, error=f"{type(e).__name__}: {str(e)}\n{tb}")
@@ -144,6 +166,7 @@ def handle_extract_info(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """Handle extract_info RPC call."""
     url = params.get("url")
     options = merge_options(params.get("options", {}))
+    outtmpl = options.get("outtmpl", None)
 
     if not url:
         return rpc_response(id, error="Missing required parameter: url")
@@ -154,6 +177,15 @@ def handle_extract_info(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
     try:
         with YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=False)
+            if outtmpl:
+                info.update(
+                    {
+                        "filename": (ydl.prepare_filename(
+                            info_dict=info,
+                            outtmpl=outtmpl,
+                        ) or None)
+                    }
+                )
         return rpc_response(id, result=info)
     except Exception as e:
         tb = traceback.format_exc()
@@ -178,10 +210,16 @@ def handle_quit(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
     return rpc_response(id, result="Quitting...")
 
 
+def ensure_download_success(exit_code: Any) -> None:
+    """Raise if yt-dlp reports a non-zero download result code."""
+    if isinstance(exit_code, int) and exit_code != 0:
+        raise RuntimeError(f"yt-dlp download failed with exit code {exit_code}")
+
 def handle_download(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """Handle download RPC call."""
     url = params.get("url")
     options = merge_options(params.get("options", {}))
+    info_ref = options.get("info", None)
 
     if not url:
         return rpc_response(id, error="Missing required parameter: url")
@@ -190,10 +228,41 @@ def handle_download(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
         return rpc_response(id, error="yt-dlp not installed.")
 
     try:
-        existing_hooks = options.get("progress_hooks") if isinstance(options.get("progress_hooks"), list) else []
+        existing_hooks = (
+            options.get("progress_hooks")
+            if isinstance(options.get("progress_hooks"), list)
+            else []
+        )
         options["progress_hooks"] = [*existing_hooks, create_progress_hook(id)]
+
         with YoutubeDL(options) as ydl:
-            ydl.download([url])
+            if info_ref:
+                try:
+                    exit_code = ydl.__download_wrapper(ydl.process_ie_result)(info_ref, download=True)
+                    ensure_download_success(exit_code)
+                except Exception:
+                    exit_code = ydl.download([url])
+                    ensure_download_success(exit_code)
+            else:
+                exit_code = ydl.download([url])
+                ensure_download_success(exit_code)
+        write_json(
+            {
+                "__ytdlp_progress__": True,
+                "id": id,
+                "line": (
+                    "[download] postprocess: completed"
+                ),
+                "workerId": WORKER_ID,
+                "status": "completed",
+                "videoId": None,
+                "percent": 100.0,
+                "speed": None,
+                "eta": None,
+                "fragmentIndex": None,
+                "fragmentCount": None,
+            }
+        )
         return rpc_response(id, result="Download completed")
     except Exception as e:
         tb = traceback.format_exc()
@@ -208,9 +277,52 @@ _rpc_methods: Dict[str, Callable[[str, Dict[str, Any]], Dict[str, Any]]] = {
     "get_version": handle_get_version,
     "quit": handle_quit,
 }
+_hostname_postprocessors: Dict[str, List[Dict[str, Any]]] = {
+    "coub.com": [
+        {
+            "key": "Merger+ffmpeg_i1",
+            "value": "-stream_loop -1",
+        },
+        {
+            "key": "Merger+ffmpeg_o1",
+            "value": "-shortest",
+        },
+    ]
+}
 
 
-def normalize_rpc_params(raw_params: Any) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+def get_hostname(urlString: str) -> str:
+    """
+    Extract and return the hostname (domain) from a URL string, without using urllib or other libraries.
+    Returns empty string if extraction fails.
+    """
+    # Remove protocol
+    if "://" in urlString:
+        url_no_proto = urlString.split("://", 1)[1]
+    else:
+        url_no_proto = urlString
+    # Hostname is up to first '/' or end of string
+    slash_index = url_no_proto.find("/")
+    if slash_index != -1:
+        host_port = url_no_proto[:slash_index]
+    else:
+        host_port = url_no_proto
+    # Remove port if any
+    host = host_port.split(":")[0]
+    # Return host, or empty string if not found
+    return host if host else ""
+
+
+def get_hostname_postprocessors(urlString: str) -> List[Dict[str, Any]]:
+    hostname = get_hostname(urlString)
+    if hostname in _hostname_postprocessors:
+        return _hostname_postprocessors[hostname]
+    return []
+
+
+def normalize_rpc_params(
+    raw_params: Any,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """Accept params as JSON string or object and normalize to object."""
     if isinstance(raw_params, dict):
         return raw_params, None
@@ -255,10 +367,7 @@ def main() -> None:
             try:
                 req: Dict[str, Any] = json.loads(line)
             except json.JSONDecodeError as e:
-                resp = rpc_response(
-                    id="",
-                    error=f"Invalid JSON: {str(e)}"
-                )
+                resp = rpc_response(id="", error=f"Invalid JSON: {str(e)}")
                 write_json(resp)
                 continue
 
@@ -271,27 +380,19 @@ def main() -> None:
 
             # Validate request structure
             if not req_id_value:
-                resp = rpc_response(
-                    id="",
-                    error="Missing required field: id (string)"
-                )
+                resp = rpc_response(id="", error="Missing required field: id (string)")
             elif not method:
                 resp = rpc_response(
-                    id=req_id_value,
-                    error="Missing required field: method"
+                    id=req_id_value, error="Missing required field: method"
                 )
             elif params_error is not None:
-                resp = rpc_response(
-                    id=req_id_value,
-                    error=params_error
-                )
+                resp = rpc_response(id=req_id_value, error=params_error)
             else:
                 # Route to handler
                 handler = _rpc_methods.get(method)
                 if not handler:
                     resp = rpc_response(
-                        id=req_id_value,
-                        error=f"Unknown method: {method}"
+                        id=req_id_value, error=f"Unknown method: {method}"
                     )
                 else:
                     try:
@@ -300,7 +401,7 @@ def main() -> None:
                         tb = traceback.format_exc()
                         resp = rpc_response(
                             id=req_id_value,
-                            error=f"Handler exception: {type(e).__name__}: {str(e)}\n{tb}"
+                            error=f"Handler exception: {type(e).__name__}: {str(e)}\n{tb}",
                         )
 
             # Send JSON response
@@ -311,8 +412,7 @@ def main() -> None:
         except Exception as e:
             tb = traceback.format_exc()
             resp = rpc_response(
-                id="",
-                error=f"Fatal error: {type(e).__name__}: {str(e)}\n{tb}"
+                id="", error=f"Fatal error: {type(e).__name__}: {str(e)}\n{tb}"
             )
             try:
                 write_json(resp)

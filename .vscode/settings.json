@@ -30,5 +30,8 @@
     "**/.svn/**"
   ],
   "discord.enabled": false,
-  "typescript.preferences.importModuleSpecifier": "non-relative"
+  "typescript.preferences.importModuleSpecifier": "non-relative",
+  "python.defaultInterpreterPath": "python",
+  "python.venvPath": "./.venv",
+  "python.languageServer": "None"
 }

@@ -54,7 +54,16 @@ export default function AddLink({ showDownloadPath, children }: { showDownloadPa
 		ev.preventDefault();
 		const textData = ev.clipboardData.getData("text");
 		if (!textData) return;
-		setMediaUrl((s) => s.replace(/\r?\n$/, "") + "\n" + textData.trim() + "\n");
+		setMediaUrl((s) => {
+			const existing = s.trimEnd();
+			const newLinks = textData
+				.replace(/\r\n?/g, "\n")
+				.split("\n")
+				.map((line) => line.trim())
+				.filter(Boolean)
+				.join("\n");
+			return (existing ? existing + "\n" : "") + newLinks + "\n";
+		});
 	}, []);
 	return (
 		<>
