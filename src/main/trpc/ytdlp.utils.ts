@@ -115,7 +115,7 @@ export function sanitizeFilename(filename: string) {
 export const DEFAULT_OUTTMPL = `[%(source)s_%(id)s] %(title)s.%(ext)s`;
 
 export function getOuttmpl() {
-	const outtmpl = appStore.get("ytdlp.flags.outtmpl", DEFAULT_OUTTMPL);
+	const outtmpl = appStore.get("ytdlp.flags.outtmpl", null) ?? DEFAULT_OUTTMPL;
 	return outtmpl;
 }
 export function getDownloadPath() {

@@ -17,7 +17,9 @@ import json
 import os
 import sys
 import traceback
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from datetime import datetime
+from io import FileIO
+from typing import Any, Callable, Dict, List, Optional, TextIO, Tuple
 
 # Assume we have yt-dlp installed
 try:
@@ -27,6 +29,59 @@ try:
 except ImportError:
     YoutubeDL = None
     YTDLP_VERSION = None
+
+class Logger:
+    def __logger_call(self, level: str, message: str):
+        print(f"[{level}][{self.name}] {message}")
+        self.file.write(f"[{level}][{self.name}] {message}\n")
+        if not self.file.closed:
+            self.file.flush()
+    def __open_file(self):
+        date_day = datetime.now().strftime("%Y-%m-%d")
+        logger_name = f"{self.name.lower().replace(' ', '_')}_{date_day}.log"
+        self.file = open(os.path.join(os.path.dirname(__file__), logger_name), "a", encoding="utf-8")
+    def __init__(self, name: str, file: FileIO | None = None):
+        self.name = name
+        self.file = None
+        self.__open_file()
+        self.catch_all_unhandled_exceptions()
+
+    def catch_all_unhandled_exceptions(self):
+        """
+        Install hooks to catch and log all unhandled exceptions and uncaught stderr output.
+        """
+        import sys
+
+        def excepthook(exc_type, exc_value, exc_tb):
+            self.error("Unhandled exception:")
+            self.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+        sys.excepthook = excepthook
+
+        class StderrLogger:
+            def __init__(self, logger_instance):
+                self.logger = logger_instance
+
+            def write(self, message):
+                message = str(message)
+                if message.strip():
+                    self.logger.error(message.rstrip())
+
+            def flush(self):
+                pass
+
+        sys.stderr = StderrLogger(self)
+
+    def __del__(self):
+        self.file.close()
+
+    def info(self, message: str):
+        self.__logger_call("INFO", message)
+    def error(self, message: str):
+        self.__logger_call("ERROR", message)
+    def warn(self, message: str):
+        self.__logger_call("WARN", message)
+    def debug(self, message: str):
+        self.__logger_call("DEBUG", message)
 
 
 WORKER_ID = os.environ.get("YTDLP_WORKER_ID")
@@ -331,8 +386,9 @@ def normalize_rpc_params(
         return parsed, None
     return None, "Invalid params: must be an object or JSON object string"
 
-
+logger = Logger("worker_" + WORKER_ID)
 def main() -> None:
+    logger.info("Worker started")
     initialized = False
     version = None
     if YoutubeDL:
@@ -409,6 +465,7 @@ def main() -> None:
             resp = rpc_response(
                 id="", error=f"Fatal error: {type(e).__name__}: {str(e)}\n{tb}"
             )
+            logger.error(f"Fatal error: {type(e).__name__}: {str(e)}\n{tb or 'No traceback available'}")
             try:
                 write_json(resp)
             except Exception:

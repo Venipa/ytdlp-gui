@@ -12,7 +12,7 @@ import queuePromise from "@shared/promises/helper";
 import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { desc } from "drizzle-orm";
-import { omit } from "lodash";
+import { cloneDeep, omit } from "lodash-es";
 import { VideoInfo } from "yt-dlp-wrap/types";
 import { YTDLDownloadStatus, YTDLItem, YTDLMediaType, YTDLStatus } from "ytdlp-gui/types";
 import { z } from "zod";
@@ -124,7 +124,6 @@ class DownloadQueueManager {
 		Object.assign(dbFile, {
 			metaId: existingDbFile.metaId,
 			meta: existingDbFile.meta,
-			filepath: existingDbFile.filepath,
 			filesize: dbFile.filesize || existingDbFile.filesize,
 			source: new URL(dbFile.url).hostname,
 			state: "fetching_meta",
@@ -175,6 +174,7 @@ class DownloadQueueManager {
 		dbFile.metaId = videoInfo.id;
 		dbFile.state = "fetching_meta";
 		dbFile.source = new URL(url).hostname;
+		dbFile.filepath = getDownloadPathWithFilename(videoInfo.filename);
 
 		pushLogToClient(`[${dbFile.id}=${dbFile.metaId}] added new download: ${dbFile.title}`, "info");
 
@@ -183,7 +183,7 @@ class DownloadQueueManager {
 	}
 
 	private trimVideoInfo(videoInfo: VideoInfo): VideoInfo {
-		return omit(videoInfo, "formats", "thumbnails", "automatic_captions", "heatmap") as VideoInfo;
+		return cloneDeep(omit(videoInfo, "formats", "thumbnails", "automatic_captions", "heatmap")) as VideoInfo;
 	}
 
 	private async deleteDownloadItem(dbFile: SelectDownload) {
@@ -236,9 +236,9 @@ class DownloadQueueManager {
 
 	private async executeDownload(dbFile: SelectDownload, videoInfo: VideoInfo, controller: AbortController) {
 		const settings = appStore.store.ytdlp;
-		const downloadPath = getDownloadPathWithFilename(videoInfo.filename);
+		const downloadPath = dbFile.filepath ?? getDownloadPathWithFilename(videoInfo.filename);
 		const selectedMediaType = (dbFile.type ?? "auto") as YTDLMediaType;
-		const selectedFormat = MEDIA_TYPE_TO_FORMAT[selectedMediaType] ?? "best";
+		const selectedFormat = MEDIA_TYPE_TO_FORMAT[selectedMediaType] ?? "video-best";
 		const ytdlpOptions: YtdlpOptions = {
 			format: selectedFormat,
 			filename: downloadPath,
@@ -324,6 +324,8 @@ class DownloadQueueManager {
 			data: videoInfo,
 			state: "progressing",
 		});
+		log.info("executeDownload", { filename: videoInfo.filename, downloadPath, selectedMediaType, selectedFormat });
+		this.updateDownloadEntry(dbFile);
 		try {
 			await ytdl.downloadWithOutput(dbFile.url, ytdlpOptions, (requestId) => {
 				activeRequestId = requestId;
@@ -343,7 +345,7 @@ class DownloadQueueManager {
 				this.finishedDownloads.set(dbFile.url, "success");
 				pushLogToClient(`[${dbFile.id}=${dbFile.metaId}] finished download: ${dbFile.title}`, "success");
 			} catch (error) {
-				log.error("failed to get file stats", { error });
+				log.error("failed to get file stats", { error, filepath: dbFile.filepath, meta: dbFile.meta });
 				this.finishedDownloads.set(dbFile.url, "error");
 				dbFile.state = "error";
 				dbFile.error = error;
