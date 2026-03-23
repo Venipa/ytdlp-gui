@@ -238,7 +238,7 @@ class DownloadQueueManager {
 		const settings = appStore.store.ytdlp;
 		const downloadPath = dbFile.filepath ?? getDownloadPathWithFilename(videoInfo.filename);
 		const selectedMediaType = (dbFile.type ?? "auto") as YTDLMediaType;
-		const selectedFormat = MEDIA_TYPE_TO_FORMAT[selectedMediaType] ?? "video-best";
+		const selectedFormat = MEDIA_TYPE_TO_FORMAT[selectedMediaType] ?? MEDIA_TYPE_TO_FORMAT["video-best"]!;
 		const ytdlpOptions: YtdlpOptions = {
 			format: selectedFormat,
 			filename: downloadPath,
