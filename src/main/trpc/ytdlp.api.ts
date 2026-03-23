@@ -318,6 +318,7 @@ class DownloadQueueManager {
 		ytdlpOptions.filename = dbFile.filepath;
 		ytdlpOptions.windowsfilenames = platform.isWindows;
 		ytdlpOptions.info = videoInfo;
+		ytdlpOptions.cliargs = settings.flags.custom.split(" ");
 		ytdlpEvents.emit("status", {
 			id: dbFile.id,
 			action: "download",

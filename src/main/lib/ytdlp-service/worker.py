@@ -19,16 +19,18 @@ import sys
 import traceback
 from datetime import datetime
 from io import FileIO
-from typing import Any, Callable, Dict, List, Optional, TextIO, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # Assume we have yt-dlp installed
 try:
     from yt_dlp import YoutubeDL
     from yt_dlp import parse_options as ytdlp_parse_options
+    from yt_dlp.utils import cli_configuration_args as ytdlp_parse_cliargs
     from yt_dlp.version import __version__ as YTDLP_VERSION
 except ImportError:
     YoutubeDL = None
     YTDLP_VERSION = None
+
 
 class Logger:
     def __logger_call(self, level: str, message: str):
@@ -36,10 +38,14 @@ class Logger:
         self.file.write(f"[{level}][{self.name}] {message}\n")
         if not self.file.closed:
             self.file.flush()
+
     def __open_file(self):
         date_day = datetime.now().strftime("%Y-%m-%d")
         logger_name = f"{self.name.lower().replace(' ', '_')}_{date_day}.log"
-        self.file = open(os.path.join(os.path.dirname(__file__), logger_name), "a", encoding="utf-8")
+        self.file = open(
+            os.path.join(os.path.dirname(__file__), logger_name), "a", encoding="utf-8"
+        )
+
     def __init__(self, name: str, file: FileIO | None = None):
         self.name = name
         self.file = None
@@ -55,6 +61,7 @@ class Logger:
         def excepthook(exc_type, exc_value, exc_tb):
             self.error("Unhandled exception:")
             self.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+
         sys.excepthook = excepthook
 
         class StderrLogger:
@@ -76,10 +83,13 @@ class Logger:
 
     def info(self, message: str):
         self.__logger_call("INFO", message)
+
     def error(self, message: str):
         self.__logger_call("ERROR", message)
+
     def warn(self, message: str):
         self.__logger_call("WARN", message)
+
     def debug(self, message: str):
         self.__logger_call("DEBUG", message)
 
@@ -172,8 +182,12 @@ def merge_options(options: Any) -> Dict[str, Any]:
     opts = dict(options) if isinstance(options, dict) else {}
     opts["quiet"] = True
     opts["no_warnings"] = True
+    cliargs = opts.get("cliargs", None)
     ytdlOptions = dict(ytdlp_parse_options([]).ydl_opts)
-    ytdlOptions.update(opts)
+    # add cliargs to ytdlOptions if provided
+    if cliargs and isinstance(cliargs, list) and len(cliargs) > 0:
+        ytdlOptions.update(transform_cliargs(cliargs))
+    ytdlOptions.update(opts) # set required options
     return ytdlOptions
 
 
@@ -273,6 +287,10 @@ def ensure_download_success(exit_code: Any) -> None:
     """Raise if yt-dlp reports a non-zero download result code."""
     if isinstance(exit_code, int) and exit_code != 0:
         raise RuntimeError(f"yt-dlp download failed with exit code {exit_code}")
+
+
+def transform_cliargs(cliargs: List[str]) -> List[str]:
+    return ytdlp_parse_cliargs(cliargs)
 
 
 def handle_download(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -386,7 +404,10 @@ def normalize_rpc_params(
         return parsed, None
     return None, "Invalid params: must be an object or JSON object string"
 
+
 logger = Logger("worker_" + WORKER_ID)
+
+
 def main() -> None:
     logger.info("Worker started")
     initialized = False
@@ -465,7 +486,9 @@ def main() -> None:
             resp = rpc_response(
                 id="", error=f"Fatal error: {type(e).__name__}: {str(e)}\n{tb}"
             )
-            logger.error(f"Fatal error: {type(e).__name__}: {str(e)}\n{tb or 'No traceback available'}")
+            logger.error(
+                f"Fatal error: {type(e).__name__}: {str(e)}\n{tb or 'No traceback available'}"
+            )
             try:
                 write_json(resp)
             except Exception:
