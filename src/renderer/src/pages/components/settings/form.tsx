@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { appStoreSchema } from "@main/stores/AppStore";
 import { Form } from "@renderer/components/ui/form";
 import { trpc } from "@renderer/lib/trpc-link";
 import { logger } from "@shared/logger";
@@ -7,36 +8,7 @@ import { SubmitHandler, useForm, useFormContext } from "react-hook-form";
 import { z } from "zod";
 import { useApp } from "../app-context";
 
-const settingsSchema = z.object({
-	startMinimized: z.coerce.boolean(),
-	startOnBoot: z.coerce.boolean(),
-	updateChannel: z.enum(["stable", "beta"]).default("stable"),
-	autoUpdate: z.enum(["prompt", "auto", "manual"]).default("prompt"),
-	features: z.object({
-		concurrentDownloads: z.coerce.number().min(1).max(window.api.maxParallelism),
-		clipboardMonitor: z.coerce.boolean(),
-		clipboardMonitorAutoAdd: z.coerce.boolean(),
-		advancedView: z.coerce.boolean(),
-	}),
-	ytdlp: z.object({
-		flags: z
-			.object({
-				custom: z
-					.string()
-					.nullish()
-					.transform((val) => val?.trim() ?? ""),
-				nomtime: z.coerce.boolean(),
-			})
-			.nullish()
-			.transform(
-				(val) =>
-					val ?? {
-						custom: "",
-						nomtime: true,
-					},
-			),
-	}),
-});
+const settingsSchema = appStoreSchema;
 type SettingsValues = z.infer<typeof settingsSchema>;
 const log = logger.child("SettingsFormProvider");
 export function SettingsFormProvider({ children }: PropsWithChildren) {
@@ -52,7 +24,7 @@ export function SettingsFormProvider({ children }: PropsWithChildren) {
 	});
 	const onSubmit: SubmitHandler<SettingsValues> = useCallback(
 		(data) => {
-			logger.child("onSubmit").info("data", { data });
+			log.child("onSubmit").info("data", { data });
 			updateSettings(data).then((newSettings) => {
 				form.reset(newSettings);
 			});

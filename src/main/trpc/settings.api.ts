@@ -1,6 +1,5 @@
 import EventEmitter from "events";
-import platform from "@main/lib/platform";
-import { AppStore } from "@main/stores/AppStore";
+import { AppStore, appStoreSchema } from "@main/stores/AppStore";
 import { appStore } from "@main/stores/app.store";
 import config from "@shared/config";
 import { TRPCError } from "@trpc/server";
@@ -11,9 +10,6 @@ import { z } from "zod";
 import { publicProcedure, router } from "./trpc";
 const settingsChangeEmitter = new EventEmitter();
 const handleKey = `settings_change`;
-appStore.onDidChange("ytdlp.useGlobal", (value) => {
-	if (value && platform.isWindows) appStore.set("ytdlp.useGlobal", false);
-});
 export const settingsRouter = router({
 	index: publicProcedure.query(async () => {
 		return appStore.store;
@@ -59,8 +55,8 @@ export const settingsRouter = router({
 			settingsChangeEmitter.emit(handleKey, { key });
 			return { key, value };
 		}),
-	updateMany: publicProcedure.input(z.record(z.any())).mutation(async ({ ctx, input: settings }) => {
-		appStore.set(merge(appStore.store, settings));
+	updateMany: publicProcedure.input(appStoreSchema).mutation(async ({ ctx, input: settings }) => {
+		appStore.set(appStoreSchema.parse(merge({}, appStore.store, settings)));
 		Object.keys(settings).forEach((key) => {
 			settingsChangeEmitter.emit(handleKey, { key });
 		});

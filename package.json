@@ -120,7 +120,7 @@
     "vaul": "^1.1.0",
     "virtua": "^0.40.0",
     "yaml": "^2.6.0",
-    "zod": "^3.23.8"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

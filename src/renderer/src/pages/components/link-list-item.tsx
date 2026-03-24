@@ -67,12 +67,12 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
 			return {
 				percent: padStatusItem(status.percent?.toFixed(0) ?? "", "percent"),
 				speed: padStatusItem(status.speed ?? "", "speed"),
-				eta: padStatusItem(status.eta ?? "", "eta"),
+				eta: padStatusItem(status.eta ?? "", "eta").split("ETA")[0],
 			};
 		return null;
 	}, [queued, downloading, status]);
 	return (
-		<div className='h-12 hover:bg-muted/60 grid grid-cols-[40px_1fr_minmax(100px,auto)] gap-2 items-center relative cursor-default group/item shrink-0 select-none'>
+		<div className='h-16 hover:bg-muted/60 grid grid-cols-[40px_1fr_minmax(100px,auto)] gap-2 items-center relative cursor-default group/item shrink-0 select-none'>
 			<div className='flex flex-col size-10 items-center justify-center'>
 				{error ? (
 					<QTooltip side='right' content={"An error occurred while downloading."}>
@@ -114,40 +114,36 @@ export function LinkListItem(props: YTDLItem & { key: any }) {
 				)}
 			</div>
 			<FileSheet item={props as any}>
-				<div className='grid grid-rows-[20px_12px] items-center cursor-pointer'>
+				<div className='h-full pt-2 pb-1 grid grid-rows-[20px_12px_auto] items-center cursor-pointer'>
 					<div className='text-sm truncate leading-none'>{title}</div>
 					<div className='flex gap-1 items-center text-xs text-muted-foreground leading-none'>
 						{downloadStatus && (
 							<>
-								<span className='w-[40px] text-right'>{downloadStatus.percent}</span>
+								<span className='w-[40px] text-right tabular-nums'>{downloadStatus.percent}</span>
 								<DotIcon className='size-2' />
 								{downloadStatus.speed && (
 									<>
-										<span className='w-[80px] text-right'>{downloadStatus.speed}</span>
+										<span className='w-[68px] text-right tabular-nums'>{downloadStatus.speed}</span>
 										<DotIcon className='size-2' />
 									</>
 								)}
 								{downloadStatus.eta && (
 									<>
-										<span className='w-[80px] text-right'>{downloadStatus.eta}</span>
+										<span className='w-[40px] text-right tabular-nums'>{downloadStatus.eta}</span>
 										<DotIcon className='size-2' />
 									</>
 								)}
 							</>
 						)}
-						{!error && filesize ? (
+						{!error && filesize && (
 							<>
-								<span className='w-[60px]'>{filesize}</span>
-								<DotIcon className='size-2' />
-							</>
-						) : (
-							<>
-								<span className='w-[60px]'>unknown</span>
+								<span className='w-[60px] tabular-nums'>{filesize}</span>
 								<DotIcon className='size-2' />
 							</>
 						)}
-						{(type && <span className='w-[60px] text-center'>{type}</span>) || <span className='w-[60px] text-center'>unknown</span>}
-						<DotIcon className='size-2' />
+						{type && <span className='w-[60px] text-center'>{type}</span>}
+					</div>
+					<div className='flex items-center gap-1'>
 						{!url ? (
 							<div className='flex cursor-pointer items-center gap-1'>
 								{!faviconUrl ? <LucideGlobe className='size-2.5' /> : <img src={faviconUrl} className='size-2.5' />}

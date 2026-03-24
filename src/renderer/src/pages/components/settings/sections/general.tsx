@@ -21,8 +21,11 @@ export default function GeneralSection({ meta }: { meta: SectionMeta }) {
 	logger.child("GeneralSection").info("form", { isDirty: form.formState.isDirty });
 	return (
 		<PageContent icon={Icon} title={meta.title} description={meta.description} tabId={meta.title}>
+			<div className='flex flex-col gap-0'>
+				<h2 className='text-lg font-medium'>{meta.title}</h2>
+				<p className='text-xs text-muted-foreground'>{meta.description}</p>
+			</div>
 			<div className='flex flex-col gap-6'>
-				{" "}
 				<GroupSection title='Updates'>
 					<SettingsSelect name='updateChannel' title='Update channel'>
 						<SettingsSelectItem value='stable' label='Stable' />

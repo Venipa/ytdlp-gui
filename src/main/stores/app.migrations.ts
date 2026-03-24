@@ -29,7 +29,7 @@ const appStoreMigrations: Migration<AppStore>[] = [
 	{
 		version: 3,
 		hook(instance, currentVersion) {
-			instance.store.ytdlp.path = "internal";
+			removeProperty(instance.store.ytdlp, "path");
 			removeProperty(instance.store.ytdlp, "checkForUpdate");
 		},
 	},
@@ -46,6 +46,12 @@ const appStoreMigrations: Migration<AppStore>[] = [
 		version: 5,
 		hook(instance, currentVersion) {
 			instance.set("ytdlp.flags.outtmpl", DEFAULT_OUTTMPL);
+		},
+	},
+	{
+		version: 6,
+		hook(instance, currentVersion) {
+			removeProperty(instance.store.ytdlp, "custom");
 		},
 	},
 ];

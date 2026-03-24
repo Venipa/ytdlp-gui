@@ -4,6 +4,7 @@ import { Tab, TabNavbar } from "@renderer/components/ui/responsive-tabs";
 import { Sheet, SheetContent } from "@renderer/components/ui/sheet";
 import { QTooltip } from "@renderer/components/ui/tooltip";
 import { cn } from "@renderer/lib/utils";
+import { logger } from "@shared/logger";
 import { XIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { HTMLProps, PropsWithChildren, ReactElement, createElement, useMemo, useState } from "react";
@@ -89,6 +90,7 @@ function DialogFormActionControls() {
 	const { updateSettings } = useApp();
 	const onSubmit = form.handleSubmit(async (data) => {
 		const newSettings = await updateSettings(data);
+		logger.child("onSubmit").info("data", { data, newSettings });
 		reset(newSettings);
 	});
 	const shouldShowControls = formState.isDirty || formState.isSubmitting;

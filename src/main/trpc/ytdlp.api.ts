@@ -244,6 +244,7 @@ class DownloadQueueManager {
 			filename: downloadPath,
 			windowsfilenames: platform.isWindows,
 		};
+		const cliargs = settings?.flags?.custom?.split(" ") ?? [];
 
 		if (selectedMediaType === "audio-mp3") {
 			ytdlpOptions.postprocessors = [
@@ -318,7 +319,7 @@ class DownloadQueueManager {
 		ytdlpOptions.filename = dbFile.filepath;
 		ytdlpOptions.windowsfilenames = platform.isWindows;
 		ytdlpOptions.info = videoInfo;
-		ytdlpOptions.cliargs = settings.flags.custom.split(" ");
+		ytdlpOptions.cliargs = cliargs;
 		ytdlpEvents.emit("status", {
 			id: dbFile.id,
 			action: "download",

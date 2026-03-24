@@ -38,7 +38,8 @@
     },
     "types": [
       "./node_modules/styled-jsx/global.d.ts",
-      "./src/shared/primititves.d.ts"
+      "./src/shared/primititves.d.ts",
+      "./src/shared/**/*.d.ts"
     ]
   }
 }

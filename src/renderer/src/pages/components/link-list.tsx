@@ -62,9 +62,7 @@ export default function LinkList(props: { className?: string }) {
 			<VList className='grow relative flex flex-col pb-6' style={{ height: "100%" }}>
 				{isFetching && <SuspenseLoader className='absolute bg-background inset-0' />}
 				{filteredItems?.map((d) => (
-					<div className='h-12' key={d.id}>
-						<LinkListItem {...(d as any)} />
-					</div>
+					<LinkListItem key={d.id} {...(d as any)} />
 				))}
 			</VList>
 			{noResults && (

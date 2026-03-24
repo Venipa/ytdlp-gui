@@ -4,6 +4,7 @@ import createYtdlpService from "@main/lib/ytdlp-service";
 import YtdlpWorkerManager from "@main/lib/ytdlp-service/manager";
 import { YtdlpOutputEvent } from "@main/lib/ytdlp-service/python";
 import { YtdlpOptions } from "@main/lib/ytdlp-service/ytdlp-options";
+import { DEFAULT_OUTTMPL } from "@main/stores/AppStore";
 import { appStore } from "@main/stores/app.store";
 import { Logger } from "@shared/logger";
 import { app } from "electron";
@@ -112,7 +113,7 @@ export function sanitizeFilename(filename: string) {
 	return filename.replace(pattern, "_");
 }
 
-export const DEFAULT_OUTTMPL = `[%(source)s_%(id)s] %(title)s.%(ext)s`;
+export { DEFAULT_OUTTMPL };
 
 export function getOuttmpl() {
 	const outtmpl = appStore.get("ytdlp.flags.outtmpl", null) ?? DEFAULT_OUTTMPL;

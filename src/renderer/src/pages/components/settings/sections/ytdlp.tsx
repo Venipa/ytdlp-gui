@@ -6,6 +6,7 @@ import { useSettingsForm } from "@renderer/pages/components/settings/form";
 import PageContent from "@renderer/pages/components/settings/page-content";
 import { SectionMeta } from "@renderer/pages/components/settings/utils";
 import { LucideDownload } from "lucide-react";
+import { useCallback } from "react";
 const exampleFlags = [
 	"--cache-dir /path/to/cache",
 	{
@@ -44,18 +45,19 @@ export const meta: SectionMeta = {
 export default function YtdlpSection({ meta }: { meta: SectionMeta }) {
 	const Icon = meta.icon;
 	const form = useSettingsForm();
+	const formatter = useCallback((values: string[]) => values?.join(" "), []);
 	return (
 		<PageContent icon={Icon} title={meta.title} description={meta.description} tabId={meta.title}>
+			<div className='flex flex-col gap-0'>
+				<h2 className='text-lg font-medium'>{meta.title}</h2>
+				<p className='text-xs text-muted-foreground'>{meta.description}</p>
+			</div>
 			<div className='flex flex-col gap-6'>
-				<div className='flex flex-col gap-0'>
-					<h2 className='text-lg font-medium'>{meta.title}</h2>
-					<p className='text-xs text-muted-foreground'>{meta.description}</p>
-				</div>
-
 				<GroupSection title='Flags' className='gap-6'>
 					<SettingsInput
-						name='ytdlp.flags.custom'
-						title={"Custom arguments, check yt-dlp docs for more info ..."}
+						name='ytdlp.cliargs'
+						formatter={formatter}
+						title={"CLI arguments, check yt-dlp docs for more info ..."}
 						hint={
 							<div className='text-muted-foreground text-xs flex flex-wrap gap-1'>
 								{exampleFlags.map((flag) => {
@@ -68,15 +70,11 @@ export default function YtdlpSection({ meta }: { meta: SectionMeta }) {
 													variant='pre'
 													className='cursor-pointer hover:bg-muted/40'
 													onClick={() =>
-														form.setValue(
-															"ytdlp.flags.custom",
-															form.getValues().ytdlp.flags.custom ? `${form.getValues().ytdlp.flags.custom} ${label}` : label,
-															{
-																shouldDirty: true,
-																shouldTouch: true,
-																shouldValidate: true,
-															},
-														)
+														form.setValue("ytdlp.cliargs", [...form.getValues().ytdlp.cliargs, label], {
+															shouldDirty: true,
+															shouldTouch: true,
+															shouldValidate: true,
+														})
 													}>
 													{label}
 												</Badge>
@@ -88,15 +86,11 @@ export default function YtdlpSection({ meta }: { meta: SectionMeta }) {
 											variant='pre'
 											className='cursor-pointer hover:bg-muted/40'
 											onClick={() =>
-												form.setValue(
-													"ytdlp.flags.custom",
-													form.getValues().ytdlp.flags.custom ? `${form.getValues().ytdlp.flags.custom} ${label}` : label,
-													{
-														shouldDirty: true,
-														shouldTouch: true,
-														shouldValidate: true,
-													},
-												)
+												form.setValue("ytdlp.cliargs", [...form.getValues().ytdlp.cliargs, label], {
+													shouldDirty: true,
+													shouldTouch: true,
+													shouldValidate: true,
+												})
 											}
 											key={label}>
 											{label}

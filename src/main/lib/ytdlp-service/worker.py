@@ -23,9 +23,10 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # Assume we have yt-dlp installed
 try:
+    import yt_dlp
     from yt_dlp import YoutubeDL
     from yt_dlp import parse_options as ytdlp_parse_options
-    from yt_dlp.utils import cli_configuration_args as ytdlp_parse_cliargs
+    from yt_dlp.options import create_parser as ytdlp_create_parser
     from yt_dlp.version import __version__ as YTDLP_VERSION
 except ImportError:
     YoutubeDL = None
@@ -183,11 +184,12 @@ def merge_options(options: Any) -> Dict[str, Any]:
     opts["quiet"] = True
     opts["no_warnings"] = True
     cliargs = opts.get("cliargs", None)
-    ytdlOptions = dict(ytdlp_parse_options([]).ydl_opts)
-    # add cliargs to ytdlOptions if provided
+    ytdlOptions: Dict[str, Any] = {}
     if cliargs and isinstance(cliargs, list) and len(cliargs) > 0:
-        ytdlOptions.update(transform_cliargs(cliargs))
-    ytdlOptions.update(opts) # set required options
+      ytdlOptions = dict(transform_cliargs(cliargs), opts)
+    else:
+      ytdlOptions = dict(ytdlp_parse_options([]).ydl_opts)
+      ytdlOptions.update(opts)
     return ytdlOptions
 
 
@@ -288,9 +290,27 @@ def ensure_download_success(exit_code: Any) -> None:
     if isinstance(exit_code, int) and exit_code != 0:
         raise RuntimeError(f"yt-dlp download failed with exit code {exit_code}")
 
+def parse_patched_options(opts, defaults: Dict[str, Any] | None = None):
+    patched_parser = ytdlp_create_parser()
+    patched_parser.defaults.update(defaults or {})
+    yt_dlp.options.create_parser = lambda: patched_parser
+    try:
+        return yt_dlp.parse_options(opts)
+    finally:
+        yt_dlp.options.create_parser = ytdlp_create_parser
 
-def transform_cliargs(cliargs: List[str]) -> List[str]:
-    return ytdlp_parse_cliargs(cliargs)
+
+default_opts = parse_patched_options([]).ydl_opts
+
+
+def transform_cliargs(opts, defaults: Dict[str, Any] | None = None):
+    opts = (yt_dlp.parse_options if defaults else parse_patched_options)(opts).ydl_opts
+
+    diff = {k: v for k, v in opts.items() if default_opts[k] != v}
+    if 'postprocessors' in diff:
+        diff['postprocessors'] = [pp for pp in diff['postprocessors']
+                                  if pp not in default_opts['postprocessors']]
+    return diff
 
 
 def handle_download(id: str, params: Dict[str, Any]) -> Dict[str, Any]:

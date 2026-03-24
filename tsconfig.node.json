@@ -23,7 +23,8 @@
     "types": [
       "electron-vite/node",
       "./src/main/global.d.ts",
-      "./src/shared/primititves.d.ts"
+      "./src/shared/primititves.d.ts",
+      "./src/shared/**/*.d.ts"
     ],
     "baseUrl": ".",
     "paths": {

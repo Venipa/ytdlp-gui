@@ -4,14 +4,12 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
 import { defineConfig } from "electron-vite";
 import { merge } from "lodash-es";
-import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname } from "node:path";
+import path, { dirname } from "node:path";
 import { basename, join, relative, resolve } from "path";
 import type { Plugin } from "vite";
 import { AliasOptions, ResolveOptions } from "vite";
-
+import "./src/shared/extensions/string.ts";
 console.log("current working dir:", resolve("."));
 const resolveOptions: { resolve: ResolveOptions & { alias: AliasOptions } } = {
 	resolve: {
@@ -30,175 +28,21 @@ const isMac = !!process.env.ACTION_RUNNER?.startsWith("macos-");
 const isProduction = process.env.NODE_ENV === "production";
 
 const PY_BYTECODE_PREFIX = "\0py-bytecode:";
-const PY_ASSET_RE = /\.py\?asset(&asarUnpack)?(?=&|$)/;
-const PY_REQUIREMENTS_PATH = resolve("requirements.txt");
-const PY_DEPS_ASSET_DIR = "resources/python-deps";
 
-const COMPILE_SCRIPT = `import py_compile\nimport sys\npy_compile.compile(sys.argv[1], cfile=sys.argv[2])\n`;
-const COMPILE_EXT = ".pyc";
-function compilePyToPyc(pyPath: string): Buffer {
-	const outFile = resolve(tmpdir(), `ytdlp-${basename(pyPath, ".py")}-${Date.now()}.${COMPILE_EXT}`);
-	const scriptPath = resolve(tmpdir(), "ytdlp-compile-worker.py");
-	writeFileSync(scriptPath, COMPILE_SCRIPT, { encoding: "utf8" }); // ensure UTF-8 script
-	try {
-		let compiled = false;
-		for (const py of ["python", "python3", "py"]) {
-			try {
-				execSync(
-					// explicitly set PYTHONIOENCODING to utf-8 for output
-					`${py} "${scriptPath}" "${pyPath}" "${outFile}"`,
-					{
-						stdio: "pipe",
-						windowsHide: true,
-						env: { ...process.env, PYTHONIOENCODING: "utf-8" }, // redundant, but help just in case
-					},
-				);
-				compiled = true;
-				break;
-			} catch (err: any) {
-				// dump any error output for debugging
-				if (typeof err === "object" && err !== null && "stderr" in err && Buffer.isBuffer(err.stderr)) {
-					const stderrStr = err.stderr.toString("utf8");
-					if (stderrStr) {
-						console.error(`[python-bytecode] ${py} stderr:\n${stderrStr}`);
-					}
-				}
-				// try next
-			}
-		}
-		if (!compiled || !existsSync(outFile)) {
-			throw new Error(`[python-bytecode] Failed to compile ${pyPath}. Ensure Python is installed (python/python3/py) and the file exists.`);
-		}
-		return readFileSync(outFile);
-	} finally {
-		// Always cleanup
-		try {
-			unlinkSync(scriptPath);
-		} catch {}
-		if (existsSync(outFile))
-			try {
-				unlinkSync(outFile);
-			} catch {}
-	}
+function isPythonAssetRequest(source: string): boolean {
+	const [filePath, queryString = ""] = source.split("?", 2);
+	if (!filePath.endsWith(".py")) return false;
+	const searchParams = new URLSearchParams(queryString);
+	return searchParams.has("asset");
 }
 
-function getPythonCandidates(): readonly string[] {
-	return ["python", "python3", "py"] as const;
-}
 
-function runPythonCommand(commandFactory: (pythonExecutable: string) => string): void {
-	for (const py of getPythonCandidates()) {
-		try {
-			execSync(commandFactory(py), {
-				stdio: "pipe",
-				windowsHide: true,
-			});
-			return;
-		} catch {
-			/* try next */
-		}
-	}
-	throw new Error("[python-bytecode] Failed to run Python command using python/python3/py.");
-}
-
-function normalizeToken(value: string): string {
-	return value.toLowerCase().replace(/[-_.]/g, "");
-}
-
-function extractImportedModules(pyPath: string): Set<string> {
-	const sourceCode = readFileSync(pyPath, "utf8");
-	const modules = new Set<string>();
-
-	const importMatches = sourceCode.matchAll(/^\s*import\s+([A-Za-z_][A-Za-z0-9_\.]*)/gm);
-	for (const match of importMatches) {
-		const [topLevel] = match[1].split(".");
-		if (topLevel) {
-			modules.add(normalizeToken(topLevel));
-		}
-	}
-
-	const fromImportMatches = sourceCode.matchAll(/^\s*from\s+([A-Za-z_][A-Za-z0-9_\.]*)\s+import\s+/gm);
-	for (const match of fromImportMatches) {
-		const [topLevel] = match[1].split(".");
-		if (topLevel) {
-			modules.add(normalizeToken(topLevel));
-		}
-	}
-
-	return modules;
-}
-
-function getRequiredRequirementLines(pyPath: string, requirementsPath: string): string[] {
-	if (!existsSync(requirementsPath)) {
-		return [];
-	}
-
-	const importedModules = extractImportedModules(pyPath);
-	if (importedModules.size === 0) {
-		return [];
-	}
-
-	const requirementsContent = readFileSync(requirementsPath, "utf8");
-	const requirementLines = requirementsContent
-		.split(/\r?\n/)
-		.map((line) => line.trim())
-		.filter((line) => line.length > 0 && !line.startsWith("#"));
-
-	return requirementLines.filter((line) => {
-		const packageName = line.split(/==|>=|<=|~=|!=|>|<|@/)[0]?.trim();
-		if (!packageName) {
-			return false;
-		}
-		return importedModules.has(normalizeToken(packageName));
-	});
-}
-
-function installRequirementsToTarget(requirementLines: readonly string[], targetDir: string): void {
-	rmSync(targetDir, { recursive: true, force: true });
-	mkdirSync(targetDir, { recursive: true });
-	const tempRequirementsPath = join(targetDir, "requirements.selected.txt");
-	writeFileSync(tempRequirementsPath, `${requirementLines.join("\n")}\n`);
-	try {
-		runPythonCommand((py) => `${py} -m pip install -r "${tempRequirementsPath}" --target "${targetDir}" --disable-pip-version-check --no-compile`);
-	} finally {
-		if (existsSync(tempRequirementsPath)) {
-			unlinkSync(tempRequirementsPath);
-		}
-	}
-}
-
-function emitDirectoryAssets(emitAsset: (assetName: string, sourceBuffer: Buffer) => void, rootDir: string, currentDir: string = rootDir): void {
-	const entries = readdirSync(currentDir);
-	for (const entry of entries) {
-		const fullPath = join(currentDir, entry);
-		const stats = statSync(fullPath);
-		if (stats.isDirectory()) {
-			emitDirectoryAssets(emitAsset, rootDir, fullPath);
-			continue;
-		}
-		const relativePath = relative(rootDir, fullPath).replace(/\\/g, "/");
-		emitAsset(`${PY_DEPS_ASSET_DIR}/${relativePath}`, readFileSync(fullPath));
-	}
-}
-
-function pythonBytecodePlugin(): Plugin {
-	let depsTmpDir: string | null = null;
-	let depsEmitted = false;
-
+function pythonAssetPlugin(): Plugin {
 	return {
 		name: "python-bytecode",
 		enforce: "pre",
-		// buildStart() {
-		// 	if (!existsSync(PY_REQUIREMENTS_PATH)) {
-		// 		return;
-		// 	}
-		// 	if (depsTmpDir) {
-		// 		return;
-		// 	}
-		// 	depsTmpDir = mkdtempSync(join(tmpdir(), "ytdlp-pydeps-"));
-		// },
 		async resolveId(source, importer) {
-			if (!PY_ASSET_RE.test(source)) return null;
+			if (!isPythonAssetRequest(source)) return null;
 			const pyPath = source.replace(/\?.*$/, "");
 			const resolved = await this.resolve(pyPath, importer ?? undefined, { skipSelf: true });
 			if (!resolved?.id) return null;
@@ -234,14 +78,8 @@ function pythonBytecodePlugin(): Plugin {
 				unpackedPath,
 			});
 			export default resolvedPath;`;
-		},
-		closeBundle() {
-			if (depsTmpDir) {
-				rmSync(depsTmpDir, { recursive: true, force: true });
-				depsTmpDir = null;
-			}
-		},
-	};
+		}
+  }
 }
 
 function venvCopyPlugin(options: { venvPath: string }): Plugin {
@@ -289,10 +127,74 @@ function venvCopyPlugin(options: { venvPath: string }): Plugin {
 	};
 }
 
+function injectExtensionsPlugin(): Plugin {
+	return {
+		name: "inject-extensions-plugin",
+		enforce: "pre",
+		// Never claim ids here; let Vite/plugin pipeline resolve modules.
+		resolveId() {
+			return null;
+		},
+		async transform(code: string, id: string) {
+			if (
+				!/src[\\/].*\.(ts|js)$/.test(id) ||
+				id.includes("src/shared/extensions/")
+			) {
+				return null;
+			}
+			const extensionsDir = resolve("./src/shared/extensions");
+			// Helper to get all .ts files in extensionsDir/* and extensionsDir/*/*
+			function collectExtensionFiles(rootDir: string): string[] {
+				const results: string[] = [];
+				for (const f of readdirSync(rootDir)) {
+					const absPath = join(rootDir, f);
+					const stat = statSync(absPath);
+					if (stat.isFile() && f.endsWith(".ts")) {
+						results.push(absPath);
+					} else if (stat.isDirectory()) {
+						for (const subF of readdirSync(absPath)) {
+							const subAbsPath = join(absPath, subF);
+							const subStat = statSync(subAbsPath);
+							if (subStat.isFile() && subF.endsWith(".ts")) {
+								results.push(subAbsPath);
+							}
+						}
+					}
+				}
+				return results;
+			}
+
+			const extensionFiles = collectExtensionFiles(extensionsDir).filter((filepath) => {
+				const source = readFileSync(filepath, "utf8");
+				return source.includes(".prototype.");
+			});
+
+			const extensionImports: string[] = extensionFiles.map((absFile) => {
+				const importPath = path.relative(path.dirname(id), absFile).replace(/\\/g, "/").replace(/\.ts$/, "");
+				return `import "${importPath.startsWith(".") ? importPath : "./" + importPath}";`;
+			});
+
+			if (extensionImports.length === 0) {
+				return null;
+			}
+
+			const newImports = extensionImports.filter((imp) => !code.includes(imp));
+			if (newImports.length === 0) {
+				return null;
+			}
+			const injectedCode = [...newImports, code].join("\n");
+			return {
+				code: injectedCode,
+				map: null,
+			};
+		},
+	};
+}
+
 export default defineConfig({
 	main: {
 		...resolveOptions,
-		plugins: [ViteYaml(), pythonBytecodePlugin(), venvCopyPlugin({ venvPath: resolve(".venv") })],
+		plugins: [ViteYaml(), pythonAssetPlugin(), venvCopyPlugin({ venvPath: resolve(".venv") }), injectExtensionsPlugin()],
 		build: {
 			bytecode: isProduction ? { transformArrowFunctions: false } : false,
 			externalizeDeps: { exclude: [...externalizedEsmDeps] },
@@ -308,7 +210,7 @@ export default defineConfig({
 	},
 	preload: {
 		...resolveOptions,
-		plugins: [ViteYaml()],
+		plugins: [ViteYaml(), injectExtensionsPlugin()],
 		build: { externalizeDeps: { exclude: [...externalizedEsmDeps] }, bytecode: isProduction ? { transformArrowFunctions: false } : false },
 	},
 	renderer: {
@@ -321,6 +223,7 @@ export default defineConfig({
 		}),
 		plugins: [
 			ViteYaml(),
+			injectExtensionsPlugin(),
 			react({
 				plugins: [["@swc/plugin-styled-jsx", {}]],
 			}),

@@ -18,6 +18,10 @@ export default function DownloaderSection({ meta }: { meta: SectionMeta }) {
 	const form = useSettingsForm();
 	return (
 		<PageContent icon={Icon} title={meta.title} description={meta.description} tabId={meta.title}>
+			<div className='flex flex-col gap-0'>
+				<h2 className='text-lg font-medium'>{meta.title}</h2>
+				<p className='text-xs text-muted-foreground'>{meta.description}</p>
+			</div>
 			<GroupSection title='Download'>
 				<div className='flex flex-col gap-2'>
 					<SettingsInput
