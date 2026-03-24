@@ -1,10 +1,10 @@
+import EventEmitter from "events";
 import { platform } from "@electron-toolkit/utils";
 import { publicProcedure, router } from "@main/trpc/trpc";
 import { createLogger } from "@shared/logger";
 import { inferProcedureOutput } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
-import { BrowserWindow, ipcMain, IpcMainEvent } from "electron";
-import EventEmitter from "events";
+import { BrowserWindow, IpcMainEvent, ipcMain } from "electron";
 import { pick } from "lodash-es";
 import { z } from "zod";
 const log = createLogger("windowRouter");
@@ -92,9 +92,8 @@ export const windowRouter = router({
 					width: z.number().nullish(),
 					height: z.number().nullish(),
 				})
-				.superRefine((v) => {
-					if (!v.width && !v.height) throw "Missing size param";
-					return v;
+				.superRefine((v, ctx) => {
+					if (!v.width && !v.height) ctx.addIssue({ code: "custom", message: "Missing size param" });
 				}),
 		)
 		.mutation(({ ctx: { window }, input }) => {

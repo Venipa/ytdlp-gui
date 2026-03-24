@@ -1,4 +1,4 @@
-import { AppStore } from "@main/stores/AppStore";
+import { type AppStore } from "@main/stores/AppStore";
 import { trpc } from "@renderer/lib/trpc-link";
 import { logger } from "@shared/logger";
 import { uniq } from "lodash-es";
@@ -71,7 +71,7 @@ const AppContextProvider: Provider<AppContext> = (({ value, ...props }) => {
 	const updateSettings = useMemo(
 		() =>
 			<T extends Record<string, any>>(settings: T, showToast?: boolean) =>
-				_updateSettings(settings).then((s) => {
+				_updateSettings(settings as unknown as AppStore).then((s) => {
 					if (showToast) onUpdateCallback(s);
 					return s;
 				}) as Promise<T>,

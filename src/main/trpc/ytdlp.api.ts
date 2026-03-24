@@ -244,7 +244,7 @@ class DownloadQueueManager {
 			filename: downloadPath,
 			windowsfilenames: platform.isWindows,
 		};
-		const cliargs = settings?.flags?.custom?.split(" ") ?? [];
+		const cliargs = settings?.cliargs ?? [];
 
 		if (selectedMediaType === "audio-mp3") {
 			ytdlpOptions.postprocessors = [

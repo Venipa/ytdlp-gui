@@ -24,7 +24,7 @@
       "electron-vite/node",
       "./src/main/global.d.ts",
       "./src/shared/primititves.d.ts",
-      "./src/shared/**/*.d.ts"
+      "./src/shared/extensions/typings.d.ts"
     ],
     "baseUrl": ".",
     "paths": {
