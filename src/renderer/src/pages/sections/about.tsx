@@ -81,7 +81,7 @@ export default function AboutTab() {
 		<div className='p-2 pt-16 flex flex-col space-y-4'>
 			<div className='flex items-center space-x-6 group'>
 				<QTooltip content='Open website' asChild>
-					<a href='https://ytdlpd.venipa.net' target='_blank' rel='noopener' className='flex-shrink-0'>
+					<a href='https://ytdlpd.venipa.net' target='_blank' rel='noopener' className='shrink-0'>
 						<Logo className='size-12 group-hover:opacity-100 opacity-80' />
 					</a>
 				</QTooltip>

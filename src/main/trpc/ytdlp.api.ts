@@ -580,7 +580,8 @@ export const ytdlpRouter = router({
 		return items.reduce(
 			(acc, r) => {
 				if (r.state === "completed") acc.overallCount++;
-				const type = r.type?.toLowerCase();
+				let type = r.type?.toLowerCase()?.split("-")[0];
+				if (type === "auto") type = "video";
 				if (type && r.state === "completed") acc.count[type]++;
 				if (r.state) acc.state[r.state.toLowerCase()]++;
 				if (r.filesize) {

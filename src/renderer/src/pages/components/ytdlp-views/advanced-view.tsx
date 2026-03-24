@@ -19,7 +19,7 @@ export default function AdvancedYTDLPView() {
 				<CollapsibleTrigger asChild>
 					<ClickableText className='flex items-center gap-4'>
 						<div className='h-px bg-muted flex-auto'></div>
-						<div className='flex-shrink-0 flex items-center gap-1'>
+						<div className='shrink-0 flex items-center gap-1'>
 							<div className='text-sm text-muted-foreground'>Advanced View</div>
 							<LucideChevronDown className={cn("size-3 text-muted-foreground", open && "rotate-180")} />
 						</div>

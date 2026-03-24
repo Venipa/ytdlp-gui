@@ -32,7 +32,7 @@ export default function StatusBar() {
 		},
 	});
 	return (
-		<div className='grid items-center grid-cols-[140px_200px_1fr] h-10 flex-shrink-0 overflow-hidden border-t border-t-border flex-auto text-xs text-muted-foreground px-4 select-none'>
+		<div className='grid items-center grid-cols-[140px_200px_1fr] h-10 shrink-0 overflow-hidden border-t border-t-border flex-auto text-xs text-muted-foreground px-4 select-none'>
 			<Appear className='flex gap-1 items-center'>
 				<span>Disk usage:</span>
 				<span>{diskUsage}</span>

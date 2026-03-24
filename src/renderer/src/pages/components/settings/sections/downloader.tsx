@@ -1,3 +1,6 @@
+import { DEFAULT_OUTTMPL } from "@main/stores/AppStore";
+import { Badge } from "@renderer/components/ui/badge";
+import { QTooltip } from "@renderer/components/ui/tooltip";
 import GroupSection from "@renderer/pages/components/group-section";
 import SettingsInput from "@renderer/pages/components/settings-input";
 import { useSettingsForm } from "@renderer/pages/components/settings/form";
@@ -12,7 +15,34 @@ export const meta: SectionMeta = {
 	show: true,
 	description: "Downloader settings for the application",
 };
-const exampleFlags = ["--concurrent-fragments 16", "--cache-dir /path/to/cache", "--no-mtime", "--embed-thumbnail", "--embed-subs", "--no-check-certificates"];
+type OuttmplExample = {
+	label: string;
+	value: string;
+	hint?: string;
+};
+const OUTTMPL_EXAMPLES: OuttmplExample[] = [
+	{
+		label: "Default",
+		value: DEFAULT_OUTTMPL,
+		hint: "The default filename template is used when no other template is specified. It is a combination of the source, id, and title of the video.",
+	},
+	{
+		label: "Only title",
+		value: "%(title)s.%(ext)s",
+		hint: "The filename template is only the title of the video.",
+	},
+	{
+		label: "Title with id",
+		value: "%(title)s [%(id)s].%(ext)s",
+		hint: "The filename template is the title of the video with the id of the video.",
+	},
+	{
+		label: "Title with uploader",
+		value: "%(title)s [%(uploader)s].%(ext)s",
+		hint: "The filename template is the title of the video with the uploader of the video.",
+	},
+];
+
 export default function DownloaderSection({ meta }: { meta: SectionMeta }) {
 	const Icon = meta.icon;
 	const form = useSettingsForm();
@@ -23,7 +53,7 @@ export default function DownloaderSection({ meta }: { meta: SectionMeta }) {
 				<p className='text-xs text-muted-foreground'>{meta.description}</p>
 			</div>
 			<GroupSection title='Download'>
-				<div className='flex flex-col gap-2'>
+				<div className='flex flex-col gap-6'>
 					<SettingsInput
 						name='features.concurrentDownloads'
 						type='number'
@@ -31,6 +61,63 @@ export default function DownloaderSection({ meta }: { meta: SectionMeta }) {
 						max={window.api.maxParallelism}
 						title={"Max concurrent downloads"}
 						hint={`Recommended: 2`}></SettingsInput>
+					<SettingsInput
+						name='ytdlp.outtmpl'
+						defaultValue={DEFAULT_OUTTMPL}
+						title='Filename template'
+						hint={
+							<div className='text-muted-foreground text-xs flex flex-wrap gap-1'>
+								<div className='text-muted-foreground text-xs flex flex-wrap gap-1'>
+									{OUTTMPL_EXAMPLES.map((flag) => {
+										const label = typeof flag === "string" ? flag : flag.label;
+										const hint = typeof flag === "string" ? undefined : flag.hint;
+										if (hint) {
+											return (
+												<QTooltip
+													content={
+														(
+															<div className='text-xs w-64 flex flex-col gap-1'>
+																<span>{hint}</span>
+																<code>{flag.value}</code>
+															</div>
+														) as any
+													}
+													key={label}>
+													<Badge
+														variant='pre'
+														className='cursor-pointer hover:bg-muted/40'
+														onClick={() =>
+															form.setValue("ytdlp.outtmpl", flag.value, {
+																shouldDirty: true,
+																shouldTouch: true,
+																shouldValidate: true,
+															})
+														}>
+														{label}
+													</Badge>
+												</QTooltip>
+											);
+										}
+										return (
+											<Badge
+												variant='pre'
+												className='cursor-pointer hover:bg-muted/40'
+												onClick={() =>
+													form.setValue("ytdlp.outtmpl", flag.value, {
+														shouldDirty: true,
+														shouldTouch: true,
+														shouldValidate: true,
+													})
+												}
+												key={label}>
+												{label}
+											</Badge>
+										);
+									})}
+								</div>
+							</div>
+						}
+					/>
 				</div>
 			</GroupSection>
 		</PageContent>

@@ -45,7 +45,8 @@ export const meta: SectionMeta = {
 export default function YtdlpSection({ meta }: { meta: SectionMeta }) {
 	const Icon = meta.icon;
 	const form = useSettingsForm();
-	const formatter = useCallback((values: string[]) => values?.join(" "), []);
+	const cliFormatter = useCallback((values: string[]) => values?.join(" "), []);
+
 	return (
 		<PageContent icon={Icon} title={meta.title} description={meta.description} tabId={meta.title}>
 			<div className='flex flex-col gap-0'>
@@ -56,7 +57,7 @@ export default function YtdlpSection({ meta }: { meta: SectionMeta }) {
 				<GroupSection title='Flags' className='gap-6'>
 					<SettingsInput
 						name='ytdlp.cliargs'
-						formatter={formatter}
+						formatter={cliFormatter}
 						title={"CLI arguments, check yt-dlp docs for more info ..."}
 						hint={
 							<div className='text-muted-foreground text-xs flex flex-wrap gap-1'>

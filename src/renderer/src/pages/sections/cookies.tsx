@@ -25,7 +25,7 @@ export function CookiesTabItem({ cookie }: CookiesTabItemProps) {
 				<div className='h-8 border border-border rounded hover:bg-muted truncate grid grid-cols-[20px_1fr] gap-6 text-sm items-center px-4 cursor-pointer select-none group/cookie'>
 					<Icon className='size-4 self-center' />
 					<div className='flex'>
-						<div className='grid grid-cols-[100px_10px_100px] flex-shrink-0 truncate items-center gap-2 justify-items-end'>
+						<div className='grid grid-cols-[100px_10px_100px] shrink-0 truncate items-center gap-2 justify-items-end'>
 							<div className='truncate'>{amountOfCookies} cookies</div>
 							<div className='w-px h-4 bg-muted group-hover/cookie:bg-muted-foreground'></div>
 							<div className='truncate'>{amountOfDomains} domains</div>

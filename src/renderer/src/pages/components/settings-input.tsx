@@ -34,7 +34,7 @@ export default forwardRef<HTMLInputElement, SettingsInputProps<string>>(function
 								<Input
 									id={id}
 									{...field}
-									defaultValue={fieldValue}
+									defaultValue={props.defaultValue ?? fieldValue}
 									value={formatter(value)}
 									onChange={(ev) => {
 										onChange(parser(ev.target.value));

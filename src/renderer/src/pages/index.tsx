@@ -34,7 +34,7 @@ export default function SettingsWindow() {
 	const settings = useSettings();
 	return (
 		<div className={cn("absolute inset-0 flex flex-col px-0 h-full")}>
-			<div className='flex flex-col flex-shrink-0 h-full flex-auto'>
+			<div className='flex flex-col shrink-0 h-full flex-auto'>
 				<div className='grid grid-cols-[148px_1fr] h-full flex-auto overflow-hidden'>
 					<TabNavbar
 						defaultTab={selectedTab}
@@ -62,7 +62,7 @@ export default function SettingsWindow() {
 							);
 						})}
 						<div className='flex-auto'></div>
-						<div className='flex flex-col text-xs text-muted-foreground px-2 items-end flex-shrink-0'>
+						<div className='flex flex-col text-xs text-muted-foreground px-2 items-end shrink-0'>
 							<div>{config.appInfo.name}</div>
 							<ClickableText
 								onClick={() => navigator.clipboard.writeText(appVersion + ((buildInfo && ` b${buildInfo}`) || "")).then(() => toast("Copied app version"))}>
