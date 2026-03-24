@@ -50,7 +50,7 @@ export class YTDLP {
 			this._state = YTDLP_STATE.ERROR;
 		});
 		const version = await this._service.getVersion();
-		appStore.set("ytdlp", { path: "internal", version });
+		appStore.set("ytdlp.version", version);
 		this._state = YTDLP_STATE.READY;
 		log.debug("ytdlp python version:", { version });
 	}
@@ -116,7 +116,7 @@ export function sanitizeFilename(filename: string) {
 export { DEFAULT_OUTTMPL };
 
 export function getOuttmpl() {
-	const outtmpl = appStore.get("ytdlp.flags.outtmpl", null) ?? DEFAULT_OUTTMPL;
+	const outtmpl = appStore.get("ytdlp.outtmpl", null) ?? DEFAULT_OUTTMPL;
 	return outtmpl;
 }
 export function getDownloadPath() {
