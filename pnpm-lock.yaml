@@ -176,6 +176,9 @@ importers:
       ffmpeg-static:
         specifier: ^5.3.0
         version: 5.3.0
+      ffprobe-static:
+        specifier: ^3.1.0
+        version: 3.1.0
       filenamify:
         specifier: ^6.0.0
         version: 6.0.0
@@ -4195,6 +4198,9 @@ packages:
   ffmpeg-static@5.3.0:
     resolution: {integrity: sha512-H+K6sW6TiIX6VGend0KQwthe+kaceeH/luE8dIZyOP35ik7ahYojDuqlTV1bOrtEwl01sy2HFNGQfi5IDJvotg==}
     engines: {node: '>=16'}
+
+  ffprobe-static@3.1.0:
+    resolution: {integrity: sha512-Dvpa9uhVMOYivhHKWLGDoa512J751qN1WZAIO+Xw4L/mrUSPxS4DApzSUDbCFE/LUq2+xYnznEahTd63AqBSpA==}
 
   file-entry-cache@6.0.1:
     resolution: {integrity: sha512-7Gps/XWymbLk2QLYK4NzpMOrYjMhdIxXuIvy2QBsLE6ljuodKvdkWs/cpyJJ3CVIVpH0Oi1Hvg1ovbMzLdFBBg==}
@@ -10838,6 +10844,8 @@ snapshots:
       progress: 2.0.3
     transitivePeerDependencies:
       - supports-color
+
+  ffprobe-static@3.1.0: {}
 
   file-entry-cache@6.0.1:
     dependencies:
