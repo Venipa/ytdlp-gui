@@ -8,3 +8,5 @@ out
 !/.env.sample
 /git.json
 /.venv/
+/.tmp/*
+!/.tmp/

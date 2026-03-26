@@ -12,16 +12,13 @@ import { existsSync, mkdirSync } from "node:fs";
 import path, { dirname, join, resolve } from "node:path";
 import { platform } from "@electron-toolkit/utils";
 import { checkDebugFlag } from "@main/lib/debug";
+import { ffmpeg as ffmpegPath, ffprobe as ffprobePath } from "@main/lib/ffmpeg";
 import { YtdlpPyOptions } from "@main/lib/ytdlp-service/ytdlp-options";
 import { parseJson, stringifyJson } from "@shared/json";
 import { createLogger } from "@shared/logger";
 import { app } from "electron";
-import _ffmpegStaticPath from "ffmpeg-static";
-import _ffprobeStaticPath from "ffprobe-static";
 import { PythonShell } from "python-shell";
 import ytdlPyWorkerPath from "./worker.py?asset&asarUnpack";
-const ffmpegStaticPath = import.meta.env.PROD ? (_ffmpegStaticPath?.replace("app.asar", "app.asar.unpacked") ?? null) : _ffmpegStaticPath;
-const ffprobeStaticPath = import.meta.env.PROD ? (_ffprobeStaticPath?.replace("app.asar", "app.asar.unpacked") ?? null) : _ffprobeStaticPath;
 const log = createLogger("ytdlp-py-service");
 // Helper: Generate a unique ID for RPC calls
 function genId(): string {
@@ -181,8 +178,8 @@ class YtdlpPythonWorkerService {
 		Object.assign(reqParams.options, {
 			quiet: true,
 			no_warnings: true,
-			ffmpeg_location: ffmpegStaticPath,
-			ffprobe_location: ffprobeStaticPath,
+			ffmpeg_location: ffmpegPath,
+			ffprobe_location: ffprobePath,
 		} as YtdlpPyOptions);
 		const req: RpcRequest = { id, method, params: reqParams };
 		log.debug("Sending RPC request", { id, method, params: reqParams });

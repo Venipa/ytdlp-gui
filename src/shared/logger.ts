@@ -113,9 +113,9 @@ export class Logger {
 		}
 	}
 }
-
+const IS_PROD = import.meta?.env?.PROD ?? false;
 export const createLogger = (name?: string) => new Logger(name);
-if (import.meta.env.PROD) Logger.enableProductionMode();
+if (IS_PROD) Logger.enableProductionMode();
 else console.log("App is in dev mode.");
 export const logger = createLogger("App");
 logger.debug("init logger");

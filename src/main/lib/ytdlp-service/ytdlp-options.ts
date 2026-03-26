@@ -311,6 +311,8 @@ export interface YtdlpPyOptions {
 	progress_delta?: number;
 	/** FFmpeg binary path or directory. */
 	ffmpeg_location?: string;
+	/** FFprobe binary path or directory. */
+	ffprobe_location?: string;
 	/** Extra args for postprocessors/executables. */
 	postprocessor_args?: Record<string, string[]> | string[];
 	/** Extractor retry count for known extractor errors. */

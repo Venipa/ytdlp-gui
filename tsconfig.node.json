@@ -4,6 +4,7 @@
     "src/env.d.ts",
     "src/main/global.d.ts",
     "electron.vite.config.*",
+    "ffmpeg.vite.plugin.ts",
     "src/vite-plugins/*.ts",
     "src/main/**/*",
     "src/preload/**/*",

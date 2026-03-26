@@ -325,7 +325,6 @@ def handle_download(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
 
     if not YoutubeDL:
         return rpc_response(id, error="yt-dlp not installed.")
-
     try:
         existing_hooks = (
             options.get("progress_hooks")

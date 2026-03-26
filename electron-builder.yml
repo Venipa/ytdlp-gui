@@ -41,8 +41,6 @@ asar:
   smartUnpack: true
 asarUnpack:
   - resources/**
-  - node_modules/ffmpeg-static/ffmpeg*
-  - node_modules/ffprobe-static/ffprobe*
   - out/main/**
   - build/*.ico
   - build/*.png
