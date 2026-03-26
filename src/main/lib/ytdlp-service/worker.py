@@ -186,10 +186,11 @@ def merge_options(options: Any) -> Dict[str, Any]:
     cliargs = opts.get("cliargs", None)
     ytdlOptions: Dict[str, Any] = {}
     if cliargs and isinstance(cliargs, list) and len(cliargs) > 0:
-      ytdlOptions = dict(transform_cliargs(cliargs), opts)
+      ytdlOptions = dict(transform_cliargs(cliargs))
     else:
       ytdlOptions = dict(ytdlp_parse_options([]).ydl_opts)
-      ytdlOptions.update(opts)
+    ytdlOptions.update(opts)
+
     return ytdlOptions
 
 
