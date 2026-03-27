@@ -129,6 +129,10 @@ export class DependenciesManager {
 		return dependencyStore.get(key, null as DependencyInstallState | null) as DependencyInstallState | null;
 	}
 
+	get store() {
+		return dependencyStore;
+	}
+
 	public getActiveDownloads(): readonly ActiveDownload[] {
 		return Array.from(this.activeDownloads.values());
 	}
