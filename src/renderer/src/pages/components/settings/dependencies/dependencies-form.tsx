@@ -79,19 +79,23 @@ export function DependenciesForm({
 	const { mutateAsync: installDependency, isLoading: isInstalling } = trpc.dependencies.download.useMutation();
 	const { mutateAsync: removeDependency, isLoading: isRemoving } = trpc.dependencies.removeDependency.useMutation();
 	const { mutateAsync: openPath } = trpc.internals.openPath.useMutation();
+	const [toastId, setToastId] = useState<number | string | undefined>();
 	trpc.dependencies.downloadProgress.useSubscription(undefined, {
 		onData: (progress) => {
 			if (progress.key !== dependencyKey) return;
 			setProgress(progress as DependencyProgress);
 			if (progress.state === "completed") {
-				toast(`${dependencyKey} ${completedDownloadMessage}`);
+				toast.success(`${completedDownloadMessage}`, { description: `${dependencyKey}`, id: toastId });
 				void utils.dependencies.list.invalidate();
+				setToastId(undefined);
 			}
 			if (progress.state === "error") {
-				toast(`${dependencyKey} ${failedDownloadMessage}`, { description: progress.message });
+				toast.error(`${failedDownloadMessage}`, { description: `${dependencyKey} ${progress.message}`, id: toastId });
+				setToastId(undefined);
 			}
 			if (progress.state === "cancelled") {
-				toast(`${dependencyKey} ${cancelledDownloadMessage}`);
+				toast.error(`${cancelledDownloadMessage}`, { description: `${dependencyKey}`, id: toastId });
+				setToastId(undefined);
 			}
 		},
 	});
@@ -161,26 +165,34 @@ export function DependenciesForm({
 						<Button
 							size='sm'
 							disabled={!canInstall}
-							onClick={() =>
+							onClick={() => {
+								const toastId = toast.loading(`${startedDownloadMessage} ${dependency.name} ${selectedVersion}`, { duration: 0 });
+								setToastId(toastId);
 								installDependency({ key: dependency.key as never, version: selectedVersion })
 									.then(() => {
-										toast(`${startedDownloadMessage} ${dependency.name} ${selectedVersion}`);
+										toast.success(`${completedDownloadMessage}`, { description: `${dependency.name} ${selectedVersion}`, id: toastId });
 									})
 									.catch((error: Error) => {
-										toast(`${failedDownloadMessage} ${dependency.name}`, { description: error.message });
+										toast.error(`${failedDownloadMessage}`, { description: `${dependency.name} ${selectedVersion} ${error.message}` });
 									})
-							}>
+									.finally(() => {
+										setToastId(undefined);
+									});
+							}}>
 							{dependency.installed?.version === selectedVersion ? reinstallLabel : dependency.installed ? updateLabel : installLabel}
 						</Button>
 						<Button
 							size='sm'
 							variant='destructive'
 							disabled={!canRemove}
-							onClick={() =>
+							onClick={() => {
+								const toastId = toast.loading(`${removedMessage} ${dependency.name}`, { duration: 0 });
+								setToastId(toastId);
 								removeDependency({ key: dependency.key as never })
 									.then((result) => {
-										toast(`${removedMessage} ${dependency.name}`, {
+										toast.success(`${removedMessage} ${dependency.name}`, {
 											description: `Reclaimed ${prettyBytes(result.reclaimedBytes ?? 0)}`,
+											id: toastId,
 										});
 										void utils.dependencies.list.invalidate();
 										setProgress({
@@ -195,9 +207,12 @@ export function DependenciesForm({
 										});
 									})
 									.catch((error: Error) => {
-										toast(`${failedRemoveMessage} ${dependency.name}`, { description: error.message });
+										toast.error(`${failedRemoveMessage} ${dependency.name}`, { description: error.message, id: toastId });
 									})
-							}>
+									.finally(() => {
+										setToastId(undefined);
+									});
+							}}>
 							{deleteLabel}
 						</Button>
 					</div>

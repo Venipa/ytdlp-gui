@@ -1,6 +1,6 @@
 "use client";
 
-import { LucideCheckCircle2 } from "lucide-react";
+import { LucideCheck } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Toaster as Sonner } from "sonner";
 
@@ -12,14 +12,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
 	return (
 		<Sonner
 			theme={theme as ToasterProps["theme"]}
-			className='toaster group'
+			className='toaster group z-9999'
 			richColors
 			position='bottom-right'
 			offset={48}
-			icons={{ success: <LucideCheckCircle2 className='size-4' /> }}
+			icons={{ success: <LucideCheck className='size-4.5 bg-foreground rounded-full p-1 stroke-background' /> }}
 			toastOptions={{
 				classNames: {
-					toast: "group select-none toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg py-2",
+					toast: "group select-none toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg py-2 z-9999",
 					description: "group-[.toast]:text-muted-foreground",
 					content: "-mt-px",
 					actionButton: "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
