@@ -10,3 +10,4 @@ out
 /.venv/
 /.tmp/*
 !/.tmp/
+!/.tmp/ffmpeg/downloads/darwin-arm64-binary*

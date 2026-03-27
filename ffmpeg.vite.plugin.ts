@@ -118,9 +118,9 @@ async function pathExists(pathToCheck: string): Promise<boolean> {
 	}
 }
 
-async function downloadToCache(sourceUrl: string): Promise<string> {
+async function downloadToCache(sourceUrl: string, prefix?: string): Promise<string> {
 	const urlPath = new URL(sourceUrl).pathname;
-	const fileName = sanitizeFilename(basename(urlPath) || "download.bin");
+	const fileName = sanitizeFilename(prefix ? `${prefix}-${basename(urlPath)}` : basename(urlPath) || "download.bin");
 	const destinationPath = join(CACHE_ROOT, fileName);
 	try {
 		await stat(destinationPath);
@@ -256,12 +256,14 @@ async function copySharedFolders(ffmpegBinaryPath: string): Promise<string[]> {
 	}
 	return copiedFolders;
 }
-
-async function resolveBinariesFromSharedArchive(source: SourceDescriptor): Promise<{ ffmpeg: string; ffprobe: string }> {
+type ResolveBinariesFromSharedArchiveOptions = {
+	prefix?: string;
+};
+async function resolveBinariesFromSharedArchive(source: SourceDescriptor, options: ResolveBinariesFromSharedArchiveOptions = {}): Promise<{ ffmpeg: string; ffprobe: string }> {
 	if (source.type !== "archive" || !source.archiveType) {
 		throw new Error("[ffmpeg-vite-plugin] Shared archive source requires archive type.");
 	}
-	const cachedPath = await downloadToCache(source.url);
+	const cachedPath = await downloadToCache(source.url, options.prefix ? `${options.prefix}-${source.type}-${source.archiveType}` : undefined);
 	const extractedDir = await extractArchive(cachedPath, source.archiveType);
 	const resolvedFfmpegPath = await findBinaryFilePath(extractedDir, "ffmpeg");
 	const resolvedFfprobePath = await findBinaryFilePath(extractedDir, "ffprobe");
@@ -297,7 +299,7 @@ export default function ffmpegVitePlugin(): Plugin {
 					sources.ffprobe.some((probeSource) => probeSource.type === "archive" && probeSource.url === source.url && probeSource.archiveType === source.archiveType),
 			);
 			if (sharedArchiveSource?.type === "archive") {
-				const resolvedPaths = await resolveBinariesFromSharedArchive(sharedArchiveSource);
+				const resolvedPaths = await resolveBinariesFromSharedArchive(sharedArchiveSource, { prefix: `${targetKey}-${sharedArchiveSource.type || "binary"}` });
 				resolvedFfmpegPath = resolvedPaths.ffmpeg;
 				resolvedFfprobePath = resolvedPaths.ffprobe;
 			} else {
