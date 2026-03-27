@@ -64,13 +64,13 @@ const ffmpegSourceUrls: Record<PlatformTargetKey, BinarySourceConfig> = {
 		ffmpeg: [
 			{
 				type: "binary",
-				url: "https://github.com/descriptinc/ffmpeg-ffprobe-static/releases/latest/download/ffmpeg-darwin-arm64",
+				url: "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linuxarm64-gpl-shared-7.1.tar.xz",
 			},
 		],
 		ffprobe: [
 			{
 				type: "binary",
-				url: "https://github.com/descriptinc/ffmpeg-ffprobe-static/releases/latest/download/ffprobe-darwin-arm64",
+				url: "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linuxarm64-gpl-shared-7.1.tar.xz",
 			},
 		],
 	},
@@ -78,6 +78,7 @@ const ffmpegSourceUrls: Record<PlatformTargetKey, BinarySourceConfig> = {
 
 function resolveTargetKey(): PlatformTargetKey {
 	const key = `${process.platform}-${process.arch}`;
+
 	if (key in ffmpegSourceUrls) {
 		return key as PlatformTargetKey;
 	}
