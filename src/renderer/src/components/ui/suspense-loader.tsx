@@ -2,7 +2,6 @@
 
 import { Progress } from "@renderer/components/ui/progress";
 import { cn } from "@renderer/lib/utils";
-import { ReactElement, ReactNode } from "react";
 import { Spinner } from "./spinner";
 
 export default function SuspenseLoader({ className }: { className?: string }) {
@@ -12,13 +11,13 @@ export default function SuspenseLoader({ className }: { className?: string }) {
 		</div>
 	);
 }
-type SuspenseLoaderOptionsProps = {
+type SuspenseLoaderOptionsProps<C extends JSX.Element> = {
 	className?: string;
-	content?: ReactNode | ReactElement | ReactNode;
+	label?: C;
 	progress?: number | null;
 	progressLabel?: string | null;
 } & React.HTMLAttributes<HTMLDivElement>;
-export function SuspenseLoaderOptions({ className, content, progressLabel, progress }: SuspenseLoaderOptionsProps) {
+export function SuspenseLoaderOptions<C extends JSX.Element>({ className, label: content, progressLabel, progress }: SuspenseLoaderOptionsProps<C>) {
 	return (
 		<div className={cn("flex flex-col h-full items-center justify-center gap-2", className)}>
 			{progress ? (

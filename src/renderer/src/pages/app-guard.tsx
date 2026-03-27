@@ -50,7 +50,7 @@ export default function AppGuard({ children }: { children: React.ReactNode }) {
 		<>
 			{isLoading ? (
 				<SuspenseLoaderOptions
-					content={<RotateWords words={["Initializing app and ytdlp...", "Checking for updates...", "Moving full speed ahead...", "Almost there..."]} delay={2000} />}
+					label={<RotateWords words={["Initializing app and ytdlp...", "Checking for updates...", "Moving full speed ahead...", "Almost there..."]} delay={2000} />}
 					progress={progress?.percent ?? null}
 					progressLabel={progress?.state === "downloading" ? "Downloading ffmpeg..." : null}
 				/>
