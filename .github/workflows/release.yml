@@ -71,8 +71,9 @@ jobs:
           # Copy Python executable for portability (might not work 😅)
           cp $(which python) .venv/bin/python
           source .venv/bin/activate
-          pip install -r requirements.txt
-          rm .venv/bin/pip*
+          .venv/bin/pip install -r requirements.txt
+          rm .venv/bin/pip* # remove pip from venv
+          rm .venv/lib/python*/site-packages/pip* # remove pip from venv
       - if: matrix.os == 'windows-latest'
         name: Install Python dependencies (win32)
         run: |

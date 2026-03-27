@@ -47,7 +47,6 @@
     "**/app-builds": true,
     "**/dist": true,
     "**/dist/**": true,
-    "**/out": true,
     "**/node_modules/*/**": true,
     "**/release": true
   }

@@ -28,15 +28,25 @@ import { ytdlpEvents } from "./trpc/ytdlp.ee";
 import { attachAutoUpdaterIPC } from "./updater";
 const log = new Logger("App");
 const trayIcon = platform.isWindows ? iconWin : icon;
+import { executableIsAvailable } from "./lib/bin.utils";
 
 if (import.meta.env.DEV) {
+	const pythonPath = executableIsAvailable("python") ? executableIsAvailable("python3.13") : executableIsAvailable("python3");
+	if (!pythonPath) {
+		throw new Error("Python not found");
+	}
 	function createVenv() {
 		const venvPath = join(process.cwd(), ".venv");
 		if (existsSync(venvPath)) {
 			return;
 		}
-		execSync("python -m venv --copies " + venvPath, { stdio: "inherit" });
-		execSync("pip install -r requirements.txt", { env: { PYTHONPATH: venvPath }, stdio: "inherit" });
+		execSync(`${pythonPath} -m venv --copies ${venvPath}`, { stdio: "inherit" });
+		if (platform.isMacOS) {
+			execSync(`${venvPath}/bin/activate`, { stdio: "inherit" });
+		} else if (platform.isLinux) {
+			execSync(`source ${venvPath}/bin/activate`, { stdio: "inherit" });
+		}
+		execSync(`${venvPath}/bin/pip install -r requirements.txt`, { env: { PYTHONPATH: venvPath }, stdio: "inherit" });
 	}
 
 	createVenv();
