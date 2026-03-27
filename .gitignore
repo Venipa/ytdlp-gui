@@ -8,6 +8,10 @@ out
 !/.env.sample
 /git.json
 /.venv/
-/.tmp/*
+/tmp/*
+/.tmp/**
+# Un-ignore required parent directories and file pattern to allow adding darwin-arm64-binary*
 !/.tmp/
+!/.tmp/ffmpeg/
+!/.tmp/ffmpeg/downloads/
 !/.tmp/ffmpeg/downloads/darwin-arm64-binary*
