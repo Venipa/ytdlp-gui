@@ -64,13 +64,13 @@ const ffmpegSourceUrls: Record<PlatformTargetKey, BinarySourceConfig> = {
 		ffmpeg: [
 			{
 				type: "binary",
-				url: "https://deolaha.ca/pub/ffmpeg/ffmpeg-7.1.zip",
+				url: "https://www.osxexperts.net/ffmpeg71arm.zip",
 			},
 		],
 		ffprobe: [
 			{
 				type: "binary",
-				url: "https://deolaha.ca/pub/ffmpeg/ffprobe-7.1.zip",
+				url: "https://www.osxexperts.net/ffprobe71arm.zip",
 			},
 		],
 	},
