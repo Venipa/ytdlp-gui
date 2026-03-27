@@ -10,7 +10,6 @@ import { basename, join, relative, resolve } from "path";
 import type { Plugin } from "vite";
 import { AliasOptions, ResolveOptions } from "vite";
 import "./src/shared/extensions/string.ts";
-import ffmpegVitePlugin from "./ffmpeg.vite.plugin";
 console.log("current working dir:", resolve("."));
 const resolveOptions: { resolve: ResolveOptions & { alias: AliasOptions } } = {
 	resolve: {
@@ -195,7 +194,7 @@ function injectExtensionsPlugin(): Plugin {
 export default defineConfig({
 	main: {
 		...resolveOptions,
-		plugins: [ViteYaml(), pythonAssetPlugin(), venvCopyPlugin({ venvPath: resolve(".venv") }), ffmpegVitePlugin(), injectExtensionsPlugin()],
+		plugins: [ViteYaml(), pythonAssetPlugin(), venvCopyPlugin({ venvPath: resolve(".venv") }), injectExtensionsPlugin()],
 		build: {
 			bytecode: isProduction ? { transformArrowFunctions: false } : false,
 			externalizeDeps: { exclude: [...externalizedEsmDeps] },

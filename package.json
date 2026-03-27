@@ -30,7 +30,7 @@
     "drizzle:make": "npx drizzle-kit generate"
   },
   "dependencies": {
-    "@better-fetch/fetch": "^1.1.15",
+    "@better-fetch/fetch": "^1.1.21",
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
     "@generouted/react-router": "^1.19.8",

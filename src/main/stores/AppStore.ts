@@ -7,6 +7,7 @@ export const appStoreSchema = z
 	.object({
 		ytdlp: z
 			.object({
+				ffmpegPath: z.string().nullish(),
 				flags: z
 					.object({
 						nomtime: z.boolean().fallback(true),

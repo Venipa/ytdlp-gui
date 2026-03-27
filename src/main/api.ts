@@ -1,3 +1,4 @@
+import dependenciesRouter from "@main/trpc/dependencies";
 import { router } from "@main/trpc/trpc";
 import { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import { dialogRouter } from "./trpc/dialog.api";
@@ -8,6 +9,7 @@ import { windowRouter } from "./trpc/window.api";
 import { ytdlpRouter } from "./trpc/ytdlp.api";
 
 export const appRouter = router({
+	dependencies: dependenciesRouter,
 	window: windowRouter,
 	dialog: dialogRouter,
 	internals: internalRouter,
