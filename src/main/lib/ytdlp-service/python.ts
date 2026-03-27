@@ -12,8 +12,8 @@ import { existsSync, mkdirSync } from "node:fs";
 import path, { dirname, join, resolve } from "node:path";
 import { platform } from "@electron-toolkit/utils";
 import { checkDebugFlag } from "@main/lib/debug";
-import { ffmpeg as ffmpegPath, ffprobe as ffprobePath } from "@main/lib/ffmpeg";
 import { YtdlpPyOptions } from "@main/lib/ytdlp-service/ytdlp-options";
+import { dependenciesManager } from "@main/trpc/dependencies/handler";
 import { parseJson, stringifyJson } from "@shared/json";
 import { createLogger } from "@shared/logger";
 import { app } from "electron";
@@ -114,14 +114,7 @@ class YtdlpPythonWorkerService {
 		const firstPyPath = pythonPaths[0];
 
 		const pythonPath = join(firstPyPath, platform.isWindows ? "Scripts" : "bin", platform.isWindows ? "python.exe" : "python");
-		// TODO: Uncomment this when we have a way to chmod +x the Python executable
-		// if (!platform.isWindows && executableIsAvailable("chmod")) {
-		// 	try {
-		// 		execSync(`chmod +x "${pythonPath}"`, { stdio: "inherit" });
-		// 	} catch (error) {
-		// 		log.error("Failed to chmod +x Python executable", { error });
-		// 	}
-		// }
+
 		log.info("Python path", { pythonPath });
 		this.pyshell = new PythonShell(workerScriptPath, {
 			pythonPath: options.pythonPath ?? pythonPath,
@@ -171,15 +164,17 @@ class YtdlpPythonWorkerService {
 		log.info("YtdlpPythonService initialized", { workerId: this.workerId });
 	}
 	// Sends a typed JSON RPC call to Python
-	call(method: string, params?: { options?: YtdlpPyOptions; [key: string]: unknown }, callOptions?: RpcCallOptions): Promise<unknown> {
+	async call(method: string, params?: { options?: YtdlpPyOptions; [key: string]: unknown }, callOptions?: RpcCallOptions): Promise<unknown> {
 		const id = genId();
-
+		const ffmpegDep = dependenciesManager.getInstallState("ffmpeg");
+		if (!ffmpegDep) {
+			throw new Error("FFmpeg path not found");
+		}
 		const reqParams = Object.assign({ options: {} }, params ?? {});
 		Object.assign(reqParams.options, {
 			quiet: true,
 			no_warnings: true,
-			ffmpeg_location: ffmpegPath,
-			ffprobe_location: ffprobePath,
+			ffmpeg_location: ffmpegDep.path,
 		} as YtdlpPyOptions);
 		const req: RpcRequest = { id, method, params: reqParams };
 		log.debug("Sending RPC request", { id, method, params: reqParams });
