@@ -239,6 +239,25 @@ async function copyBinArtifacts(ffmpegBinaryPath: string, ffprobeBinaryPath: str
 	return [OUTPUT_BIN_ROOT];
 }
 
+function resolvePackageRootFromBinary(binaryPath: string): string {
+	const parentDir = path.dirname(binaryPath);
+	return path.basename(parentDir).toLowerCase() === "bin" ? path.dirname(parentDir) : parentDir;
+}
+
+async function copySharedFolders(ffmpegBinaryPath: string): Promise<string[]> {
+	const packageRoot = resolvePackageRootFromBinary(ffmpegBinaryPath);
+	const sharedFolderNames = ["lib", "include"] as const;
+	const copiedFolders: string[] = [];
+	for (const folderName of sharedFolderNames) {
+		const sourceFolderPath = join(packageRoot, folderName);
+		if (!(await pathExists(sourceFolderPath))) continue;
+		const destinationFolderPath = join(OUTPUT_ROOT, folderName);
+		await cp(sourceFolderPath, destinationFolderPath, { recursive: true, force: true });
+		copiedFolders.push(destinationFolderPath);
+	}
+	return copiedFolders;
+}
+
 async function resolveBinariesFromSharedArchive(source: SourceDescriptor): Promise<{ ffmpeg: string; ffprobe: string }> {
 	if (source.type !== "archive" || !source.archiveType) {
 		throw new Error("[ffmpeg-vite-plugin] Shared archive source requires archive type.");
@@ -287,12 +306,14 @@ export default function ffmpegVitePlugin(): Plugin {
 				resolvedFfprobePath = await resolveBinaryFromSources("ffprobe", sources.ffprobe);
 			}
 			const copiedBinArtifacts = await copyBinArtifacts(resolvedFfmpegPath, resolvedFfprobePath);
+			const copiedSharedFolders = await copySharedFolders(resolvedFfmpegPath);
 
 			log.info("Prepared binaries", {
 				targetKey,
 				ffmpeg: join(OUTPUT_BIN_ROOT, buildBinaryFileName("ffmpeg")),
 				ffprobe: join(OUTPUT_BIN_ROOT, buildBinaryFileName("ffprobe")),
 				binArtifacts: copiedBinArtifacts,
+				sharedFolders: copiedSharedFolders,
 				cacheRoot: CACHE_ROOT,
 			});
 		},
