@@ -63,16 +63,14 @@ const ffmpegSourceUrls: Record<PlatformTargetKey, BinarySourceConfig> = {
 	"darwin-arm64": {
 		ffmpeg: [
 			{
-				type: "archive",
-				archiveType: "tar.xz",
-				url: "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linuxarm64-gpl-shared-7.1.tar.xz",
+				type: "binary",
+				url: "https://deolaha.ca/pub/ffmpeg/ffmpeg-7.1.zip",
 			},
 		],
 		ffprobe: [
 			{
-				type: "archive",
-				archiveType: "tar.xz",
-				url: "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linuxarm64-gpl-shared-7.1.tar.xz",
+				type: "binary",
+				url: "https://deolaha.ca/pub/ffmpeg/ffprobe-7.1.zip",
 			},
 		],
 	},
