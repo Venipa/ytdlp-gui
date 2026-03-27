@@ -6,7 +6,7 @@ import { Logger } from "./src/shared/logger";
 
 type PlatformTargetKey = "win32-x64" | "linux-x64" | "darwin-arm64";
 type SourceType = "archive" | "binary";
-type ArchiveType = "zip" | "tar.xz";
+type ArchiveType = "zip" | "tar";
 type BinaryKind = "ffmpeg" | "ffprobe";
 const log = new Logger("ffmpeg-vite-plugin");
 interface SourceDescriptor {
@@ -48,14 +48,14 @@ const ffmpegSourceUrls: Record<PlatformTargetKey, BinarySourceConfig> = {
 		ffmpeg: [
 			{
 				type: "archive",
-				archiveType: "tar.xz",
+				archiveType: "tar",
 				url: "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-lgpl-shared-7.1.tar.xz",
 			},
 		],
 		ffprobe: [
 			{
 				type: "archive",
-				archiveType: "tar.xz",
+				archiveType: "tar",
 				url: "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-lgpl-shared-7.1.tar.xz",
 			},
 		],
@@ -87,6 +87,14 @@ function resolveTargetKey(): PlatformTargetKey {
 
 function sanitizeFilename(input: string): string {
 	return input.replace(/[^\w.-]+/g, "_");
+}
+
+function detectArchiveType(filePath: string): ArchiveType | null {
+	const normalizedPath = filePath.toLowerCase();
+	if (normalizedPath.endsWith(".zip")) return "zip";
+	if (normalizedPath.endsWith(".tar.xz") || normalizedPath.endsWith(".txz")) return "tar";
+	if (normalizedPath.endsWith(".tar")) return "tar";
+	return null;
 }
 
 function buildBinaryFileName(binaryKind: BinaryKind): string {
@@ -123,6 +131,7 @@ async function downloadToCache(sourceUrl: string, prefix?: string): Promise<stri
 	const fileName = sanitizeFilename(prefix ? `${prefix}-${basename(urlPath)}` : basename(urlPath) || "download.bin");
 	const destinationPath = join(CACHE_ROOT, fileName);
 	try {
+		log.info("Checking cache", { destinationPath });
 		await stat(destinationPath);
 		return destinationPath;
 	} catch {
@@ -154,7 +163,7 @@ async function extractArchive(archivePath: string, archiveType: ArchiveType): Pr
 
 	await rm(destinationPath, { recursive: true, force: true });
 	await ensureDirectory(destinationPath);
-
+    const isTarXz = archivePath.endsWith(".xz");
 	if (archiveType === "zip") {
 		if (process.platform === "win32") {
 			execFileSync("powershell", ["-NoProfile", "-Command", `Expand-Archive -Path "${archivePath}" -DestinationPath "${destinationPath}" -Force`], {
@@ -167,7 +176,8 @@ async function extractArchive(archivePath: string, archiveType: ArchiveType): Pr
 		return destinationPath;
 	}
 
-	execFileSync("tar", ["-xJf", archivePath, "-C", destinationPath], { stdio: "inherit" });
+	const tarArgs = isTarXz ? ["-xJf", archivePath, "-C", destinationPath] : ["-xf", archivePath, "-C", destinationPath];
+	execFileSync("tar", tarArgs, { stdio: "inherit" });
 	await writeFile(extractionCacheKeyPath, destinationPath);
 	return destinationPath;
 }
@@ -182,12 +192,21 @@ async function findBinaryFilePath(directoryPath: string, binaryKind: BinaryKind)
 	return relaxedMatch ?? null;
 }
 
-async function resolveBinaryFromSources(binaryKind: BinaryKind, sources: readonly SourceDescriptor[]): Promise<string> {
+async function resolveBinaryFromSources(targetKey: PlatformTargetKey, binaryKind: BinaryKind, sources: readonly SourceDescriptor[]): Promise<string> {
 	const errors: string[] = [];
 	for (const source of sources) {
 		try {
-			const cachedPath = await downloadToCache(source.url);
+			const cachedPath = await downloadToCache(source.url, `${targetKey}-${source.type}`);
 			if (source.type === "binary") {
+				const archiveType = detectArchiveType(cachedPath);
+				if (archiveType) {
+					const extractedDir = await extractArchive(cachedPath, archiveType);
+					const binaryPath = await findBinaryFilePath(extractedDir, binaryKind);
+					if (!binaryPath) {
+						throw new Error(`Could not find ${buildBinaryFileName(binaryKind)} in extracted binary archive`);
+					}
+					return binaryPath;
+				}
 				return cachedPath;
 			}
 			if (!source.archiveType) {
@@ -212,18 +231,63 @@ function resolveSourceBinDirectory(binaryPath: string): string | null {
 	return path.basename(parentDir).toLowerCase() === "bin" ? parentDir : null;
 }
 
-async function copyBinArtifacts(ffmpegBinaryPath: string, ffprobeBinaryPath: string): Promise<string[]> {
+function isLikelyBinaryArtifact(filePath: string, mode: number): boolean {
+	const fileName = path.basename(filePath).toLowerCase();
+	const isNamedFfTool = fileName.startsWith("ffmpeg") || fileName.startsWith("ffprobe") || fileName.startsWith("ffplay");
+	const hasKnownExtension =
+		fileName.endsWith(".exe") ||
+		fileName.endsWith(".dll") ||
+		fileName.endsWith(".dylib") ||
+		fileName.endsWith(".so") ||
+		fileName.includes(".so.") ||
+		fileName.endsWith(".bin");
+	const isExecutable = (mode & 0o111) !== 0;
+	return isNamedFfTool || hasKnownExtension || isExecutable;
+}
+
+async function listBinaryArtifacts(directoryPath: string): Promise<string[]> {
+	const files = await readDirectoryRecursive(directoryPath);
+	const candidateFiles: string[] = [];
+	for (const filePath of files) {
+		const fileStats = await stat(filePath);
+		if (!fileStats.isFile()) continue;
+		if (!isLikelyBinaryArtifact(filePath, fileStats.mode)) continue;
+		candidateFiles.push(filePath);
+	}
+	return candidateFiles;
+}
+
+type CopyBinArtifactsOptions = {
+	flattenArchives?: boolean;
+};
+
+async function copyBinArtifacts(ffmpegBinaryPath: string, ffprobeBinaryPath: string, options: CopyBinArtifactsOptions = {}): Promise<string[]> {
 	const ffmpegBinDir = resolveSourceBinDirectory(ffmpegBinaryPath);
 	const ffprobeBinDir = resolveSourceBinDirectory(ffprobeBinaryPath);
 
-	// await rm(OUTPUT_BIN_ROOT, { recursive: true, force: true });
+	await rm(OUTPUT_BIN_ROOT, { recursive: true, force: true });
+	await ensureDirectory(OUTPUT_BIN_ROOT);
 
-	// Shared packages expose a `bin` directory that already contains ffmpeg, ffprobe and related runtime binaries.
-	if (!ffmpegBinDir || !ffprobeBinDir || ffmpegBinDir !== ffprobeBinDir) {
-		throw new Error("[ffmpeg-vite-plugin] Expected shared archive binaries to be located in the same `bin` directory.");
+	if (!options.flattenArchives && ffmpegBinDir && ffprobeBinDir && ffmpegBinDir === ffprobeBinDir) {
+		await cp(ffmpegBinDir, OUTPUT_BIN_ROOT, { recursive: true, force: true });
+	} else {
+		const sourceRoots = Array.from(new Set([resolvePackageRootFromBinary(ffmpegBinaryPath), resolvePackageRootFromBinary(ffprobeBinaryPath)]));
+		const copiedNames = new Set<string>();
+		for (const sourceRoot of sourceRoots) {
+			const binaryArtifacts = await listBinaryArtifacts(sourceRoot);
+			for (const binaryArtifact of binaryArtifacts) {
+				const destinationPath = join(OUTPUT_BIN_ROOT, path.basename(binaryArtifact));
+				await cp(binaryArtifact, destinationPath, { force: true });
+				copiedNames.add(path.basename(destinationPath).toLowerCase());
+			}
+		}
+		const expectedBinaries = [buildBinaryFileName("ffmpeg"), buildBinaryFileName("ffprobe")].map((name) => name.toLowerCase());
+		for (const expectedBinary of expectedBinaries) {
+			if (!copiedNames.has(expectedBinary)) {
+				throw new Error(`[ffmpeg-vite-plugin] Missing required binary after flattening archive: ${expectedBinary}`);
+			}
+		}
 	}
-
-	await cp(ffmpegBinDir, OUTPUT_BIN_ROOT, { recursive: true, force: true });
 
 	if (process.platform !== "win32") {
 		const copiedPaths = await readDirectoryRecursive(OUTPUT_BIN_ROOT);
@@ -303,10 +367,11 @@ export default function ffmpegVitePlugin(): Plugin {
 				resolvedFfmpegPath = resolvedPaths.ffmpeg;
 				resolvedFfprobePath = resolvedPaths.ffprobe;
 			} else {
-				resolvedFfmpegPath = await resolveBinaryFromSources("ffmpeg", sources.ffmpeg);
-				resolvedFfprobePath = await resolveBinaryFromSources("ffprobe", sources.ffprobe);
+				resolvedFfmpegPath = await resolveBinaryFromSources(targetKey, "ffmpeg", sources.ffmpeg);
+				resolvedFfprobePath = await resolveBinaryFromSources(targetKey, "ffprobe", sources.ffprobe);
 			}
-			const copiedBinArtifacts = await copyBinArtifacts(resolvedFfmpegPath, resolvedFfprobePath);
+			const usesBinaryTypeSource = [...sources.ffmpeg, ...sources.ffprobe].some((source) => source.type === "binary");
+			const copiedBinArtifacts = await copyBinArtifacts(resolvedFfmpegPath, resolvedFfprobePath, { flattenArchives: usesBinaryTypeSource });
 			const copiedSharedFolders = await copySharedFolders(resolvedFfmpegPath);
 
 			log.info("Prepared binaries", {
