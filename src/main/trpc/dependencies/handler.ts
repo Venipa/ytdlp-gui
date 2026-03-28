@@ -67,6 +67,10 @@ function normalizePathSeparators(value: string): string {
 	return value.replace(/\\/g, "/");
 }
 
+function isMacOsMetadataDirectory(name: string): boolean {
+	return name === "__MACOSX";
+}
+
 function toWildcardRegex(pattern: string): RegExp {
 	const escaped = pattern
 		.replace(/[.+^${}()|[\]\\]/g, "\\$&")
@@ -299,7 +303,10 @@ export class DependenciesManager {
 		const files = await Promise.all(
 			entries.map(async (entry) => {
 				const fullPath = join(directoryPath, entry.name);
-				if (entry.isDirectory()) return this.collectFilesRecursively(fullPath);
+				if (entry.isDirectory()) {
+					if (isMacOsMetadataDirectory(entry.name)) return [];
+					return this.collectFilesRecursively(fullPath);
+				}
 				return [fullPath];
 			}),
 		);

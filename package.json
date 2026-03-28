@@ -14,7 +14,7 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "start": "electron-vite preview",
     "dev": "electron-vite dev --watch",
-    "release": "npm run git:info && cross-env NODE_ENV=production npm run build && electron-builder",
+    "release": "rimraf out dist && npm run git:info && cross-env NODE_ENV=production npm run build && electron-builder",
     "dev-release": "npm run git:info && cross-env NODE_ENV=development npm run build && electron-builder",
     "git:info": "node git-config.cjs",
     "build": "npm run typecheck && electron-vite build",

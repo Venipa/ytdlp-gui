@@ -8,11 +8,6 @@ const createYtdlpService = () => {
 	process.on("exit", shutdown);
 	process.on("SIGINT", shutdown);
 	process.on("SIGTERM", shutdown);
-	process.on("SIGABRT", shutdown);
-	process.on("SIGKILL", (error) => {
-		logger.error("SIGKILL received", { error });
-		shutdown();
-	});
 	return service;
 };
 

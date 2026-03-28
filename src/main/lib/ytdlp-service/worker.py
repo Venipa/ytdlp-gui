@@ -317,6 +317,7 @@ def handle_extract_info(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
         return rpc_response(id, result=info)
     except Exception as e:
         tb = traceback.format_exc()
+        logger.error(f"Error extracting info: {type(e).__name__}: {str(e)}\n{tb}")
         return rpc_response(id, error=f"{type(e).__name__}: {str(e)}\n{tb}")
 
 
@@ -416,6 +417,7 @@ def handle_download(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
         return rpc_response(id, result="Download completed")
     except Exception as e:
         tb = traceback.format_exc()
+        logger.error(f"Error extracting info: {type(e).__name__}: {str(e)}\n{tb}")
         return rpc_response(id, error=f"{type(e).__name__}: {str(e)}\n{tb}")
 
 
