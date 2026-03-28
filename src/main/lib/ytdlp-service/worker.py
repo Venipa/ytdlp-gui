@@ -35,7 +35,6 @@ except ImportError:
 
 class Logger:
     def __logger_call(self, level: str, message: str):
-        print(f"[{level}][{self.name}] {message}")
         self.file.write(f"[{level}][{self.name}] {message}\n")
         if not self.file.closed:
             self.file.flush()
@@ -105,6 +104,50 @@ def write_json(payload: Dict[str, Any]) -> None:
 
 
 def create_progress_hook(request_id: str):
+    in_progress_percent_max = 99.9
+
+    def _single_line_text(value: Any) -> str:
+        return str(value or "").replace("\r", " ").replace("\n", " ").strip()
+
+    def _parse_percent_value(percent_text: Any) -> Optional[float]:
+        if percent_text is None:
+            return None
+        text = _single_line_text(percent_text)
+        if not text:
+            return None
+        if text.endswith("%"):
+            text = text[:-1].strip()
+        try:
+            parsed = float(text)
+        except (TypeError, ValueError):
+            return None
+        return max(0.0, min(100.0, parsed))
+
+    def _parse_int_value(value: Any) -> Optional[int]:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed >= 0 else None
+
+    def _compute_fragment_overall_percent(
+        fragment_percent: Optional[float],
+        fragment_index: Optional[int],
+        fragment_count: Optional[int],
+    ) -> Optional[float]:
+        if (
+            fragment_percent is None
+            or fragment_index is None
+            or fragment_count is None
+            or fragment_count <= 0
+        ):
+            return None
+        # yt-dlp fragment indices are mostly 1-based; clamp odd values safely.
+        current_index = max(1, min(fragment_index, fragment_count))
+        completed_fragments = current_index - 1
+        overall = ((completed_fragments + (fragment_percent / 100.0)) / fragment_count) * 100.0
+        return max(0.0, min(100.0, overall))
+
     def _progress_hook(progress: Dict[str, Any]) -> None:
         status = progress.get("status")
         info = progress.get("info_dict") or {}
@@ -113,10 +156,17 @@ def create_progress_hook(request_id: str):
             "total_bytes_estimate"
         )
         downloaded_bytes = progress.get("downloaded_bytes")
-        percent_value = None
+        percent_value = _parse_percent_value(progress.get("_percent_str"))
         speed = None
         eta = None
-        if (
+        fragment_index = _parse_int_value(progress.get("_fragment_index"))
+        fragment_count = _parse_int_value(progress.get("_fragment_count"))
+        fragment_percent_value = _compute_fragment_overall_percent(
+            percent_value, fragment_index, fragment_count
+        )
+        if fragment_percent_value is not None:
+            percent_value = fragment_percent_value
+        if percent_value is None and (
             isinstance(total_bytes, (int, float))
             and total_bytes > 0
             and isinstance(downloaded_bytes, (int, float))
@@ -130,17 +180,21 @@ def create_progress_hook(request_id: str):
             # postprocessors (e.g. merger) may still be running.
             return
         elif status == "downloading":
+            if isinstance(percent_value, (int, float)) and percent_value >= 100.0:
+                percent_value = in_progress_percent_max
             percent = (
-                progress.get("_percent_str")
+                (f"{percent_value:.1f}%" if percent_value is not None else None)
+                or progress.get("_percent_str")
                 or (f"{percent_value:.1f}%" if percent_value is not None else "0.0%")
-            ).strip()
-            total = (
+            )
+            percent = _single_line_text(percent)
+            total = _single_line_text(
                 progress.get("_total_bytes_str")
                 or progress.get("_total_bytes_estimate_str")
                 or ""
-            ).strip()
-            speed = (progress.get("_speed_str") or "").strip()
-            eta = (progress.get("_eta_str") or "").strip()
+            )
+            speed = _single_line_text(progress.get("_speed_str"))
+            eta = _single_line_text(progress.get("_eta_str"))
             if eta.upper().startswith("ETA"):
                 eta = eta[3:].lstrip(": ").strip()
             if eta.upper().endswith("ETA"):
@@ -151,11 +205,9 @@ def create_progress_hook(request_id: str):
                 message_parts.append(f"at {speed}")
             if eta:
                 message_parts.append(f"ETA {eta}")
-            fragment_index = progress.get("_fragment_index")
-            fragment_count = progress.get("_fragment_count")
             if fragment_index is not None and fragment_count is not None:
                 message_parts.append(f"(frag {fragment_index}/{fragment_count})")
-            line = f"[download] {video_id}: {' '.join(message_parts)}"
+            line = _single_line_text(f"[download] {video_id}: {' '.join(message_parts)}")
         else:
             return
 
@@ -170,8 +222,8 @@ def create_progress_hook(request_id: str):
                 "percent": percent_value,
                 "speed": speed,
                 "eta": eta,
-                "fragmentIndex": progress.get("_fragment_index"),
-                "fragmentCount": progress.get("_fragment_count"),
+                "fragmentIndex": fragment_index,
+                "fragmentCount": fragment_count,
             }
         )
 
@@ -318,7 +370,12 @@ def handle_download(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """Handle download RPC call."""
     url = params.get("url")
     options = merge_options(params.get("options", {}))
-    info_ref = options.get("info", None)
+    output_path_value = options.get("filename") or options.get("outtmpl")
+    output_path = (
+        os.path.abspath(output_path_value)
+        if isinstance(output_path_value, str) and output_path_value.strip()
+        else None
+    )
 
     if not url:
         return rpc_response(id, error="Missing required parameter: url")
@@ -335,6 +392,11 @@ def handle_download(id: str, params: Dict[str, Any]) -> Dict[str, Any]:
 
         with YoutubeDL(options) as ydl:
             ydl.download([url])
+        if output_path and not os.path.exists(output_path):
+            raise RuntimeError(
+                "Download completed but output file was not found at "
+                f"{output_path!r}"
+            )
 
         write_json(
             {

@@ -51,10 +51,16 @@ interface RpcResponse {
 	error?: string | { message: string; code?: number; data?: unknown };
 }
 
-interface YtdlpProgressLine {
-	extractor: string;
-	id: string | null;
-	message: string;
+interface YtdlpTemplateProgressPayload {
+	status?: string;
+	videoId?: string;
+	percent?: string;
+	speed?: string;
+	eta?: string;
+	fragmentIndex?: string;
+	fragmentCount?: string;
+	total?: string;
+	totalEstimate?: string;
 }
 
 export interface YtdlpOutputEvent {
@@ -89,6 +95,7 @@ interface YtdlpWorkerServiceOptions {
 	workerId?: string;
 }
 class YtdlpPythonWorkerService {
+	private static readonly IN_PROGRESS_PERCENT_MAX = 99.9;
 	private pyshell: PythonShell;
 	private pending: Record<string, PendingCall> = {};
 	private readonly outputEmitter = new EventEmitter();
@@ -133,10 +140,9 @@ class YtdlpPythonWorkerService {
 				return stringifyJson(param);
 			},
 			stderrParser(param) {
-				log.error("PythonShell stderrParser", { param });
 				return param;
 			},
-			...(import.meta.env.DEV ? { detached: true, windowsHide: false } : { windowsHide: true }),
+			...(import.meta.env.DEV ? {} : { windowsHide: true }),
 			mode: "text",
 		});
 		if (import.meta.env.DEV) {
@@ -166,7 +172,7 @@ class YtdlpPythonWorkerService {
 	// Sends a typed JSON RPC call to Python
 	async call(method: string, params?: { options?: YtdlpPyOptions; [key: string]: unknown }, callOptions?: RpcCallOptions): Promise<unknown> {
 		const id = genId();
-		const ffmpegDep = dependenciesManager.getInstallState("ffmpeg");
+		const ffmpegDep = dependenciesManager.getInstallState("ffmpeg")?.files?.[0];
 		if (!ffmpegDep) {
 			throw new Error("FFmpeg path not found");
 		}
@@ -174,7 +180,8 @@ class YtdlpPythonWorkerService {
 		Object.assign(reqParams.options, {
 			quiet: true,
 			no_warnings: true,
-			ffmpeg_location: ffmpegDep.path,
+			compat_opts: ["abort-on-error"],
+			ffmpeg_location: ffmpegDep,
 		} as YtdlpPyOptions);
 		const req: RpcRequest = { id, method, params: reqParams };
 		log.debug("Sending RPC request", { id, method, params: reqParams });
@@ -244,69 +251,94 @@ class YtdlpPythonWorkerService {
 		const activeEntry = Object.entries(this.pending).find(([, pendingCall]) => pendingCall.method === method);
 		return activeEntry ? activeEntry[0] : null;
 	}
-	private parseDownloadStatus(progressLine: YtdlpProgressLine, rawLine: string, requestIdOverride: string | null): YtdlpOutputEvent {
-		const requestId = requestIdOverride ?? this.getActiveRequestIdByMethod("download");
-		const progressMatch = /^(\d+(?:\.\d+)?)%\s+of\s+.+?(?:\s+at\s+(.+?))?(?:\s+ETA\s+(.+?))?(?:\s+\(frag\s+(\d+)\/(\d+)\))?$/i.exec(progressLine.message);
-		if (!progressMatch) {
+	private parseIntegerValue(value: unknown): number | null {
+		if (typeof value !== "string" && typeof value !== "number") {
+			return null;
+		}
+		const parsed = Number.parseInt(String(value).trim(), 10);
+		return Number.isFinite(parsed) ? parsed : null;
+	}
+	private computeFragmentOverallPercent(percent: number | null | undefined, fragmentIndex: number | null | undefined, fragmentCount: number | null | undefined): number | null {
+		if (
+			typeof percent !== "number" ||
+			!Number.isFinite(percent) ||
+			typeof fragmentIndex !== "number" ||
+			!Number.isFinite(fragmentIndex) ||
+			typeof fragmentCount !== "number" ||
+			!Number.isFinite(fragmentCount) ||
+			fragmentCount <= 0
+		) {
+			return null;
+		}
+		// yt-dlp fragment index is generally 1-based in logs.
+		const currentIndex = Math.max(1, Math.min(Math.trunc(fragmentIndex), Math.trunc(fragmentCount)));
+		const completedFragments = currentIndex - 1;
+		const overall = ((completedFragments + percent / 100) / fragmentCount) * 100;
+		return Math.max(0, Math.min(100, overall));
+	}
+	private normalizeInProgressPercent(percent: number | null | undefined): number | undefined {
+		if (typeof percent !== "number" || !Number.isFinite(percent)) {
+			return undefined;
+		}
+		const clamped = Math.max(0, Math.min(100, percent));
+		return clamped >= 100 ? YtdlpPythonWorkerService.IN_PROGRESS_PERCENT_MAX : clamped;
+	}
+	private createTaggedProgressOutputEvent(parsed: {
+		id?: string;
+		status?: string;
+		videoId?: string;
+		line?: string;
+		percent?: number | null;
+		speed?: string | null;
+		eta?: string | null;
+		fragmentIndex?: number | null;
+		fragmentCount?: number | null;
+	}): YtdlpOutputEvent {
+		const requestId = typeof parsed.id === "string" ? parsed.id : null;
+		const status = typeof parsed.status === "string" ? parsed.status : null;
+		const normalizedVideoId = typeof parsed.videoId === "string" ? parsed.videoId : null;
+		const line = typeof parsed.line === "string" ? parsed.line : `[download] ${normalizedVideoId ?? "unknown"}: ${status ?? "progress"}`;
+		if (status === "completed") {
 			return {
-				type: "status",
-				raw: rawLine,
-				extractor: progressLine.extractor,
-				videoId: progressLine.id,
-				message: progressLine.message,
+				type: "completed",
+				raw: line,
+				extractor: "download",
+				videoId: normalizedVideoId,
+				message: line,
 				requestId,
 				workerId: this.workerId,
+				percent: 100,
 			};
 		}
-
-		return {
-			type: "download_status",
-			raw: rawLine,
-			extractor: progressLine.extractor,
-			videoId: progressLine.id,
-			message: progressLine.message,
-			requestId,
-			workerId: this.workerId,
-			percent: Number.parseFloat(progressMatch[1]),
-			speed: progressMatch[2] ?? null,
-			eta: progressMatch[3] ?? null,
-			fragmentIndex: progressMatch[4] ? Number.parseInt(progressMatch[4], 10) : null,
-			fragmentCount: progressMatch[5] ? Number.parseInt(progressMatch[5], 10) : null,
-		};
-	}
-	private parseStatusOutputEvent(rawLine: string, progressLine: YtdlpProgressLine, requestIdOverride: string | null): YtdlpOutputEvent {
-		if (progressLine.extractor.toLowerCase() === "download") {
-			return this.parseDownloadStatus(progressLine, rawLine, requestIdOverride);
+		if (status === "downloading" || status === "finished") {
+			const parsedPercent = typeof parsed.percent === "number" ? parsed.percent : null;
+			const fragmentIndex = typeof parsed.fragmentIndex === "number" ? parsed.fragmentIndex : null;
+			const fragmentCount = typeof parsed.fragmentCount === "number" ? parsed.fragmentCount : null;
+			const computedPercent = this.computeFragmentOverallPercent(parsedPercent, fragmentIndex, fragmentCount) ?? parsedPercent;
+			return {
+				type: "download_status",
+				raw: line,
+				extractor: "download",
+				videoId: normalizedVideoId,
+				message: line,
+				requestId,
+				workerId: this.workerId,
+				percent: this.normalizeInProgressPercent(computedPercent),
+				speed: parsed.speed ?? null,
+				eta: parsed.eta ?? null,
+				fragmentIndex,
+				fragmentCount,
+			};
 		}
 		return {
 			type: "status",
-			raw: rawLine,
-			extractor: progressLine.extractor,
-			videoId: progressLine.id,
-			message: progressLine.message,
-			requestId: requestIdOverride ?? this.getActiveRequestIdByMethod("download"),
+			raw: line,
+			extractor: "download",
+			videoId: normalizedVideoId,
+			message: line,
+			requestId,
 			workerId: this.workerId,
 		};
-	}
-	private parseYtdlpProgressLine(line: string): YtdlpProgressLine | null {
-		const withIdMatch = /^\[([^\]]+)\]\s+([^:]+):\s*(.+)$/.exec(line);
-		if (withIdMatch) {
-			return {
-				extractor: withIdMatch[1],
-				id: withIdMatch[2],
-				message: withIdMatch[3],
-			};
-		}
-
-		const withoutIdMatch = /^\[([^\]]+)\]\s+(.+)$/.exec(line);
-		if (withoutIdMatch) {
-			return {
-				extractor: withoutIdMatch[1],
-				id: null,
-				message: withoutIdMatch[2],
-			};
-		}
-		return null;
 	}
 	private onPythonRpcResponse(response: RpcResponse): void {
 		const { id, result, error } = response;
@@ -339,14 +371,56 @@ class YtdlpPythonWorkerService {
 		delete this.pending[id];
 
 		if (error !== undefined && error !== null) {
+			log.error("YtdlpPythonService error", { error });
 			const errorMessage = typeof error === "string" ? error : error.message || "Unknown error";
 			pending.reject(new Error(errorMessage));
 		} else {
 			pending.resolve(result);
 		}
 	}
+	private splitLeadingJsonObject(value: string): { json: string; rest: string } | null {
+		if (!value.startsWith("{")) {
+			return null;
+		}
+		let depth = 0;
+		let inString = false;
+		let escaped = false;
+		for (let index = 0; index < value.length; index += 1) {
+			const char = value[index];
+			if (inString) {
+				if (escaped) {
+					escaped = false;
+				} else if (char === "\\") {
+					escaped = true;
+				} else if (char === '"') {
+					inString = false;
+				}
+				continue;
+			}
+			if (char === '"') {
+				inString = true;
+				continue;
+			}
+			if (char === "{") {
+				depth += 1;
+				continue;
+			}
+			if (char === "}") {
+				depth -= 1;
+				if (depth === 0) {
+					return {
+						json: value.slice(0, index + 1),
+						rest: value.slice(index + 1).trim(),
+					};
+				}
+			}
+		}
+		return null;
+	}
 	private parseYtdlpPayload(line: string) {
 		if (!line.startsWith("{")) return null;
+		const splitPayload = this.splitLeadingJsonObject(line);
+		if (!splitPayload) return null;
 		const parsed = parseJson<{
 			result?: unknown;
 			id?: string;
@@ -361,23 +435,41 @@ class YtdlpPythonWorkerService {
 			eta?: string | null;
 			fragmentIndex?: number | null;
 			fragmentCount?: number | null;
-		}>(line);
+		}>(splitPayload.json);
 		if (!parsed || typeof parsed !== "object") return null;
 		return parsed;
 	}
 	private splitMixedOutputLine(line: string): string[] {
 		const trimmed = line.trim();
 		if (!trimmed) return [];
-		if (trimmed.startsWith("{")) return [trimmed];
+		const parts: string[] = [];
+		let remaining = trimmed;
 
-		for (let index = trimmed.indexOf("{"); index !== -1; index = trimmed.indexOf("{", index + 1)) {
-			const left = trimmed.slice(0, index).trim();
-			const right = trimmed.slice(index).trim();
-			if (!left || !right) continue;
-			if (!this.parseYtdlpPayload(right)) continue;
-			return [left, right];
+		while (remaining.length > 0) {
+			if (remaining.startsWith("{")) {
+				const splitPayload = this.splitLeadingJsonObject(remaining);
+				if (!splitPayload) {
+					parts.push(remaining);
+					break;
+				}
+				parts.push(splitPayload.json);
+				remaining = splitPayload.rest;
+				continue;
+			}
+
+			const nextJsonIndex = remaining.indexOf("{");
+			if (nextJsonIndex < 0) {
+				parts.push(remaining);
+				break;
+			}
+			const head = remaining.slice(0, nextJsonIndex).trim();
+			if (head) {
+				parts.push(head);
+			}
+			remaining = remaining.slice(nextJsonIndex).trimStart();
 		}
-		return [trimmed];
+
+		return parts.filter((part) => part.length > 0);
 	}
 	private handleTaggedProgressPayload(parsed: {
 		__ytdlp_progress__?: boolean;
@@ -393,64 +485,7 @@ class YtdlpPythonWorkerService {
 		fragmentCount?: number | null;
 	}): boolean {
 		if (!parsed.__ytdlp_progress__) return false;
-		const requestId = typeof parsed.id === "string" ? parsed.id : null;
-		const status = typeof parsed.status === "string" ? parsed.status : null;
-		const normalizedVideoId = typeof parsed.videoId === "string" ? parsed.videoId : null;
-		const line = typeof parsed.line === "string" ? parsed.line : `[download] ${normalizedVideoId ?? "unknown"}: ${status ?? "progress"}`;
-
-		let outputEvent: YtdlpOutputEvent | null = null;
-		if (status === "downloading") {
-			outputEvent = {
-				type: "download_status",
-				raw: line,
-				extractor: "download",
-				videoId: normalizedVideoId,
-				message: line,
-				requestId,
-				workerId: this.workerId,
-				percent: typeof parsed.percent === "number" ? parsed.percent : undefined,
-				speed: parsed.speed ?? null,
-				eta: parsed.eta ?? null,
-				fragmentIndex: typeof parsed.fragmentIndex === "number" ? parsed.fragmentIndex : null,
-				fragmentCount: typeof parsed.fragmentCount === "number" ? parsed.fragmentCount : null,
-			};
-		} else if (status === "finished") {
-			outputEvent = {
-				type: "download_status",
-				raw: line,
-				extractor: "download",
-				videoId: normalizedVideoId,
-				message: line,
-				requestId,
-				workerId: this.workerId,
-				percent: 100,
-			};
-		} else if (status === "completed") {
-			outputEvent = {
-				type: "completed",
-				raw: line,
-				extractor: "download",
-				videoId: normalizedVideoId,
-				message: line,
-				requestId,
-				workerId: this.workerId,
-				percent: 100,
-			};
-		}
-
-		if (!outputEvent) {
-			if (typeof parsed.line !== "string") {
-				log.warn("Tagged progress missing line", { id: parsed.id, workerId: parsed.workerId ?? this.workerId });
-				return true;
-			}
-			const progressLine = this.parseYtdlpProgressLine(parsed.line);
-			if (!progressLine) {
-				log.debug("Tagged progress line did not parse", { line: parsed.line, workerId: parsed.workerId ?? this.workerId });
-				return true;
-			}
-			outputEvent = this.parseStatusOutputEvent(parsed.line, progressLine, requestId);
-		}
-
+		const outputEvent = this.createTaggedProgressOutputEvent(parsed);
 		this.emitOutput(outputEvent);
 		if (checkDebugFlag("ytdlp")) log.debug("yt-dlp output", outputEvent);
 		return true;
@@ -482,14 +517,6 @@ class YtdlpPythonWorkerService {
 						const resultObject = parsedJson.result && typeof parsedJson.result === "object" ? (parsedJson.result as { id?: string }) : null;
 						log.debug("yt-dlp JSON RPC response", { videoId: resultObject?.id ?? "unknown" });
 						this.onPythonRpcResponse(parsedJson as RpcResponse);
-						continue;
-					}
-
-					const progressLine = this.parseYtdlpProgressLine(part);
-					if (progressLine) {
-						const outputEvent = this.parseStatusOutputEvent(part, progressLine, null);
-						this.emitOutput(outputEvent);
-						if (checkDebugFlag("ytdlp")) log.debug("yt-dlp output", outputEvent);
 						continue;
 					}
 

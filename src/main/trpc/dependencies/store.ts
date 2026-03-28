@@ -1,4 +1,4 @@
-import { createYmlStore } from "@shared/electron/store/createYmlStore";
+import { createEncryptedStore } from "@shared/electron/store/createYmlStore";
 import z from "zod";
 import { type DependencyKey, dependencyKeys } from "./meta";
 
@@ -26,6 +26,6 @@ export const dependencyStoreSchema = z
 	.fallback({});
 
 export type DependencyStoreData = Partial<Record<DependencyKey, DependencyInstallState>>;
-export const dependencyStore = createYmlStore<DependencyStoreData>("dependencies", {
+export const dependencyStore = createEncryptedStore<DependencyStoreData>("dependencies", {
 	defaults: dependencyStoreSchema.parse({}),
 });

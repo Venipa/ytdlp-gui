@@ -129,6 +129,10 @@ export class DependenciesManager {
 		return dependencyStore.get(key, null as DependencyInstallState | null) as DependencyInstallState | null;
 	}
 
+	public getInstallStateFiles(key: DependencyKey): readonly string[] {
+		return this.getInstallState(key)?.files ?? [];
+	}
+
 	get store() {
 		return dependencyStore;
 	}
