@@ -11,7 +11,7 @@ import { logger } from "@shared/logger";
 import queuePromise from "@shared/promises/helper";
 import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
-import { desc } from "drizzle-orm";
+import { asc, desc, sql } from "drizzle-orm";
 import { cloneDeep, omit } from "lodash-es";
 import { VideoInfo } from "yt-dlp-wrap/types";
 import { YTDLDownloadStatus, YTDLItem, YTDLMediaType, YTDLStatus } from "ytdlp-gui/types";
@@ -22,6 +22,8 @@ import { ytdl } from "./ytdlp.core";
 import { pushToastToClient, ytdlpEvents } from "./ytdlp.ee";
 
 const AUDIO_MEDIA_TYPES = ["audio-bestaudio", "audio-mp3", "audio-m4a", "audio-opus"] as const;
+const LIST_SORT_KEYS = ["created", "title", "source", "state", "filesize", "type", "finishedAt"] as const;
+const LIST_SORT_DIRECTIONS = ["asc", "desc"] as const;
 
 const MEDIA_TYPE_TO_FORMAT: Record<YTDLMediaType, string | null> = {
 	auto: null,
@@ -47,6 +49,38 @@ class DownloadQueueManager {
 	private finishedDownloads = new Map<string, "success" | "error" | "cancelled">();
 	private processingUrls = new Set<string>();
 	private metaCache = new Map<string, VideoInfo>();
+	private progressState = new Map<number, { percent: number }>();
+
+	private normalizeProgressValue(value: unknown): number | null {
+		if (typeof value === "number" && Number.isFinite(value)) return value;
+		if (typeof value === "string") {
+			const parsed = Number.parseFloat(value);
+			return Number.isFinite(parsed) ? parsed : null;
+		}
+		return null;
+	}
+
+	private getFragmentFloorPercent(fragmentIndex: unknown, fragmentCount: unknown): number {
+		const index = this.normalizeProgressValue(fragmentIndex);
+		const count = this.normalizeProgressValue(fragmentCount);
+		if (!index || !count || count <= 0) return 0;
+		const completedFragments = Math.max(0, index - 1);
+		return Math.min(100, (completedFragments / count) * 100);
+	}
+
+	private getStableDownloadPercent(downloadId: number, incomingPercent: unknown, fragmentIndex?: unknown, fragmentCount?: unknown): number {
+		const previous = this.progressState.get(downloadId)?.percent ?? 0;
+		const rawPercent = this.normalizeProgressValue(incomingPercent) ?? previous;
+		const fragmentFloor = this.getFragmentFloorPercent(fragmentIndex, fragmentCount);
+		const monotonicPercent = Math.max(previous, rawPercent, fragmentFloor);
+		const clampedPercent = Math.min(100, Math.max(0, monotonicPercent));
+		this.progressState.set(downloadId, { percent: clampedPercent });
+		return clampedPercent;
+	}
+
+	private clearDownloadProgress(downloadId: number): void {
+		this.progressState.delete(downloadId);
+	}
 
 	async addToQueue(urls: string[], type: YTDLMediaType = "auto") {
 		const uniqueUrls = urls.filter((url) => !this.processingUrls.has(url));
@@ -280,6 +314,7 @@ class DownloadQueueManager {
 			}
 
 			if (event.type === "download_status") {
+				const stablePercent = this.getStableDownloadPercent(dbFile.id, event.percent, event.fragmentIndex, event.fragmentCount);
 				ytdlpEvents.emit("status", {
 					id: dbFile.id,
 					action: "download",
@@ -288,7 +323,7 @@ class DownloadQueueManager {
 				});
 				ytdlpEvents.emit("download", {
 					id: dbFile.id,
-					percent: event.percent ?? 0,
+					percent: stablePercent,
 					speed: event.speed ?? "",
 					eta: event.eta ?? "",
 					fragmentIndex: event.fragmentIndex,
@@ -299,6 +334,7 @@ class DownloadQueueManager {
 			}
 
 			if (event.type === "completed") {
+				this.clearDownloadProgress(dbFile.id);
 				ytdlpEvents.emit("status", {
 					id: dbFile.id,
 					action: "download",
@@ -379,6 +415,7 @@ class DownloadQueueManager {
 			state: "done",
 		});
 		ytdlpEvents.emit("download", { id: dbFile.id, percent: 100, speed: "", eta: "", message: `failed: ${errorMessage}` });
+		this.clearDownloadProgress(dbFile.id);
 		pushToastToClient(`${dbFile.title}`, "error", `Failed to download: ${errorMessage}`);
 		log.error("handleDownloadError", { error });
 		await this.updateDownloadEntry(dbFile);
@@ -390,6 +427,7 @@ class DownloadQueueManager {
 		return updated;
 	}
 	private cleanupDownload(dbFile: SelectDownload) {
+		this.clearDownloadProgress(dbFile.id);
 		this.activeDownloads.delete(dbFile.id);
 		this.processingUrls.delete(dbFile.url);
 		if (!this.activeDownloads.size && this.finishedDownloads.size) {
@@ -406,6 +444,7 @@ class DownloadQueueManager {
 
 			controller.abort("cancelled by user");
 			this.activeDownloads.delete(id);
+			this.clearDownloadProgress(id);
 		}
 	}
 }
@@ -603,7 +642,38 @@ export const ytdlpRouter = router({
 			},
 		);
 	}),
-	list: publicProcedure.query(async () => await db.select().from(downloads).orderBy(desc(downloads.created)).all()),
+	list: publicProcedure
+		.input(
+			z
+				.object({
+					sortBy: z.enum(LIST_SORT_KEYS).default("created"),
+					sortDir: z.enum(LIST_SORT_DIRECTIONS).default("desc"),
+				})
+				.default({
+					sortBy: "created",
+					sortDir: "desc",
+				}),
+		)
+		.query(async ({ input }) => {
+			const { sortBy, sortDir } = input;
+			const activeRank = sql<number>`CASE WHEN ${downloads.state} IN ('downloading', 'fetching_meta', 'queued', 'converting') THEN 1 ELSE 0 END`;
+			const finishedRank = sql<number>`CASE WHEN ${downloads.state} = 'completed' AND ${downloads.created} IS NOT NULL THEN 1 ELSE 0 END`;
+			const columnMap = {
+				created: downloads.created,
+				title: downloads.title,
+				source: downloads.source,
+				state: downloads.state,
+				filesize: downloads.filesize,
+				type: downloads.type,
+				finishedAt: downloads.created,
+			} as const;
+			const sortColumn = columnMap[sortBy];
+			const sortExpr = sortDir === "asc" ? asc(sortColumn) : desc(sortColumn);
+			if (sortBy === "finishedAt") {
+				return await db.select().from(downloads).orderBy(desc(activeRank), desc(finishedRank), sortExpr, desc(downloads.created)).all();
+			}
+			return await db.select().from(downloads).orderBy(desc(activeRank), sortExpr, desc(downloads.created)).all();
+		}),
 	listSync: publicProcedure.subscription(() => {
 		return observable<YTDLItem[]>((emit) => {
 			function onStatusChange(data: any) {
