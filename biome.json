@@ -7,7 +7,7 @@
     "indentStyle": "tab",
     "formatWithErrors": true,
     "indentWidth": 4,
-    "lineWidth": 180,
+    "lineWidth": 120,
     "attributePosition": "auto"
   },
   "javascript": {

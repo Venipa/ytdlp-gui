@@ -14,6 +14,7 @@ import iconWin from "~/build/icon.ico?asset";
 import icon from "~/build/icon_24x24.png?asset";
 // @ts-ignore
 import builderConfig from "../../electron-builder.yml";
+import { executableIsAvailable } from "./lib/system/bin.utils";
 import { ClipboardMonitor } from "./lib/window/clipboardMonitor";
 import contextMenu from "./lib/window/contextMenu";
 import { wrapWindowHandler } from "./lib/window/windowUtils";
@@ -28,10 +29,11 @@ import { ytdlpEvents } from "./trpc/ytdlp/ytdlp.ee";
 import { attachAutoUpdaterIPC } from "./updater";
 const log = new Logger("App");
 const trayIcon = platform.isWindows ? iconWin : icon;
-import { executableIsAvailable } from "./lib/system/bin.utils";
 
 if (import.meta.env.DEV) {
-	const pythonPath = executableIsAvailable("python") ? executableIsAvailable("python3.13") : executableIsAvailable("python3");
+	const pythonPath = executableIsAvailable("python")
+		? executableIsAvailable("python3.13")
+		: executableIsAvailable("python3");
 	if (!pythonPath) {
 		throw new Error("Python not found");
 	}
@@ -46,7 +48,10 @@ if (import.meta.env.DEV) {
 		} else if (platform.isLinux) {
 			execSync(`source ${venvPath}/bin/activate`, { stdio: "inherit" });
 		}
-		execSync(`${venvPath}/bin/pip install -r requirements.txt`, { env: { PYTHONPATH: venvPath }, stdio: "inherit" });
+		execSync(`${venvPath}/bin/pip install -r requirements.txt`, {
+			env: { PYTHONPATH: venvPath },
+			stdio: "inherit",
+		});
 	}
 
 	createVenv();
@@ -62,7 +67,7 @@ async function createWindow() {
 	tray.setIgnoreDoubleClickEvents(true);
 	tray.on("right-click", () => trayMenu.popup());
 	tray.setContextMenu(trayMenu);
-	const [defaultWidth, defaultHeight] = [800, 600];
+	const [defaultWidth, defaultHeight] = [960, 680];
 	const mainWindow = new BrowserWindow({
 		width: defaultWidth + 160,
 		height: defaultHeight + 178,
@@ -148,7 +153,10 @@ app.whenReady().then(async () => {
 	if (platform.isWindows || platform.isLinux) {
 		app.commandLine.appendSwitch("enable-gpu-rasterization"); // performance feature flags
 		app.commandLine.appendSwitch("enable-zero-copy");
-		app.commandLine.appendSwitch("enable-features", "CanvasOopRasterization,EnableDrDc,FluentOverlayScrollbar,OverlayScrollbar"); // Enables Display Compositor to use a new gpu thread. todo: testing
+		app.commandLine.appendSwitch(
+			"enable-features",
+			"CanvasOopRasterization,EnableDrDc,FluentOverlayScrollbar,OverlayScrollbar",
+		); // Enables Display Compositor to use a new gpu thread. todo: testing
 	}
 	// Set app user model id for windows
 	const appUserId = builderConfig.appId.split(".", 2).join(".");

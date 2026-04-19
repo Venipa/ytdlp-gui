@@ -1,5 +1,6 @@
 import ButtonLoading from "@renderer/components/ui/ButtonLoading";
 import { Button } from "@renderer/components/ui/button";
+import { QTooltip } from "@renderer/components/ui/tooltip";
 import { trpc } from "@renderer/lib/api/trpc-link";
 import { TrimSubdomainRegex } from "@renderer/lib/media/regex";
 import { cn } from "@renderer/lib/ui/utils";
@@ -92,11 +93,11 @@ export function LinkListRow({ className, row }: LinkListRowProps): JSX.Element {
 			time: formatDate(parsedDate, "HH:mm:ss"),
 		};
 	}, [state, created]);
-
+	const isSingleLine = completed || cancelled || error || queued;
 	return (
 		<div
 			className={cn(
-				"h-12 grid",
+				"h-12 grid min-w-full w-fit",
 				LINK_LIST_GRID_COLUMNS,
 				"gap-2 items-center px-2 border-b border-border/60 hover:bg-muted/50 relative cursor-default group/item shrink-0 select-none",
 				className,
@@ -104,31 +105,50 @@ export function LinkListRow({ className, row }: LinkListRowProps): JSX.Element {
 			{row.getVisibleCells().map((cell) => {
 				if (cell.column.id === "status") {
 					return (
-						<div key={cell.id} className='flex items-center justify-center'>
-							<LinkListStatusIndicator cancelled={cancelled} completed={completed} downloading={downloading} error={error} queued={queued} status={status} />
-						</div>
+						<QTooltip content={stateLabel} side='right' asChild>
+							<div key={cell.id} className='flex items-center justify-center'>
+								<LinkListStatusIndicator
+									cancelled={cancelled}
+									completed={completed}
+									downloading={downloading}
+									error={error}
+									queued={queued}
+									status={status}
+								/>
+							</div>
+						</QTooltip>
 					);
 				}
 
 				if (cell.column.id === "title") {
 					return (
 						<FileSheet key={cell.id} item={props as any}>
-							<div className={cn("h-full py-1 items-center cursor-pointer min-w-0", completed ? "flex" : "grid grid-rows-[24px_12px]")}>
+							<div
+								className={cn(
+									"h-full py-1 items-center cursor-pointer min-w-0",
+									isSingleLine ? "flex" : "grid grid-rows-[24px_12px]",
+								)}>
 								<div className='text-sm truncate leading-none'>{title || "-"}</div>
 								<div className='flex gap-1 items-center text-xs text-muted-foreground leading-none min-w-0'>
 									{downloadStatus && (
 										<>
-											<span className='w-[40px] text-right tabular-nums'>{downloadStatus.percent}</span>
+											<span className='w-[40px] text-right tabular-nums'>
+												{downloadStatus.percent}
+											</span>
 											<DotIcon className='size-2' />
 											{downloadStatus.speed && (
 												<>
-													<span className='w-[68px] text-right tabular-nums'>{downloadStatus.speed}</span>
+													<span className='w-[68px] text-right tabular-nums'>
+														{downloadStatus.speed}
+													</span>
 													<DotIcon className='size-2' />
 												</>
 											)}
 											{downloadStatus.eta && (
 												<>
-													<span className='w-[40px] text-right tabular-nums'>{downloadStatus.eta}</span>
+													<span className='w-[40px] text-right tabular-nums'>
+														{downloadStatus.eta}
+													</span>
 													<DotIcon className='size-2' />
 												</>
 											)}
@@ -145,7 +165,11 @@ export function LinkListRow({ className, row }: LinkListRowProps): JSX.Element {
 						<div key={cell.id} className='text-xs text-muted-foreground flex items-center gap-1 min-w-0'>
 							{source ? (
 								<>
-									{!faviconUrl ? <LucideGlobe className='size-3 shrink-0' /> : <img src={faviconUrl} className='size-3 shrink-0' />}
+									{!faviconUrl ? (
+										<LucideGlobe className='size-3 shrink-0' />
+									) : (
+										<img src={faviconUrl} className='size-3 shrink-0' />
+									)}
 									<span className='truncate'>{source}</span>
 								</>
 							) : (
@@ -195,7 +219,9 @@ export function LinkListRow({ className, row }: LinkListRowProps): JSX.Element {
 				}
 				if (cell.column.id === "actions")
 					return (
-						<div key={cell.id} className='flex justify-end items-center gap-1 px-2 opacity-25 group-hover/item:opacity-100 transition-opacity'>
+						<div
+							key={cell.id}
+							className='flex justify-end items-center gap-1 px-2 opacity-25 group-hover/item:opacity-100 transition-opacity'>
 							{(error || cancelled) && (
 								<Button
 									variant={"ghost"}

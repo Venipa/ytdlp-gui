@@ -26,7 +26,9 @@ export default function LinkList({ className }: LinkListProps): JSX.Element {
 	const [sorting, setSorting] = useAtom(linkListSortingStore);
 	const sortInput = useMemo(
 		() => ({
-			sortBy: (sorting[0]?.id as "created" | "title" | "source" | "state" | "filesize" | "type" | undefined) ?? "created",
+			sortBy:
+				(sorting[0]?.id as "created" | "title" | "source" | "state" | "filesize" | "type" | undefined) ??
+				"created",
 			sortDir: sorting[0]?.desc ? ("desc" as const) : ("asc" as const),
 		}),
 		[sorting],
@@ -40,8 +42,14 @@ export default function LinkList({ className }: LinkListProps): JSX.Element {
 
 	const filteredItems = useMemo(() => {
 		const safeItems = (items ?? []) as LinkListTableItem[];
-		const activeItems = safeItems.filter((item) => item.state === "downloading" || item.state === "fetching_meta" || item.state === "queued");
-		const results = searchEngine.filterResults(safeItems as unknown as SearchItem<LinkListTableItem>[], search ?? "", ["title", "source", "url"]);
+		const activeItems = safeItems.filter(
+			(item) => item.state === "downloading" || item.state === "fetching_meta" || item.state === "queued",
+		);
+		const results = searchEngine.filterResults(
+			safeItems as unknown as SearchItem<LinkListTableItem>[],
+			search ?? "",
+			["title", "source", "url"],
+		);
 		if (!search?.trim()) return results;
 
 		const merged = [...activeItems, ...results] as LinkListTableItem[];
@@ -59,7 +67,7 @@ export default function LinkList({ className }: LinkListProps): JSX.Element {
 				enableSorting: false,
 			}),
 			columnHelper.accessor("title", {
-				header: "Download",
+				header: "Title",
 				cell: () => null,
 				enableSorting: true,
 			}),
@@ -82,11 +90,6 @@ export default function LinkList({ className }: LinkListProps): JSX.Element {
 			columnHelper.accessor("created", {
 				id: "created",
 				header: "Created",
-				cell: () => null,
-				enableSorting: true,
-			}),
-			columnHelper.accessor("state", {
-				header: "State",
 				cell: () => null,
 				enableSorting: true,
 			}),
@@ -170,7 +173,10 @@ export default function LinkList({ className }: LinkListProps): JSX.Element {
 									ref={rowVirtualizer.measureElement}
 									className='absolute left-0 top-0 w-full'
 									style={{ transform: `translateY(${virtualRow.start}px)` }}>
-									<LinkListRow className={cn(virtualRow.index === rows.length - 1 && "border-b-0")} row={row} />
+									<LinkListRow
+										className={cn(virtualRow.index === rows.length - 1 && "border-b-0")}
+										row={row}
+									/>
 								</div>
 							);
 						})}
