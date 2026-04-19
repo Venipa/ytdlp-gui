@@ -1,10 +1,10 @@
+import { join } from "path";
 import { is } from "@electron-toolkit/utils";
 import { trpcIpcHandler } from "@main/trpc";
-import { BrowserWindow, BrowserWindowConstructorOptions, Event, LoadFileOptions, Rectangle, shell } from "electron";
-import { join } from "path";
 // @ts-ignore
 import { logger } from "@shared/logger";
 import { buildUrl } from "build-url-ts";
+import { BrowserWindow, BrowserWindowConstructorOptions, Event, LoadFileOptions, Rectangle, shell } from "electron";
 // @ts-ignore
 // @ts-ignore
 import iconWin from "~/build/icon.ico?asset";

@@ -1,10 +1,10 @@
 import ClickableText from "@renderer/components/ui/clickable-text";
 import { Tab, TabNavbar } from "@renderer/components/ui/responsive-tabs";
 import { Sheet, SheetContent, SheetTrigger } from "@renderer/components/ui/sheet";
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 import config, { NodeEnv } from "@shared/config";
 import { atom, useAtom } from "jotai";
-import { createElement, HTMLProps, PropsWithChildren, ReactElement, useEffect, useMemo, useState } from "react";
+import { HTMLProps, PropsWithChildren, ReactElement, createElement, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 type Element = <T extends HTMLProps<HTMLDivElement> = HTMLProps<HTMLDivElement>>(props?: T) => ReactElement<T, any>;
 type Module = {

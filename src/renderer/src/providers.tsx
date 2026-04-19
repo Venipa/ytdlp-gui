@@ -1,7 +1,7 @@
 import { ThemeProvider } from "@renderer/components/app/theme-provider";
 import { Toaster } from "@renderer/components/ui/sonner";
 import { TooltipProvider } from "@renderer/components/ui/tooltip";
-import { client, trpc } from "@renderer/lib/trpc-link";
+import { client, trpc } from "@renderer/lib/api/trpc-link";
 import SettingsDialogWrapper from "@renderer/pages/components/settings/dialog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Provider as JotaiProvider } from "jotai";

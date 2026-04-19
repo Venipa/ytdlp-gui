@@ -1,11 +1,11 @@
-import { db } from "@main/stores/app-database";
-import { downloads } from "@main/stores/app-database.schema";
+import { availableParallelism } from "os";
+import path from "path";
+import { db } from "@main/stores/database/app-database";
+import { downloads } from "@main/stores/database/app-database.schema";
 import { logger } from "@shared/logger";
 import { inArray } from "drizzle-orm";
 import { app } from "electron";
 import { clamp } from "lodash";
-import { availableParallelism } from "os";
-import path from "path";
 import { YTDLP } from "./ytdlp.utils";
 
 export const ytdl = new YTDLP();

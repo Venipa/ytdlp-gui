@@ -1,7 +1,7 @@
 import { Button } from "@renderer/components/ui/button";
 import ClickableText from "@renderer/components/ui/clickable-text";
 import { QTooltip } from "@renderer/components/ui/tooltip";
-import { trpc } from "@renderer/lib/trpc-link";
+import { trpc } from "@renderer/lib/api/trpc-link";
 import config, { NodeEnv } from "@shared/config";
 import { throwErrorToast } from "@shared/trpc/error";
 import { formatDistanceToNow, isValid } from "date-fns";

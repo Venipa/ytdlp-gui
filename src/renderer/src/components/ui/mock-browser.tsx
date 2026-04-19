@@ -1,4 +1,4 @@
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 
 export const BrowserComponent: React.FC<{ children?: React.ReactNode; className?: string; title?: string }> = ({ className, children, title }) => (
 	<div

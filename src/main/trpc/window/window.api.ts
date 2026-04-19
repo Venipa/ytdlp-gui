@@ -1,6 +1,6 @@
 import EventEmitter from "events";
 import { platform } from "@electron-toolkit/utils";
-import { publicProcedure, router } from "@main/trpc/trpc";
+import { publicProcedure, router } from "@main/trpc/core/trpc";
 import { createLogger } from "@shared/logger";
 import { inferProcedureOutput } from "@trpc/server";
 import { observable } from "@trpc/server/observable";

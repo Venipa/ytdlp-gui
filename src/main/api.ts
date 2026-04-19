@@ -1,12 +1,12 @@
+import { router } from "@main/trpc/core/trpc";
 import dependenciesRouter from "@main/trpc/dependencies";
-import { router } from "@main/trpc/trpc";
 import { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
-import { dialogRouter } from "./trpc/dialog.api";
-import { eventsRouter } from "./trpc/events.api";
-import { internalRouter } from "./trpc/internal.api";
-import { settingsRouter } from "./trpc/settings.api";
-import { windowRouter } from "./trpc/window.api";
-import { ytdlpRouter } from "./trpc/ytdlp.api";
+import { dialogRouter } from "./trpc/dialog/dialog.api";
+import { eventsRouter } from "./trpc/events/events.api";
+import { internalRouter } from "./trpc/internal/internal.api";
+import { settingsRouter } from "./trpc/settings/settings.api";
+import { windowRouter } from "./trpc/window/window.api";
+import { ytdlpRouter } from "./trpc/ytdlp/ytdlp.api";
 
 export const appRouter = router({
 	dependencies: dependenciesRouter,

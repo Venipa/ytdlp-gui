@@ -3,7 +3,7 @@
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import * as React from "react";
 
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 import { motion, useScroll, useTransform } from "motion/react";
 
 const ScrollArea = React.forwardRef<React.ElementRef<typeof ScrollAreaPrimitive.Root>, React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> & { plain?: boolean }>(

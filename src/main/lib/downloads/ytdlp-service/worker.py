@@ -94,7 +94,7 @@ class Logger:
         self.__logger_call("DEBUG", message)
 
 
-WORKER_ID = os.environ.get("YTDLP_WORKER_ID")
+WORKER_ID = os.environ.get("YTDLP_WORKER_ID") or "unknown"
 
 
 def write_json(payload: Dict[str, Any]) -> None:

@@ -1,5 +1,5 @@
-import { type AppStore } from "@main/stores/AppStore";
-import { trpc } from "@renderer/lib/trpc-link";
+import { type AppStore } from "@main/stores/app/AppStore";
+import { trpc } from "@renderer/lib/api/trpc-link";
 import { logger } from "@shared/logger";
 import { uniq } from "lodash-es";
 import { Context, Provider, createContext, useContext, useMemo } from "react";

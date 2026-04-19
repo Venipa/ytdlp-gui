@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 import { Button } from "../button";
 import type { StepSharedProps } from "./types";
 import { useStepper } from "./use-stepper";

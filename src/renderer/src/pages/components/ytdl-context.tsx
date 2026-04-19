@@ -1,5 +1,5 @@
-import { trpc } from "@renderer/lib/trpc-link";
-import { Context, createContext, Provider, useContext, useMemo, useState } from "react";
+import { trpc } from "@renderer/lib/api/trpc-link";
+import { Context, Provider, createContext, useContext, useMemo, useState } from "react";
 import type { YTDLDownloadStatus, YTDLStatus } from "ytdlp-gui/types";
 type YTDLContext = {
 	getCurrentState: () => Promise<string>;

@@ -1,6 +1,6 @@
 import ClickableText from "@renderer/components/ui/clickable-text";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@renderer/components/ui/collapsible";
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 import { LucideChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useApp } from "../app-context";

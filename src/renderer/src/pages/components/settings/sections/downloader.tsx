@@ -1,4 +1,4 @@
-import { DEFAULT_OUTTMPL } from "@main/stores/AppStore";
+import { DEFAULT_OUTTMPL } from "@main/stores/app/AppStore";
 import { Badge } from "@renderer/components/ui/badge";
 import { QTooltip } from "@renderer/components/ui/tooltip";
 import GroupSection from "@renderer/pages/components/group-section";

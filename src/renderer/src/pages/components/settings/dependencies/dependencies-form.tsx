@@ -3,7 +3,7 @@ import ClickableText from "@renderer/components/ui/clickable-text";
 import { Progress } from "@renderer/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select";
 import { Spinner } from "@renderer/components/ui/spinner";
-import { trpc } from "@renderer/lib/trpc-link";
+import { trpc } from "@renderer/lib/api/trpc-link";
 import prettyBytes from "pretty-bytes";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";

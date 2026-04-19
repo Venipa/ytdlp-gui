@@ -2,7 +2,7 @@ import * as React from "react";
 
 import type { StepSharedProps } from "./types";
 
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 
 import { StepButtonContainer } from "./step-button-container";
 import { StepIcon } from "./step-icon";

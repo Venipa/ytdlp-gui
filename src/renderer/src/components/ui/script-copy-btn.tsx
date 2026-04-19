@@ -2,7 +2,7 @@
 
 import { CheckIcon, CopyIcon } from "@radix-ui/react-icons";
 import { Button } from "@renderer/components/ui/button";
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 import { motion } from "motion/react";
 import { useTheme } from "next-themes";
 import { HTMLAttributes, useEffect, useState } from "react";

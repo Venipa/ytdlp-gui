@@ -3,7 +3,7 @@ import { Button } from "@renderer/components/ui/button";
 import { Tab, TabNavbar } from "@renderer/components/ui/responsive-tabs";
 import { Sheet, SheetContent } from "@renderer/components/ui/sheet";
 import { QTooltip } from "@renderer/components/ui/tooltip";
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 import { logger } from "@shared/logger";
 import { XIcon } from "lucide-react";
 import { motion } from "motion/react";

@@ -1,4 +1,4 @@
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 import { PropsWithChildren, ReactNode } from "react";
 interface GroupSectionProps {
 	title: string | ReactNode;

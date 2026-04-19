@@ -1,13 +1,13 @@
 import EventEmitter from "events";
-import { AppStore, appStoreSchema } from "@main/stores/AppStore";
-import { appStore } from "@main/stores/app.store";
+import { AppStore, appStoreSchema } from "@main/stores/app/AppStore";
+import { appStore } from "@main/stores/app/app.store";
 import config from "@shared/config";
 import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { app, dialog } from "electron";
 import { merge } from "lodash-es";
 import { z } from "zod";
-import { publicProcedure, router } from "./trpc";
+import { publicProcedure, router } from "../core/trpc";
 const settingsChangeEmitter = new EventEmitter();
 const handleKey = `settings_change`;
 export const settingsRouter = router({

@@ -10,7 +10,7 @@ Unless a file states otherwise or is listed under [Proprietary components](#prop
 
 The following paths are **not** licensed under the AGPL. They are **proprietary**; **all rights reserved** by **Venipa**. They may not be copied, modified, distributed, or used except by the copyright holder without explicit written permission:
 
-- `src/main/lib/ytdlp-service/worker.py`
+- `src/main/lib/downloads/ytdlp-service/worker.py`
 - `src/main/lib/ytdlp-service/python.ts`
 - `src/main/lib/ytdlp-service/manager.ts`
 

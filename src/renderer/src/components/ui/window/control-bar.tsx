@@ -1,5 +1,5 @@
 import type { RouterOutput } from "@main/api";
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 import { isProduction } from "@shared/config";
 import { VariantProps, cva } from "class-variance-authority";
 import * as React from "react";

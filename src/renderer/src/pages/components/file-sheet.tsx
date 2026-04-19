@@ -1,9 +1,9 @@
-import type { SelectDownload } from "@main/stores/app-database.helpers";
+import type { SelectDownload } from "@main/stores/database/app-database.helpers";
 import { Button } from "@renderer/components/ui/button";
 import { ScrollArea } from "@renderer/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@renderer/components/ui/sheet";
-import { TrimSubdomainRegex } from "@renderer/lib/regex";
-import { trpc } from "@renderer/lib/trpc-link";
+import { trpc } from "@renderer/lib/api/trpc-link";
+import { TrimSubdomainRegex } from "@renderer/lib/media/regex";
 import { formatDistanceToNow } from "date-fns";
 import { LucideGlobe } from "lucide-react";
 import prettyBytes from "pretty-bytes";

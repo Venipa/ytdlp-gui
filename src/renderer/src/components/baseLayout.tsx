@@ -1,6 +1,6 @@
 import AppNavBar from "@renderer/components/ui/app-navbar";
-import { useWindowState } from "@renderer/lib/useWindowState";
-import { cn } from "@renderer/lib/utils";
+import { useWindowState } from "@renderer/lib/api/useWindowState";
+import { cn } from "@renderer/lib/ui/utils";
 import { motion, useScroll, useTransform } from "motion/react";
 import { PropsWithChildren, useMemo } from "react";
 import { useLocation } from "react-router-dom";

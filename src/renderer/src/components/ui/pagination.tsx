@@ -2,7 +2,7 @@ import { ChevronLeftIcon, ChevronRightIcon, DotsHorizontalIcon } from "@radix-ui
 import * as React from "react";
 
 import { ButtonProps, buttonVariants } from "@renderer/components/ui/button";
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 
 const Pagination = ({ className, ...props }: React.ComponentProps<"nav">) => (
 	<nav role='navigation' aria-label='pagination' className={cn("mx-auto flex w-full justify-center", className)} {...props} />

@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { appStore } from "@main/stores/app.store";
+import { appStore } from "@main/stores/app/app.store";
 import { createLogger } from "@shared/logger";
 import YtdlpPythonWorkerService, { YtdlpOutputEvent } from "./python";
 

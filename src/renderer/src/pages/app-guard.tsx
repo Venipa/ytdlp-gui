@@ -1,8 +1,8 @@
 import { DependencyProgressEvent } from "@main/trpc/dependencies/handler";
 import { SuspenseLoaderOptions } from "@renderer/components/ui/suspense-loader";
 import { RotateWords } from "@renderer/components/ui/text-rotate";
-import { tempStorage } from "@renderer/lib/atom";
-import { trpc } from "@renderer/lib/trpc-link";
+import { trpc } from "@renderer/lib/api/trpc-link";
+import { tempStorage } from "@renderer/lib/state/atom";
 import { logger } from "@shared/logger";
 import { useAtom } from "jotai";
 import { atomWithStorage } from "jotai/utils";

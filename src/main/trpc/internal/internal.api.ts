@@ -1,6 +1,6 @@
 import { dirname } from "node:path";
 import secureStore from "@main/secureStore";
-import { appStore } from "@main/stores/app.store";
+import { appStore } from "@main/stores/app/app.store";
 import { dependenciesManager } from "@main/trpc/dependencies/handler";
 import { checkForUpdates, checkForUpdatesAndNotify, setUpdateHandledByFrontend } from "@main/updater";
 import { nextTick } from "@shared/promises/helper";
@@ -8,8 +8,8 @@ import { TRPCError } from "@trpc/server";
 import { shell } from "electron";
 import { autoUpdater } from "electron-updater";
 import { z } from "zod";
-import { mainProcedure, publicProcedure, router } from "./trpc";
-import { ytdl } from "./ytdlp.core";
+import { mainProcedure, publicProcedure, router } from "../core/trpc";
+import { ytdl } from "../ytdlp/ytdlp.core";
 let appInitialized = false;
 export const internalRouter = router({
 	getAll: mainProcedure.query(() => secureStore.getAll()),

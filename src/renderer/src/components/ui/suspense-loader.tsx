@@ -1,7 +1,7 @@
 "use client";
 
 import { Progress } from "@renderer/components/ui/progress";
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 import { Spinner } from "./spinner";
 
 export default function SuspenseLoader({ className }: { className?: string }) {

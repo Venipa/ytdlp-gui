@@ -1,5 +1,5 @@
 import { Switch as ShadcnCheckbox } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 import { type VariantProps, cva } from "class-variance-authority";
 import * as React from "react";
 

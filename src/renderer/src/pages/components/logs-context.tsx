@@ -1,6 +1,6 @@
-import { trpc } from "@renderer/lib/trpc-link";
+import { trpc } from "@renderer/lib/api/trpc-link";
 import { logger } from "@shared/logger";
-import { Context, createContext, Provider, useContext, useMemo, useState } from "react";
+import { Context, Provider, createContext, useContext, useMemo, useState } from "react";
 export type LogEntry = {
 	date: Date;
 	message: string;

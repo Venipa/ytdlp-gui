@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { appStoreSchema } from "@main/stores/AppStore";
+import { appStoreSchema } from "@main/stores/app/AppStore";
 import { Form } from "@renderer/components/ui/form";
-import { trpc } from "@renderer/lib/trpc-link";
+import { trpc } from "@renderer/lib/api/trpc-link";
 import { logger } from "@shared/logger";
 import { PropsWithChildren, useCallback } from "react";
 import { SubmitHandler, useForm, useFormContext } from "react-hook-form";

@@ -1,5 +1,5 @@
-import { MAX_PARALLEL_DOWNLOADS } from "@main/trpc/ytdlp.core";
-import { DEFAULT_OUTTMPL } from "@main/trpc/ytdlp.utils";
+import { MAX_PARALLEL_DOWNLOADS } from "@main/trpc/ytdlp/ytdlp.core";
+import { DEFAULT_OUTTMPL } from "@main/trpc/ytdlp/ytdlp.utils";
 import { Migration } from "electron-conf";
 import { AppStore } from "./AppStore";
 const removeProperty = (instance: any, property: string) => {

@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CaretSortIcon } from "@radix-ui/react-icons";
-import { type MediaType, useMediaType } from "@renderer/lib/useMediaType";
-import { cn } from "@renderer/lib/utils";
+import { type MediaType, useMediaType } from "@renderer/lib/media/useMediaType";
+import { cn } from "@renderer/lib/ui/utils";
 
 type Option = {
 	name: string;

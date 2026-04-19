@@ -1,7 +1,7 @@
-import { initTRPC, TRPCError } from "@trpc/server";
+import { TRPCError, initTRPC } from "@trpc/server";
 import { BrowserWindow, IpcMainInvokeEvent } from "electron";
 import { Logger } from "~/src/shared/logger";
-import { pushLogToClient } from "./events.ee";
+import { pushLogToClient } from "../events/events.ee";
 const t = initTRPC.context<{ window: BrowserWindow; event: IpcMainInvokeEvent; log: Logger; path: string }>().create({ isServer: true });
 export const router = t.router;
 /**

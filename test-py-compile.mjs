@@ -4,7 +4,7 @@ import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, resolve } from "path";
 
-const workerPy = resolve("src/main/lib/ytdlp-service/worker.py");
+const workerPy = resolve("src/main/lib/downloads/ytdlp-service/worker.py");
 const outFile = resolve(tmpdir(), `ytdlp-${basename(workerPy, ".py")}-${Date.now()}.pyc`);
 const scriptPath = resolve(tmpdir(), "ytdlp-compile-worker.py");
 const compileScript = "import py_compile\nimport sys\npy_compile.compile(sys.argv[1], cfile=sys.argv[2])\n";

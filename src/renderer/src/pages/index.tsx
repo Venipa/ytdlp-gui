@@ -2,7 +2,7 @@ import ClickableText from "@renderer/components/ui/clickable-text";
 import { Tab, TabNavbar } from "@renderer/components/ui/responsive-tabs";
 import { ScrollArea } from "@renderer/components/ui/scroll-area";
 import SuspenseLoader from "@renderer/components/ui/suspense-loader";
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 import config, { NodeEnv } from "@shared/config";
 import { Fragment, Suspense, createElement, useMemo } from "react";
 import { toast } from "sonner";

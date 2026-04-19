@@ -1,4 +1,4 @@
-import { ChildProcess, ChildProcessWithoutNullStreams, execFile, ExecFileException, execSync, spawn, SpawnOptionsWithoutStdio } from "child_process";
+import { ChildProcess, ChildProcessWithoutNullStreams, ExecFileException, SpawnOptionsWithoutStdio, execFile, execSync, spawn } from "child_process";
 import { EventEmitter } from "events";
 import fs from "fs";
 import { IncomingMessage } from "http";

@@ -1,4 +1,4 @@
-import { sn } from "@renderer/lib/utils";
+import { sn } from "@renderer/lib/ui/utils";
 import { MouseEvent, forwardRef, useCallback, useEffect, useState } from "react";
 import { Button, ButtonProps } from "./button";
 import { Spinner } from "./spinner";

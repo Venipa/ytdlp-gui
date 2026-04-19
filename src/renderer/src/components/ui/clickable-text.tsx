@@ -1,6 +1,6 @@
 import { Slot } from "@radix-ui/react-slot";
-import { cn } from "@renderer/lib/utils";
-import { cva, VariantProps } from "class-variance-authority";
+import { cn } from "@renderer/lib/ui/utils";
+import { VariantProps, cva } from "class-variance-authority";
 import { PropsWithChildren } from "react";
 
 const textVariants = cva("whitespace-nowrap cursor-default", {

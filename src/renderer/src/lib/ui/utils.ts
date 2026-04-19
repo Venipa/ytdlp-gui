@@ -1,4 +1,4 @@
-import { clsx, type ClassValue } from "clsx";
+import { type ClassValue, clsx } from "clsx";
 import merge from "lodash-es/merge";
 import { CSSProperties } from "react";
 import { twMerge } from "tailwind-merge";

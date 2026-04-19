@@ -1,4 +1,4 @@
-import { atomWithDebounce } from "@renderer/lib/atom";
+import { atomWithDebounce } from "@renderer/lib/state/atom";
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
 
 export const linkBoxStore = atom("");

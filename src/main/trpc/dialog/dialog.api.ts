@@ -1,7 +1,7 @@
 import { BrowserWindow, ipcMain } from "electron";
 import { z } from "zod";
+import { publicProcedure, router } from "../core/trpc";
 import { createChildWindow, loadUrlOfWindow, lockCenterWithParent, waitForWindowClose } from "./dialog.utils";
-import { publicProcedure, router } from "./trpc";
 
 let windowHandles: Record<string, BrowserWindow[]> = {};
 const addWindowToHandles = (key: string, win: BrowserWindow) => {

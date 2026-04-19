@@ -1,6 +1,6 @@
 "use client";
 
-import { cva, type VariantProps } from "class-variance-authority";
+import { type VariantProps, cva } from "class-variance-authority";
 import {
 	FieldError as AriaFieldError,
 	FieldErrorProps as AriaFieldErrorProps,
@@ -13,7 +13,7 @@ import {
 	composeRenderProps,
 } from "react-aria-components";
 
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 
 const labelVariants = cva([
 	"text-sm font-medium leading-none",

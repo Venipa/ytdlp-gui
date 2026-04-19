@@ -1,5 +1,5 @@
 import { electronAPI } from "@electron-toolkit/preload";
-import platform from "@main/lib/platform";
+import platform from "@main/lib/system/platform";
 import "@shared/primitivies";
 import { availableParallelism } from "node:os";
 import { IpcRendererEvent, contextBridge, ipcRenderer } from "electron";

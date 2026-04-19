@@ -1,8 +1,8 @@
 import { Button } from "@renderer/components/ui/button";
 import SuspenseLoader from "@renderer/components/ui/suspense-loader";
-import { SearchEngine, SearchItem } from "@renderer/lib/searchEngine";
-import { trpc } from "@renderer/lib/trpc-link";
-import { cn } from "@renderer/lib/utils";
+import { trpc } from "@renderer/lib/api/trpc-link";
+import { SearchEngine, SearchItem } from "@renderer/lib/media/searchEngine";
+import { cn } from "@renderer/lib/ui/utils";
 import { createLogger } from "@shared/logger";
 import { LucideRefreshCcw } from "lucide-react";
 import { useMemo, useState } from "react";

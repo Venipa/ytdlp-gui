@@ -1,5 +1,5 @@
-import { MAX_PARALLEL_DOWNLOADS } from "@main/trpc/ytdlp.core";
-import { DEFAULT_OUTTMPL } from "@main/trpc/ytdlp.utils";
+import { MAX_PARALLEL_DOWNLOADS } from "@main/trpc/ytdlp/ytdlp.core";
+import { DEFAULT_OUTTMPL } from "@main/trpc/ytdlp/ytdlp.utils";
 import { createYmlStore } from "@shared/electron/store/createYmlStore";
 import { PathsOf } from "@shared/electron/store/inferKey";
 import { app } from "electron";

@@ -1,4 +1,4 @@
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 import { VariantProps, cva } from "class-variance-authority";
 import { HTMLMotionProps } from "motion/react";
 import React from "react";

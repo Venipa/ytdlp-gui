@@ -1,5 +1,5 @@
-import { cn } from "@renderer/lib/utils";
-import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "@renderer/lib/ui/utils";
+import { type VariantProps, cva } from "class-variance-authority";
 import { Minus, Square, SquareArrowOutDownLeftIcon, X } from "lucide-react";
 import * as React from "react";
 

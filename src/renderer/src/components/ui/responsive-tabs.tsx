@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { cn, sn } from "@/lib/utils";
+import { cn, sn } from "@renderer/lib/ui/utils";
 import { ChevronDown } from "lucide-react";
 import { motion } from "motion/react";
 import React, { createContext, HTMLProps, useContext, useEffect, useRef, useState } from "react";

@@ -2,7 +2,7 @@ import ClickableText from "@renderer/components/ui/clickable-text";
 import { Appear } from "@renderer/components/ui/routes/animated-content";
 import { Spinner } from "@renderer/components/ui/spinner";
 import { useIPC } from "@renderer/hooks/use-ipc";
-import { trpc } from "@renderer/lib/trpc-link";
+import { trpc } from "@renderer/lib/api/trpc-link";
 import { DotIcon } from "lucide-react";
 import prettyBytes from "pretty-bytes";
 import { useMemo } from "react";

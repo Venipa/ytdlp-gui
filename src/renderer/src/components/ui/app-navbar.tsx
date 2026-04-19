@@ -1,6 +1,6 @@
 import { WindowControlBar, WindowsControlBarProps } from "@renderer/components/ui/window/control-bar";
-import { useWindowConfig, useWindowControls, useWindowState } from "@renderer/lib/useWindowState";
-import { cn } from "@renderer/lib/utils";
+import { useWindowConfig, useWindowControls, useWindowState } from "@renderer/lib/api/useWindowState";
+import { cn } from "@renderer/lib/ui/utils";
 import { useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { useEventListener } from "usehooks-ts";

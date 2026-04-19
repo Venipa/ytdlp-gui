@@ -1,11 +1,11 @@
 import path from "path";
 import { platform as appPlatform } from "@electron-toolkit/utils";
-import createYtdlpService from "@main/lib/ytdlp-service";
-import YtdlpWorkerManager from "@main/lib/ytdlp-service/manager";
-import { YtdlpOutputEvent } from "@main/lib/ytdlp-service/python";
-import { YtdlpOptions } from "@main/lib/ytdlp-service/ytdlp-options";
-import { DEFAULT_OUTTMPL } from "@main/stores/AppStore";
-import { appStore } from "@main/stores/app.store";
+import createYtdlpService from "@main/lib/downloads/ytdlp-service";
+import YtdlpWorkerManager from "@main/lib/downloads/ytdlp-service/manager";
+import { YtdlpOutputEvent } from "@main/lib/downloads/ytdlp-service/python";
+import { YtdlpOptions } from "@main/lib/downloads/ytdlp-service/ytdlp-options";
+import { DEFAULT_OUTTMPL } from "@main/stores/app/AppStore";
+import { appStore } from "@main/stores/app/app.store";
 import { Logger } from "@shared/logger";
 import { app } from "electron";
 import { VideoInfo } from "yt-dlp-wrap/types";

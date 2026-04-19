@@ -1,5 +1,5 @@
-import YtdlpWorkerManager from "@main/lib/ytdlp-service/manager";
 import { logger } from "@shared/logger";
+import YtdlpWorkerManager from "./manager";
 const createYtdlpService = () => {
 	const service = new YtdlpWorkerManager({});
 	const shutdown = () => {

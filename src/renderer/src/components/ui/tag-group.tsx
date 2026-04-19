@@ -14,7 +14,7 @@ import {
 	composeRenderProps,
 } from "react-aria-components";
 
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 
 import { Label } from "./field";
 

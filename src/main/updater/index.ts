@@ -1,4 +1,4 @@
-import { appStore } from "@main/stores/app.store";
+import { appStore } from "@main/stores/app/app.store";
 import { isProduction } from "@shared/config";
 import { TRPCError } from "@trpc/server";
 import { BrowserWindow, app, dialog } from "electron";

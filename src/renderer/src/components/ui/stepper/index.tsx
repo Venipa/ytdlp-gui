@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@renderer/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 import * as React from "react";
 import { StepperProvider } from "./context";
 import { Step } from "./step";

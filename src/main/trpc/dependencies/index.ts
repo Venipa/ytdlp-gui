@@ -1,4 +1,4 @@
-import { publicProcedure, router } from "@main/trpc/trpc";
+import { publicProcedure, router } from "@main/trpc/core/trpc";
 import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import z from "zod";

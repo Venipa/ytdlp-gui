@@ -11,14 +11,14 @@ import { EventEmitter } from "node:events";
 import { existsSync, mkdirSync } from "node:fs";
 import path, { dirname, join, resolve } from "node:path";
 import { platform } from "@electron-toolkit/utils";
-import { checkDebugFlag } from "@main/lib/debug";
-import { YtdlpPyOptions } from "@main/lib/ytdlp-service/ytdlp-options";
+import { checkDebugFlag } from "@main/lib/diagnostics/debug";
 import { dependenciesManager } from "@main/trpc/dependencies/handler";
 import { parseJson, stringifyJson } from "@shared/json";
 import { createLogger } from "@shared/logger";
 import { app } from "electron";
 import { PythonShell } from "python-shell";
 import ytdlPyWorkerPath from "./worker.py?asset&asarUnpack";
+import { YtdlpPyOptions } from "./ytdlp-options";
 const log = createLogger("ytdlp-py-service");
 // Helper: Generate a unique ID for RPC calls
 function genId(): string {

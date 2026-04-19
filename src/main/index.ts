@@ -14,21 +14,21 @@ import iconWin from "~/build/icon.ico?asset";
 import icon from "~/build/icon_24x24.png?asset";
 // @ts-ignore
 import builderConfig from "../../electron-builder.yml";
-import { ClipboardMonitor } from "./lib/clipboardMonitor";
-import contextMenu from "./lib/contextMenu";
-import { wrapWindowHandler } from "./lib/windowUtils";
-import { runMigrate } from "./stores/app-database";
-import { appStore } from "./stores/app.store";
+import { ClipboardMonitor } from "./lib/window/clipboardMonitor";
+import contextMenu from "./lib/window/contextMenu";
+import { wrapWindowHandler } from "./lib/window/windowUtils";
+import { appStore } from "./stores/app/app.store";
+import { runMigrate } from "./stores/database/app-database";
 import { trpcIpcHandler } from "./trpc";
-import { loadUrlOfWindow } from "./trpc/dialog.utils";
-import { pushLogToClient } from "./trpc/events.ee";
-import { pushWindowState } from "./trpc/window.api";
-import { checkBrokenLinks } from "./trpc/ytdlp.core";
-import { ytdlpEvents } from "./trpc/ytdlp.ee";
+import { loadUrlOfWindow } from "./trpc/dialog/dialog.utils";
+import { pushLogToClient } from "./trpc/events/events.ee";
+import { pushWindowState } from "./trpc/window/window.api";
+import { checkBrokenLinks } from "./trpc/ytdlp/ytdlp.core";
+import { ytdlpEvents } from "./trpc/ytdlp/ytdlp.ee";
 import { attachAutoUpdaterIPC } from "./updater";
 const log = new Logger("App");
 const trayIcon = platform.isWindows ? iconWin : icon;
-import { executableIsAvailable } from "./lib/bin.utils";
+import { executableIsAvailable } from "./lib/system/bin.utils";
 
 if (import.meta.env.DEV) {
 	const pythonPath = executableIsAvailable("python") ? executableIsAvailable("python3.13") : executableIsAvailable("python3");

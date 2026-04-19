@@ -1,7 +1,7 @@
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import * as React from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@renderer/lib/ui/utils";
 
 // Replace `Slider` component in `@components/ui/slider.tsx` with the following code to add vertical orientation to the slider.
 const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root>>(({ className, ...props }, ref) => (
