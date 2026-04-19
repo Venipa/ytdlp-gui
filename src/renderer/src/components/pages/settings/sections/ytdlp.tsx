@@ -1,10 +1,10 @@
+import GroupSection from "@renderer/components/pages/group-section";
+import SettingsInput from "@renderer/components/pages/settings-input";
+import { useSettingsForm } from "@renderer/components/pages/settings/form";
+import PageContent from "@renderer/components/pages/settings/page-content";
+import { SectionMeta } from "@renderer/components/pages/settings/utils";
 import { Badge } from "@renderer/components/ui/badge";
 import { QTooltip } from "@renderer/components/ui/tooltip";
-import GroupSection from "@renderer/pages/components/group-section";
-import SettingsInput from "@renderer/pages/components/settings-input";
-import { useSettingsForm } from "@renderer/pages/components/settings/form";
-import PageContent from "@renderer/pages/components/settings/page-content";
-import { SectionMeta } from "@renderer/pages/components/settings/utils";
 import { LucideDownload } from "lucide-react";
 import { useCallback } from "react";
 const exampleFlags = [

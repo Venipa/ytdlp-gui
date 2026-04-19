@@ -1,7 +1,7 @@
-import GroupSection from "@renderer/pages/components/group-section";
-import DependenciesForm from "@renderer/pages/components/settings/dependencies";
-import PageContent from "@renderer/pages/components/settings/page-content";
-import { SectionMeta } from "@renderer/pages/components/settings/utils";
+import GroupSection from "@renderer/components/pages/group-section";
+import DependenciesForm from "@renderer/components/pages/settings/dependencies";
+import PageContent from "@renderer/components/pages/settings/page-content";
+import { SectionMeta } from "@renderer/components/pages/settings/utils";
 import { LucideDownload } from "lucide-react";
 
 export const meta: SectionMeta = {

@@ -1,8 +1,8 @@
 import { SelectProps } from "@radix-ui/react-select";
+import { useSettingsForm } from "@renderer/components/pages/settings/form";
 import { FormControl, FormDescription, FormField, FormItem, FormMessage } from "@renderer/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select";
 import { cn } from "@renderer/lib/ui/utils";
-import { useSettingsForm } from "@renderer/pages/components/settings/form";
 import { PropsWithChildren, createContext, forwardRef, useCallback, useContext, useEffect, useId, useState } from "react";
 const settingsSelectContext = createContext<{
 	value: string;

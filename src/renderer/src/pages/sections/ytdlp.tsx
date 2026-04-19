@@ -1,7 +1,7 @@
+import AddLink from "@renderer/components/pages/add-link";
+import LinkList from "@renderer/components/pages/link-list";
+import PlainLayout from "@renderer/components/pages/plain-layout";
 import { LucideHardDriveDownload } from "lucide-react";
-import AddLink from "../components/add-link";
-import LinkList from "../components/link-list";
-import PlainLayout from "../components/plain-layout";
 
 export const meta = {
 	title: "Downloads",

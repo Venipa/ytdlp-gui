@@ -1,6 +1,6 @@
-import GroupSection from "@renderer/pages/components/group-section";
-import SettingsSelect, { SettingsSelectItem } from "@renderer/pages/components/settings-select";
-import SettingsToggle from "@renderer/pages/components/settings-toggle";
+import GroupSection from "@renderer/components/pages/group-section";
+import SettingsSelect, { SettingsSelectItem } from "@renderer/components/pages/settings-select";
+import SettingsToggle from "@renderer/components/pages/settings-toggle";
 import { logger } from "@shared/logger";
 import { LucideCog } from "lucide-react";
 import { useSettingsForm } from "../form";

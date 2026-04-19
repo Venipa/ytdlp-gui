@@ -1,17 +1,17 @@
 import { ThemeProvider } from "@renderer/components/app/theme-provider";
+import { AppContextProvider } from "@renderer/components/pages/app-context";
+import { LogsContextProvider } from "@renderer/components/pages/logs-context";
+import { SettingsContextProvider } from "@renderer/components/pages/settings/context";
+import SettingsDialogWrapper from "@renderer/components/pages/settings/dialog";
+import { YTDLContextProvider } from "@renderer/components/pages/ytdl-context";
+import YTLDPObserver from "@renderer/components/pages/ytdlp-worker";
 import { Toaster } from "@renderer/components/ui/sonner";
 import { TooltipProvider } from "@renderer/components/ui/tooltip";
 import { client, trpc } from "@renderer/lib/api/trpc-link";
-import SettingsDialogWrapper from "@renderer/pages/components/settings/dialog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Provider as JotaiProvider } from "jotai";
 import { PropsWithChildren, Suspense, useState } from "react";
 import SuspenseLoader from "./components/ui/suspense-loader";
-import { AppContextProvider } from "./pages/components/app-context";
-import { LogsContextProvider } from "./pages/components/logs-context";
-import { SettingsContextProvider } from "./pages/components/settings/context";
-import { YTDLContextProvider } from "./pages/components/ytdl-context";
-import YTLDPObserver from "./pages/components/ytdlp-worker";
 export default function AppProviders({ children }: PropsWithChildren) {
 	const [queryClient] = useState(() => new QueryClient());
 	const [trpcClient] = useState(() => client);

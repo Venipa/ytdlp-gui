@@ -1,7 +1,7 @@
+import { useSettingsForm } from "@renderer/components/pages/settings/form";
 import { FormControl, FormDescription, FormField, FormItem, FormMessage } from "@renderer/components/ui/form";
 import { Input, InputProps } from "@renderer/components/ui/input";
 import { cn } from "@renderer/lib/ui/utils";
-import { useSettingsForm } from "@renderer/pages/components/settings/form";
 import { forwardRef, useCallback, useId, useMemo } from "react";
 type SettingsInputProps<TKey extends string> = {
 	name: TKey;

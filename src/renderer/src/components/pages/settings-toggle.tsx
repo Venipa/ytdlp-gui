@@ -1,6 +1,6 @@
+import { useSettingsForm } from "@renderer/components/pages/settings/form";
 import { FormControl, FormField, FormItem, FormMessage } from "@renderer/components/ui/form";
 import { SwitchButton } from "@renderer/components/ui/switch-button";
-import { useSettingsForm } from "@renderer/pages/components/settings/form";
 import { PropsWithChildren } from "react";
 
 type SettingsToggleProps = PropsWithChildren<{

@@ -1,11 +1,11 @@
+import { LogEntry, useLogs } from "@renderer/components/pages/logs-context";
+import PlainLayout from "@renderer/components/pages/plain-layout";
 import { isProduction } from "@shared/config";
 import { cva } from "class-variance-authority";
 import { format } from "date-fns";
 import { LucideLogs } from "lucide-react";
 import { CSSProperties, memo, useMemo } from "react";
 import { AutoSizer, List, ListRowProps } from "react-virtualized";
-import { LogEntry, useLogs } from "../components/logs-context";
-import PlainLayout from "../components/plain-layout";
 
 export const meta = {
 	title: "Logs",

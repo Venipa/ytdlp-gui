@@ -1,3 +1,5 @@
+import { useSettings } from "@renderer/components/pages/settings/context";
+import StatusBar from "@renderer/components/pages/status-bar";
 import ClickableText from "@renderer/components/ui/clickable-text";
 import { Tab, TabNavbar } from "@renderer/components/ui/responsive-tabs";
 import { ScrollArea } from "@renderer/components/ui/scroll-area";
@@ -6,8 +8,6 @@ import { cn } from "@renderer/lib/ui/utils";
 import config, { NodeEnv } from "@shared/config";
 import { Fragment, Suspense, createElement, useMemo } from "react";
 import { toast } from "sonner";
-import { useSettings } from "./components/settings/context";
-import StatusBar from "./components/status-bar";
 import { getSectionByTitle, sectionTabs, useSelectedTabTitle } from "./index.store";
 
 export default function SettingsWindow() {
