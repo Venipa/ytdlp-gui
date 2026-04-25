@@ -40,6 +40,29 @@ const MEDIA_TYPE_TO_FORMAT: Record<YTDLMediaType, string | null> = {
 	"audio-opus": "bestaudio[acodec*=opus]/bestaudio/best",
 };
 
+const parseSpeedToBytesPerSecond = (speed: string): number => {
+	// Matches patterns like "1234KiB/s", "12.3MiB/s", "567B/s", etc.
+	const match = speed.match(/^(\d+(?:\.\d+)?)([KMGT]?i?B)\/s$/i);
+	if (!match) return 0;
+	const value = parseFloat(match[1]);
+	const unit = match[2].toUpperCase();
+
+	const unitMultipliers: Record<string, number> = {
+		B: 1,
+		KB: 1000,
+		KIB: 1024,
+		MB: 1000 * 1000,
+		MIB: 1024 * 1024,
+		GB: 1000 * 1000 * 1000,
+		GIB: 1024 * 1024 * 1024,
+		TB: 1000 * 1000 * 1000 * 1000,
+		TIB: 1024 * 1024 * 1024 * 1024,
+	};
+
+	const multiplier = unitMultipliers[unit] ?? 1;
+	return Math.round(value * multiplier);
+};
+
 function isAudioMediaType(type: YTDLMediaType): boolean {
 	return AUDIO_MEDIA_TYPES.includes(type as (typeof AUDIO_MEDIA_TYPES)[number]);
 }
@@ -339,7 +362,7 @@ class DownloadQueueManager {
 				ytdlpEvents.emit("download", {
 					id: dbFile.id,
 					percent: stablePercent,
-					speed: event.speed ?? "",
+					speed: parseSpeedToBytesPerSecond(event.speed ?? "") ?? 0,
 					eta: event.eta ?? "",
 					fragmentIndex: event.fragmentIndex,
 					fragmentCount: event.fragmentCount,

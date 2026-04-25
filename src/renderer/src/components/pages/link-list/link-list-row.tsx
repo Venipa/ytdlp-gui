@@ -17,7 +17,10 @@ import { useLinkListActions } from "./link-list-context";
 import LinkListDeletePopover from "./link-list-delete-popover";
 import LinkListStatusIndicator from "./link-list-status-indicator";
 import { LinkListTableItem } from "./link-list.types";
-
+function formatSpeed(speed: number): string {
+	const mib = speed / (1024 * 1024);
+	return `${mib.toFixed(2)} MiB/s`;
+}
 const padStatusItem = (status: string | number, type: "percent" | "speed" | "eta"): string => {
 	const statusString = String(status);
 	if (type === "percent") return statusString.padStart(6, " ") + "%";
@@ -94,7 +97,7 @@ export function LinkListRow({
 		if (!downloading || !status) return null;
 		return {
 			percent: padStatusItem(status.percent?.toFixed(0) ?? "", "percent"),
-			speed: padStatusItem(status.speed ?? "", "speed"),
+			speed: padStatusItem(formatSpeed(status.speed ?? 0), "speed"),
 			eta: padStatusItem(status.eta ?? "", "eta").split("ETA")[0],
 		};
 	}, [queued, downloading, status]);

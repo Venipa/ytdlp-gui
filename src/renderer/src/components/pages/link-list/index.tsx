@@ -2,6 +2,7 @@ import { Button } from "@renderer/components/ui/button";
 import { Checkbox } from "@renderer/components/ui/checkbox";
 import { Spinner } from "@renderer/components/ui/spinner";
 import SuspenseLoader from "@renderer/components/ui/suspense-loader";
+import { QTooltip } from "@renderer/components/ui/tooltip";
 import { trpc } from "@renderer/lib/api/trpc-link";
 import { SearchEngine, SearchItem } from "@renderer/lib/media/searchEngine";
 import { cn } from "@renderer/lib/ui/utils";
@@ -101,19 +102,21 @@ export default function LinkList({ className }: LinkListProps): JSX.Element {
 				id: "selection",
 				header: () => (
 					<div className='flex items-center justify-center w-full'>
-						<Checkbox
-							checked={selectAllState}
-							disabled={bulkDeleteMode !== null || rowIdsForSelection.length === 0}
-							aria-label='Select all visible items'
-							variant='ghost'
-							size='sm'
-							onCheckedChange={(checked) => {
-								handleSelectAllVisible(checked === true);
-							}}
-							onClick={(event) => {
-								event.stopPropagation();
-							}}
-						/>
+						<QTooltip content='Select all visible items'>
+							<Checkbox
+								checked={selectAllState}
+								disabled={bulkDeleteMode !== null || rowIdsForSelection.length === 0}
+								aria-label='Select all visible items'
+								variant='ghost'
+								size='sm'
+								onCheckedChange={(checked) => {
+									handleSelectAllVisible(checked === true);
+								}}
+								onClick={(event) => {
+									event.stopPropagation();
+								}}
+							/>
+						</QTooltip>
 					</div>
 				),
 				cell: () => null,

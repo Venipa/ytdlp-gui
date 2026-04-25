@@ -27,11 +27,13 @@ declare module "ytdlp-gui/types" {
 		| "audio-m4a"
 		| "audio-opus";
 	export type YTDLState = "progressing" | "done";
-	export type YTDLStatus = { action: string; data?: any; state: YTDLState } | { action: string; error: any; state: YTDLState };
+	export type YTDLStatus =
+		| { action: string; data?: any; state: YTDLState }
+		| { action: string; error: any; state: YTDLState };
 	export type YTDLDownloadStatus = {
 		percent: number;
 		totalSize?: string;
-		speed: string;
+		speed: number;
 		eta: string;
 	};
 
