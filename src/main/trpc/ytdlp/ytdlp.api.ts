@@ -68,7 +68,12 @@ class DownloadQueueManager {
 		return Math.min(100, (completedFragments / count) * 100);
 	}
 
-	private getStableDownloadPercent(downloadId: number, incomingPercent: unknown, fragmentIndex?: unknown, fragmentCount?: unknown): number {
+	private getStableDownloadPercent(
+		downloadId: number,
+		incomingPercent: unknown,
+		fragmentIndex?: unknown,
+		fragmentCount?: unknown,
+	): number {
 		const previous = this.progressState.get(downloadId)?.percent ?? 0;
 		const rawPercent = this.normalizeProgressValue(incomingPercent) ?? previous;
 		const fragmentFloor = this.getFragmentFloorPercent(fragmentIndex, fragmentCount);
@@ -89,7 +94,9 @@ class DownloadQueueManager {
 		uniqueUrls.forEach((url) => this.processingUrls.add(url));
 		const dbEntries = await this.addToDatabase(uniqueUrls, type);
 
-		const files = await queuePromise(dbEntries.map((u) => () => this.checkMetadata(u).catch(() => null))).then((files) => files.filter((s) => !!s));
+		const files = await queuePromise(dbEntries.map((u) => () => this.checkMetadata(u).catch(() => null))).then(
+			(files) => files.filter((s) => !!s),
+		);
 
 		this.startDownloads(files);
 		return files;
@@ -150,7 +157,10 @@ class DownloadQueueManager {
 		return this.fetchNewMetadata(dbFileRecord);
 	}
 
-	private async handleExistingMetadata(dbFile: SelectDownload, existingDbFile: SelectDownload): Promise<{ dbFile: SelectDownload; videoInfo: VideoInfo }> {
+	private async handleExistingMetadata(
+		dbFile: SelectDownload,
+		existingDbFile: SelectDownload,
+	): Promise<{ dbFile: SelectDownload; videoInfo: VideoInfo }> {
 		if (!existingDbFile.meta) {
 			throw new Error("Existing file metadata is missing");
 		}
@@ -174,7 +184,7 @@ class DownloadQueueManager {
 	private async fetchNewMetadata(dbFile: SelectDownload): Promise<{ dbFile: SelectDownload; videoInfo: VideoInfo }> {
 		const { url } = dbFile;
 		let videoInfo: VideoInfo | null = null;
-		const outtmpl = getOuttmpl();
+		const outtmpl = getOuttmpl().replace("%(source)s", sanitizeFilename(new URL(url).hostname.toLowerCase()));
 		try {
 			videoInfo = await ytdl.extractInfo(url, {
 				...(isAudioMediaType((dbFile.type ?? "auto") as YTDLMediaType) && { format: "bestaudio/best" }),
@@ -314,7 +324,12 @@ class DownloadQueueManager {
 			}
 
 			if (event.type === "download_status") {
-				const stablePercent = this.getStableDownloadPercent(dbFile.id, event.percent, event.fragmentIndex, event.fragmentCount);
+				const stablePercent = this.getStableDownloadPercent(
+					dbFile.id,
+					event.percent,
+					event.fragmentIndex,
+					event.fragmentCount,
+				);
 				ytdlpEvents.emit("status", {
 					id: dbFile.id,
 					action: "download",
@@ -399,7 +414,8 @@ class DownloadQueueManager {
 	}
 
 	private async handleDownloadError(dbFile: SelectDownload, error: any) {
-		const errorMessage = error instanceof Error ? error.message : typeof error === "string" ? error : "Unknown error";
+		const errorMessage =
+			error instanceof Error ? error.message : typeof error === "string" ? error : "Unknown error";
 		const normalizedError = {
 			name: error instanceof Error ? error.name : "DownloadError",
 			message: errorMessage,
@@ -414,7 +430,13 @@ class DownloadQueueManager {
 			error: normalizedError,
 			state: "done",
 		});
-		ytdlpEvents.emit("download", { id: dbFile.id, percent: 100, speed: "", eta: "", message: `failed: ${errorMessage}` });
+		ytdlpEvents.emit("download", {
+			id: dbFile.id,
+			percent: 100,
+			speed: "",
+			eta: "",
+			message: `failed: ${errorMessage}`,
+		});
 		this.clearDownloadProgress(dbFile.id);
 		pushToastToClient(`${dbFile.title}`, "error", `Failed to download: ${errorMessage}`);
 		log.error("handleDownloadError", { error });
@@ -431,7 +453,11 @@ class DownloadQueueManager {
 		this.activeDownloads.delete(dbFile.id);
 		this.processingUrls.delete(dbFile.url);
 		if (!this.activeDownloads.size && this.finishedDownloads.size) {
-			pushToastToClient(`Downloads completed`, "success", `${Array.from(this.finishedDownloads.values()).filter((d) => d === "success").length} downloads completed`);
+			pushToastToClient(
+				`Downloads completed`,
+				"success",
+				`${Array.from(this.finishedDownloads.values()).filter((d) => d === "success").length} downloads completed`,
+			);
 			this.finishedDownloads.clear();
 		}
 	}
@@ -479,10 +505,12 @@ export const ytdlpRouter = router({
 		.mutation(async ({ input: { url: urls, type } }) => {
 			return await downloadQueueManager.addToQueue(urls, type);
 		}),
-	cancel: publicProcedure.input(z.union([z.string(), z.number()]).transform((v) => Number(v))).mutation(async ({ input: id }) => {
-		await downloadQueueManager.cancelDownload(id);
-		ytdlpEvents.emit("cancel", id);
-	}),
+	cancel: publicProcedure
+		.input(z.union([z.string(), z.number()]).transform((v) => Number(v)))
+		.mutation(async ({ input: id }) => {
+			await downloadQueueManager.cancelDownload(id);
+			ytdlpEvents.emit("cancel", id);
+		}),
 	status: publicProcedure.subscription(() => {
 		return observable<YTDLStatus>((emit) => {
 			function onStatusChange(data: any) {
@@ -566,7 +594,11 @@ export const ytdlpRouter = router({
 	onAutoAdd: publicProcedure.subscription(() => {
 		return observable<string>((emit) => {
 			async function onAutoAddHandle(url: string) {
-				if (!url || (await queries.downloads.findDownloadByUrl(url, ["completed", "fetching_meta", "downloading"])).length) {
+				if (
+					!url ||
+					(await queries.downloads.findDownloadByUrl(url, ["completed", "fetching_meta", "downloading"]))
+						.length
+				) {
 					ytdlpEvents.emit("toast", { message: "File already downloaded.", type: "error" });
 					return;
 				}
@@ -604,7 +636,9 @@ export const ytdlpRouter = router({
 	onToast: publicProcedure.subscription(() => {
 		return observable<string[]>((emit) => {
 			async function onToastRelay(data: string | { message: string; type?: string; description?: string }) {
-				emit.next(typeof data === "string" ? [data] : ([data.message, data.description, data.type] as string[]));
+				emit.next(
+					typeof data === "string" ? [data] : ([data.message, data.description, data.type] as string[]),
+				);
 			}
 
 			ytdlpEvents.on("toast", onToastRelay);
@@ -670,7 +704,11 @@ export const ytdlpRouter = router({
 			const sortColumn = columnMap[sortBy];
 			const sortExpr = sortDir === "asc" ? asc(sortColumn) : desc(sortColumn);
 			if (sortBy === "finishedAt") {
-				return await db.select().from(downloads).orderBy(desc(activeRank), desc(finishedRank), sortExpr, desc(downloads.created)).all();
+				return await db
+					.select()
+					.from(downloads)
+					.orderBy(desc(activeRank), desc(finishedRank), sortExpr, desc(downloads.created))
+					.all();
 			}
 			return await db.select().from(downloads).orderBy(desc(activeRank), sortExpr, desc(downloads.created)).all();
 		}),

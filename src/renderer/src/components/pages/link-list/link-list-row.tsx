@@ -1,5 +1,6 @@
 import ButtonLoading from "@renderer/components/ui/ButtonLoading";
 import { Button } from "@renderer/components/ui/button";
+import { Checkbox } from "@renderer/components/ui/checkbox";
 import { QTooltip } from "@renderer/components/ui/tooltip";
 import { trpc } from "@renderer/lib/api/trpc-link";
 import { TrimSubdomainRegex } from "@renderer/lib/media/regex";
@@ -44,8 +45,21 @@ const getStateLabel = (state: YTDLItem["state"]): string => {
 type LinkListRowProps = {
 	className?: string;
 	row: Row<LinkListTableItem>;
+	isSelected: boolean;
+	showCheckbox: boolean;
+	disableSelection?: boolean;
+	onSelectChange: (checked: boolean) => void;
+	onHoverChange: (isHovering: boolean) => void;
 };
-export function LinkListRow({ className, row }: LinkListRowProps): JSX.Element {
+export function LinkListRow({
+	className,
+	row,
+	isSelected,
+	showCheckbox,
+	disableSelection,
+	onSelectChange,
+	onHoverChange,
+}: LinkListRowProps): JSX.Element {
 	const props = row.original;
 	const { id, error, state, filesize: rawFilesize, type, source, title, filepath, url, created } = props;
 	const [status, setDownloadStatus] = useState<YTDLDownloadStatus>();
@@ -96,6 +110,12 @@ export function LinkListRow({ className, row }: LinkListRowProps): JSX.Element {
 	const isSingleLine = completed || cancelled || error || queued;
 	return (
 		<div
+			onMouseEnter={() => {
+				onHoverChange(true);
+			}}
+			onMouseLeave={() => {
+				onHoverChange(false);
+			}}
 			className={cn(
 				"h-12 grid min-w-full w-fit",
 				LINK_LIST_GRID_COLUMNS,
@@ -103,20 +123,46 @@ export function LinkListRow({ className, row }: LinkListRowProps): JSX.Element {
 				className,
 			)}>
 			{row.getVisibleCells().map((cell) => {
+				if (cell.column.id === "selection") {
+					return (
+						<div key={cell.id} className='flex items-center justify-center'>
+							<Checkbox
+								checked={isSelected}
+								disabled={disableSelection}
+								aria-label={isSelected ? "Deselect item" : "Select item"}
+								className={cn(
+									"transition-opacity",
+									showCheckbox ? "opacity-100" : "opacity-0 pointer-events-none",
+								)}
+								onCheckedChange={(checked) => {
+									onSelectChange(checked === true);
+								}}
+								onClick={(event) => {
+									event.stopPropagation();
+								}}
+								variant={"ghost"}
+								size='sm'
+							/>
+						</div>
+					);
+				}
+
 				if (cell.column.id === "status") {
 					return (
-						<QTooltip content={stateLabel} side='right' asChild>
-							<div key={cell.id} className='flex items-center justify-center'>
-								<LinkListStatusIndicator
-									cancelled={cancelled}
-									completed={completed}
-									downloading={downloading}
-									error={error}
-									queued={queued}
-									status={status}
-								/>
-							</div>
-						</QTooltip>
+						<div key={cell.id} className='flex items-center justify-center'>
+							<QTooltip content={stateLabel} side='right' asChild>
+								<div className='flex items-center justify-center'>
+									<LinkListStatusIndicator
+										cancelled={cancelled}
+										completed={completed}
+										downloading={downloading}
+										error={error}
+										queued={queued}
+										status={status}
+									/>
+								</div>
+							</QTooltip>
+						</div>
 					);
 				}
 

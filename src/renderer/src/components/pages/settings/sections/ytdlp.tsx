@@ -46,7 +46,7 @@ export default function YtdlpSection({ meta }: { meta: SectionMeta }) {
 	const Icon = meta.icon;
 	const form = useSettingsForm();
 	const cliFormatter = useCallback((values: string[]) => values?.join(" "), []);
-
+	const cliParser = useCallback((value: string) => value.split(" "), []);
 	return (
 		<PageContent icon={Icon} title={meta.title} description={meta.description} tabId={meta.title}>
 			<div className='flex flex-col gap-0'>
@@ -58,6 +58,7 @@ export default function YtdlpSection({ meta }: { meta: SectionMeta }) {
 					<SettingsInput
 						name='ytdlp.cliargs'
 						formatter={cliFormatter}
+						parser={cliParser}
 						title={"CLI arguments, check yt-dlp docs for more info ..."}
 						hint={
 							<div className='text-muted-foreground text-xs flex flex-wrap gap-1'>
@@ -66,16 +67,22 @@ export default function YtdlpSection({ meta }: { meta: SectionMeta }) {
 									const hint = typeof flag === "string" ? undefined : flag.hint;
 									if (hint) {
 										return (
-											<QTooltip content={(<div className='text-xs w-64'>{hint}</div>) as any} key={label}>
+											<QTooltip
+												content={(<div className='text-xs w-64'>{hint}</div>) as any}
+												key={label}>
 												<Badge
 													variant='pre'
 													className='cursor-pointer hover:bg-muted/40'
 													onClick={() =>
-														form.setValue("ytdlp.cliargs", [...form.getValues().ytdlp.cliargs, label], {
-															shouldDirty: true,
-															shouldTouch: true,
-															shouldValidate: true,
-														})
+														form.setValue(
+															"ytdlp.cliargs",
+															[...form.getValues().ytdlp.cliargs, label],
+															{
+																shouldDirty: true,
+																shouldTouch: true,
+																shouldValidate: true,
+															},
+														)
 													}>
 													{label}
 												</Badge>
@@ -87,11 +94,15 @@ export default function YtdlpSection({ meta }: { meta: SectionMeta }) {
 											variant='pre'
 											className='cursor-pointer hover:bg-muted/40'
 											onClick={() =>
-												form.setValue("ytdlp.cliargs", [...form.getValues().ytdlp.cliargs, label], {
-													shouldDirty: true,
-													shouldTouch: true,
-													shouldValidate: true,
-												})
+												form.setValue(
+													"ytdlp.cliargs",
+													[...form.getValues().ytdlp.cliargs, label],
+													{
+														shouldDirty: true,
+														shouldTouch: true,
+														shouldValidate: true,
+													},
+												)
 											}
 											key={label}>
 											{label}

@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, unl
 import path, { dirname } from "node:path";
 import { basename, join, relative, resolve } from "path";
 import type { Plugin } from "vite";
-import { AliasOptions, ResolveOptions } from "vite";
+import { AliasOptions, ResolveOptions, normalizePath } from "vite";
 import "./src/shared/extensions/string.ts";
 console.log("current working dir:", resolve("."));
 const resolveOptions: { resolve: ResolveOptions & { alias: AliasOptions } } = {
@@ -38,9 +38,14 @@ function isPythonAssetRequest(source: string): boolean {
 
 
 function pythonAssetPlugin(): Plugin {
+	const pythonAssetModuleIds = new Map<string, string>();
+	let isServeMode = false;
 	return {
 		name: "python-bytecode",
 		enforce: "pre",
+		configResolved(config) {
+			isServeMode = config.command === "serve";
+		},
 		async resolveId(source, importer) {
 			if (!isPythonAssetRequest(source)) return null;
 			const pyPath = source.replace(/\?.*$/, "");
@@ -51,6 +56,11 @@ function pythonAssetPlugin(): Plugin {
 		load(id) {
 			if (!id.startsWith(PY_BYTECODE_PREFIX)) return null;
 			const pyPath = id.slice(PY_BYTECODE_PREFIX.length);
+			const normalizedPyPath = normalizePath(pyPath);
+			pythonAssetModuleIds.set(normalizedPyPath, id);
+			if (isServeMode) {
+				return `export default ${JSON.stringify(pyPath)};`;
+			}
 
 			// if (depsTmpDir && !depsEmitted) {
 			// 	const requirementLines = getRequiredRequirementLines(pyPath, PY_REQUIREMENTS_PATH);
@@ -78,12 +88,22 @@ function pythonAssetPlugin(): Plugin {
 				unpackedPath,
 			});
 			export default resolvedPath;`;
-		}
-  }
+		},
+		handleHotUpdate(ctx) {
+			const changedPath = normalizePath(ctx.file);
+			const moduleId = pythonAssetModuleIds.get(changedPath);
+			if (!moduleId) return;
+			const module = ctx.server.moduleGraph.getModuleById(moduleId);
+			if (!module) return;
+			ctx.server.moduleGraph.invalidateModule(module);
+			return [module];
+		},
+	};
 }
 
 function venvCopyPlugin(options: { venvPath: string }): Plugin {
 	const { venvPath } = options;
+  let alreadyCopied = false;
 	return {
 		name: "copy-venv-to-main-resources",
 		apply: "build",
@@ -94,6 +114,8 @@ function venvCopyPlugin(options: { venvPath: string }): Plugin {
 				console.warn("[copy-venv-to-main-resources] No .venv directory found, skipping venv copy.");
 				return;
 			}
+			if (alreadyCopied) return;
+			alreadyCopied = true; // prevents hmr from copying the venv multiple times
 			const copyRecursiveSync = (src, dest) => {
 				if (statSync(src).isDirectory()) {
 					if (!existsSync(dest)) mkdirSync(dest, { recursive: true });

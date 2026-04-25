@@ -16,6 +16,8 @@ export function SettingsFormProvider({ children }: PropsWithChildren) {
 	const utils = trpc.useUtils();
 	const form = useForm<SettingsValues>({
 		resolver: zodResolver(settingsSchema),
+		mode: "onBlur",
+		reValidateMode: "onChange",
 		async defaultValues() {
 			const settings = await utils.settings.index.fetch();
 			const parsedSettings = settingsSchema.parse(settings);
