@@ -16,6 +16,7 @@ import { dependenciesManager } from "@main/trpc/dependencies/handler";
 import { parseJson, stringifyJson } from "@shared/json";
 import { createLogger } from "@shared/logger";
 import { app } from "electron";
+import { Result, err, ok } from "neverthrow";
 import { PythonShell } from "python-shell";
 import ytdlPyWorkerPath from "./worker.py?asset&asarUnpack";
 import { YtdlpPyOptions } from "./ytdlp-options";
@@ -94,6 +95,11 @@ interface YtdlpWorkerServiceOptions {
 	cwd?: string;
 	workerId?: string;
 }
+
+interface PythonRuntimeConfig {
+	pythonPathEnv: string;
+	pythonPath: string;
+}
 class YtdlpPythonWorkerService {
 	private static readonly IN_PROGRESS_PERCENT_MAX = 99.9;
 	private pyshell: PythonShell;
@@ -114,23 +120,29 @@ class YtdlpPythonWorkerService {
 		const workerScriptPath = ytdlPyWorkerPath;
 		const cwd = options.cwd ?? path.join(app.getPath("userData"), "ytdlp_cache");
 		if (!existsSync(cwd)) mkdirSync(cwd, { recursive: true });
-		const { path: pythonPathEnv, paths: pythonPaths } = buildPythonPath(workerScriptPath);
-		if (!pythonPathEnv) {
-			throw new Error("Python path not found");
-		}
-		const firstPyPath = pythonPaths[0];
+		const runtimeConfigResult = this.resolvePythonRuntimeConfig(workerScriptPath, options.pythonPath);
+		const runtimeConfig = runtimeConfigResult.match(
+			(value) => value,
+			(runtimeError) => {
+				log.error("Unable to resolve Python runtime config", { error: runtimeError.message });
+				this.rejectReady(runtimeError);
+				this.lifecycleEmitter.emit("close", runtimeError);
+				return {
+					pythonPathEnv: "",
+					pythonPath: options.pythonPath ?? "python",
+				} satisfies PythonRuntimeConfig;
+			},
+		);
 
-		const pythonPath = join(firstPyPath, platform.isWindows ? "Scripts" : "bin", platform.isWindows ? "python.exe" : "python");
-
-		log.info("Python path", { pythonPath });
+		log.info("Python path", { pythonPath: runtimeConfig.pythonPath });
 		this.pyshell = new PythonShell(workerScriptPath, {
-			pythonPath: options.pythonPath ?? pythonPath,
+			pythonPath: runtimeConfig.pythonPath,
 			cwd,
 			encoding: "utf-8",
 			pythonOptions: options.pythonOptions || ["-u"],
 			env: {
 				...process.env,
-				...(pythonPathEnv ? { PYTHONPATH: pythonPathEnv } : {}),
+				...(runtimeConfig.pythonPathEnv ? { PYTHONPATH: runtimeConfig.pythonPathEnv } : {}),
 				...(this.workerId ? { YTDLP_WORKER_ID: this.workerId } : {}),
 			},
 			parser(param) {
@@ -169,12 +181,49 @@ class YtdlpPythonWorkerService {
 		});
 		log.info("YtdlpPythonService initialized", { workerId: this.workerId });
 	}
-	// Sends a typed JSON RPC call to Python
-	async call(method: string, params?: { options?: YtdlpPyOptions; [key: string]: unknown }, callOptions?: RpcCallOptions): Promise<unknown> {
-		const id = genId();
+
+	private toError(reason: unknown, fallbackMessage: string): Error {
+		if (reason instanceof Error) {
+			return reason;
+		}
+		if (typeof reason === "string" && reason.trim().length > 0) {
+			return new Error(reason);
+		}
+		return new Error(fallbackMessage);
+	}
+
+	private resolvePythonRuntimeConfig(
+		workerScriptPath: string,
+		explicitPythonPath?: string,
+	): Result<PythonRuntimeConfig, Error> {
+		if (explicitPythonPath && explicitPythonPath.trim().length > 0) {
+			return ok({
+				pythonPathEnv: "",
+				pythonPath: explicitPythonPath,
+			});
+		}
+		const { path: pythonPathEnv, paths: pythonPaths } = buildPythonPath(workerScriptPath);
+		const firstPyPath = pythonPaths[0];
+		if (!pythonPathEnv || !firstPyPath) {
+			return err(new Error("Python path not found"));
+		}
+		return ok({
+			pythonPathEnv,
+			pythonPath: join(
+				firstPyPath,
+				platform.isWindows ? "Scripts" : "bin",
+				platform.isWindows ? "python.exe" : "python",
+			),
+		});
+	}
+
+	private buildRequestParams(params?: { options?: YtdlpPyOptions; [key: string]: unknown }): Result<
+		{ options?: YtdlpPyOptions; [key: string]: unknown },
+		Error
+	> {
 		const ffmpegDep = dependenciesManager.getInstallState("ffmpeg")?.files?.[0];
 		if (!ffmpegDep) {
-			throw new Error("FFmpeg path not found");
+			return err(new Error("FFmpeg path not found"));
 		}
 		const reqParams = Object.assign({ options: {} }, params ?? {});
 		Object.assign(reqParams.options, {
@@ -183,19 +232,44 @@ class YtdlpPythonWorkerService {
 			compat_opts: ["abort-on-error"],
 			ffmpeg_location: ffmpegDep,
 		} as YtdlpPyOptions);
-		const req: RpcRequest = { id, method, params: reqParams };
-		log.debug("Sending RPC request", { id, method, params: reqParams });
+		return ok(reqParams);
+	}
+
+	private sendRpcRequest(
+		id: string,
+		method: string,
+		req: RpcRequest,
+		callOptions?: RpcCallOptions,
+	): Promise<unknown> {
 		return new Promise((resolve, reject) => {
 			this.pending[id] = { method, resolve, reject };
 			callOptions?.onRequestCreated?.(id);
-			try {
-				// PythonShell in json mode automatically serializes to JSON
-				this.pyshell.send(req);
-			} catch (e) {
+			const sendResult = Result.fromThrowable(
+				() => this.pyshell.send(req),
+				(sendError) => this.toError(sendError, "Failed to send RPC request"),
+			)();
+			if (sendResult.isErr()) {
 				delete this.pending[id];
-				reject(e);
+				reject(sendResult.error);
 			}
 		});
+	}
+
+	// Sends a typed JSON RPC call to Python
+	async call(
+		method: string,
+		params?: { options?: YtdlpPyOptions; [key: string]: unknown },
+		callOptions?: RpcCallOptions,
+	): Promise<unknown> {
+		const id = genId();
+		const reqParamsResult = this.buildRequestParams(params);
+		if (reqParamsResult.isErr()) {
+			return Promise.reject(reqParamsResult.error);
+		}
+		const reqParams = reqParamsResult.value;
+		const req: RpcRequest = { id, method, params: reqParams };
+		log.debug("Sending RPC request", { id, method, params: reqParams });
+		return this.sendRpcRequest(id, method, req, callOptions);
 	}
 	private _ready = false;
 	private _binVersion: string | null = null;
@@ -258,7 +332,11 @@ class YtdlpPythonWorkerService {
 		const parsed = Number.parseInt(String(value).trim(), 10);
 		return Number.isFinite(parsed) ? parsed : null;
 	}
-	private computeFragmentOverallPercent(percent: number | null | undefined, fragmentIndex: number | null | undefined, fragmentCount: number | null | undefined): number | null {
+	private computeFragmentOverallPercent(
+		percent: number | null | undefined,
+		fragmentIndex: number | null | undefined,
+		fragmentCount: number | null | undefined,
+	): number | null {
 		if (
 			typeof percent !== "number" ||
 			!Number.isFinite(percent) ||
@@ -297,7 +375,10 @@ class YtdlpPythonWorkerService {
 		const requestId = typeof parsed.id === "string" ? parsed.id : null;
 		const status = typeof parsed.status === "string" ? parsed.status : null;
 		const normalizedVideoId = typeof parsed.videoId === "string" ? parsed.videoId : null;
-		const line = typeof parsed.line === "string" ? parsed.line : `[download] ${normalizedVideoId ?? "unknown"}: ${status ?? "progress"}`;
+		const line =
+			typeof parsed.line === "string"
+				? parsed.line
+				: `[download] ${normalizedVideoId ?? "unknown"}: ${status ?? "progress"}`;
 		if (status === "completed") {
 			return {
 				type: "completed",
@@ -314,7 +395,8 @@ class YtdlpPythonWorkerService {
 			const parsedPercent = typeof parsed.percent === "number" ? parsed.percent : null;
 			const fragmentIndex = typeof parsed.fragmentIndex === "number" ? parsed.fragmentIndex : null;
 			const fragmentCount = typeof parsed.fragmentCount === "number" ? parsed.fragmentCount : null;
-			const computedPercent = this.computeFragmentOverallPercent(parsedPercent, fragmentIndex, fragmentCount) ?? parsedPercent;
+			const computedPercent =
+				this.computeFragmentOverallPercent(parsedPercent, fragmentIndex, fragmentCount) ?? parsedPercent;
 			return {
 				type: "download_status",
 				raw: line,
@@ -373,7 +455,7 @@ class YtdlpPythonWorkerService {
 		if (error !== undefined && error !== null) {
 			log.error("YtdlpPythonService error", { error });
 			const errorMessage = typeof error === "string" ? error : error.message || "Unknown error";
-			pending.reject(new Error(errorMessage));
+			pending.reject(this.toError(errorMessage, "Unknown error"));
 		} else {
 			pending.resolve(result);
 		}
@@ -514,7 +596,10 @@ class YtdlpPythonWorkerService {
 						if (this.handleTaggedProgressPayload(parsedJson)) {
 							continue;
 						}
-						const resultObject = parsedJson.result && typeof parsedJson.result === "object" ? (parsedJson.result as { id?: string }) : null;
+						const resultObject =
+							parsedJson.result && typeof parsedJson.result === "object"
+								? (parsedJson.result as { id?: string })
+								: null;
 						log.debug("yt-dlp JSON RPC response", { videoId: resultObject?.id ?? "unknown" });
 						this.onPythonRpcResponse(parsedJson as RpcResponse);
 						continue;

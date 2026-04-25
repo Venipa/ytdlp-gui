@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { appStore } from "@main/stores/app/app.store";
 import { createLogger } from "@shared/logger";
+import { type Result, err, ok } from "neverthrow";
 import YtdlpPythonWorkerService, { YtdlpOutputEvent } from "./python";
 
 const log = createLogger("ytdlp-worker-manager");
@@ -43,9 +44,8 @@ class YtdlpWorkerManager {
 	private targetConcurrency = normalizeConcurrency(appStore.store.features.concurrentDownloads);
 	private readonly options: YtdlpWorkerManagerOptions;
 	private isShuttingDown = false;
-	private restartTimer: NodeJS.Timeout | null = null;
-
-	private static readonly WORKER_RECOVERY_DELAY_MS = 1500;
+	private isScheduling = false;
+	private lastWorkerCreationError: Error | null = null;
 
 	constructor(options: YtdlpWorkerManagerOptions = {}) {
 		this.options = options;
@@ -62,53 +62,58 @@ class YtdlpWorkerManager {
 		});
 	}
 
-	private createWorker(): ManagedWorker {
-		const workerId = `worker-${this.nextWorkerId++}`;
-		const service = new YtdlpPythonWorkerService({
-			...this.options,
-			workerId,
-		});
-		const managedWorker: ManagedWorker = {
-			id: workerId,
-			service,
-			busy: false,
-			retireWhenIdle: false,
-			disposeOutput: service.onOutput((event: YtdlpOutputEvent) => {
-				this.outputEmitter.emit("output", event);
-			}),
-			disposeClose: () => {},
-		};
-		managedWorker.disposeClose = service.onClose((error) => {
-			this.handleWorkerCrash(managedWorker, error);
-		});
-		this.workers.set(workerId, managedWorker);
-		log.info("Created ytdlp worker", { workerId, totalWorkers: this.workers.size });
-		return managedWorker;
+	private createWorker(): Result<ManagedWorker, Error> {
+		try {
+			const workerId = `worker-${this.nextWorkerId++}`;
+			const service = new YtdlpPythonWorkerService({
+				...this.options,
+				workerId,
+			});
+			const managedWorker: ManagedWorker = {
+				id: workerId,
+				service,
+				busy: false,
+				retireWhenIdle: false,
+				disposeOutput: service.onOutput((event: YtdlpOutputEvent) => {
+					this.outputEmitter.emit("output", event);
+				}),
+				disposeClose: () => {},
+			};
+			managedWorker.disposeClose = service.onClose((error) => {
+				this.handleWorkerCrash(managedWorker, error);
+			});
+			this.workers.set(workerId, managedWorker);
+			this.lastWorkerCreationError = null;
+			log.info("Created ytdlp worker", { workerId, totalWorkers: this.workers.size });
+			return ok(managedWorker);
+		} catch (error) {
+			const normalizedError = error instanceof Error ? error : new Error(String(error));
+			this.lastWorkerCreationError = normalizedError;
+			log.error("Failed to create ytdlp worker", { error: normalizedError.message });
+			return err(normalizedError);
+		}
 	}
 
-	private handleWorkerCrash(worker: ManagedWorker, error: Error): void {
-		if (this.isShuttingDown) return;
-		if (!this.workers.has(worker.id)) return;
+	private removeWorker(worker: ManagedWorker): boolean {
+		if (!this.workers.has(worker.id)) return false;
 		this.workers.delete(worker.id);
 		worker.disposeOutput();
 		worker.disposeClose();
 		worker.busy = false;
-		log.warn("ytdlp worker crashed, scheduling revive", {
+		return true;
+	}
+
+	private handleWorkerCrash(worker: ManagedWorker, error: Error): void {
+		if (this.isShuttingDown) return;
+		if (!this.removeWorker(worker)) return;
+		log.warn("ytdlp worker crashed", {
 			workerId: worker.id,
 			error: error.message,
 		});
-		this.scheduleWorkerRecovery();
-	}
-
-	private scheduleWorkerRecovery(): void {
-		if (this.isShuttingDown) return;
-		if (this.restartTimer) return;
-		this.restartTimer = setTimeout(() => {
-			this.restartTimer = null;
-			if (this.isShuttingDown) return;
+		if (this.taskQueue.length > 0) {
 			this.reconcileWorkers();
 			this.schedule();
-		}, YtdlpWorkerManager.WORKER_RECOVERY_DELAY_MS);
+		}
 	}
 
 	private shutdownWorker(worker: ManagedWorker): void {
@@ -172,8 +177,12 @@ class YtdlpWorkerManager {
 			const activated = this.activateWorkers(missing);
 			const toCreate = missing - activated;
 			for (let i = 0; i < toCreate; i++) {
-				this.createWorker();
+				const creationResult = this.createWorker();
+				if (creationResult.isErr()) {
+					break;
+				}
 			}
+			this.rejectPendingTasksWhenNoWorkerIsAvailable();
 			return;
 		}
 		if (enabledCount > this.targetConcurrency) {
@@ -181,27 +190,52 @@ class YtdlpWorkerManager {
 		}
 	}
 
-	private schedule(): void {
-		while (!this.isShuttingDown && this.taskQueue.length > 0) {
-			const worker = this.getIdleWorker();
-			if (!worker) return;
-
+	private rejectPendingTasksWhenNoWorkerIsAvailable(): void {
+		if (this.taskQueue.length === 0) return;
+		if (this.countEnabledWorkers() > 0) return;
+		const error = this.lastWorkerCreationError ?? new Error("No ytdlp worker is available");
+		while (this.taskQueue.length > 0) {
 			const task = this.taskQueue.shift();
-			if (!task) return;
+			task?.reject(error);
+		}
+	}
 
-			worker.busy = true;
-			void task
-				.run(worker)
-				.then((result) => task.resolve(result))
-				.catch((error) => task.reject(error))
-				.finally(() => {
-					worker.busy = false;
-					if (worker.retireWhenIdle) {
-						this.shutdownWorker(worker);
-					}
-					this.reconcileWorkers();
-					this.schedule();
+	private schedule(): void {
+		if (this.isScheduling) return;
+		this.isScheduling = true;
+		try {
+			while (!this.isShuttingDown && this.taskQueue.length > 0) {
+				const worker = this.getIdleWorker();
+				if (!worker) return;
+
+				const task = this.taskQueue.shift();
+				if (!task) return;
+
+				this.runTask(worker, task).catch((error) => {
+					log.error("Unexpected ytdlp task scheduler failure", { error });
 				});
+			}
+		} finally {
+			this.isScheduling = false;
+		}
+	}
+
+	private async runTask(worker: ManagedWorker, task: TaskItem): Promise<void> {
+		worker.busy = true;
+		try {
+			const result = await task.run(worker);
+			task.resolve(result);
+		} catch (error) {
+			task.reject(error);
+		} finally {
+			worker.busy = false;
+			if (worker.retireWhenIdle) {
+				this.shutdownWorker(worker);
+			}
+			if (this.taskQueue.length > 0) {
+				this.reconcileWorkers();
+			}
+			this.schedule();
 		}
 	}
 
@@ -216,19 +250,25 @@ class YtdlpWorkerManager {
 				resolve: (value) => resolve(value as T),
 				reject,
 			});
+			// Keep recovery demand-driven: if workers crashed while idle, recreate on next queued task.
 			this.reconcileWorkers();
 			this.schedule();
 		});
 	}
 
-	private async runOnWorker<T>(worker: ManagedWorker, fn: (service: YtdlpPythonWorkerService) => Promise<T>): Promise<T> {
+	private async runOnWorker<T>(
+		worker: ManagedWorker,
+		fn: (service: YtdlpPythonWorkerService) => Promise<T>,
+	): Promise<T> {
 		await worker.service.waitReady();
 		return await fn(worker.service);
 	}
 
 	waitReady(): Promise<void> {
 		this.reconcileWorkers();
-		return Promise.all(Array.from(this.workers.values()).map((worker) => worker.service.waitReady())).then(() => undefined);
+		return Promise.all(Array.from(this.workers.values()).map((worker) => worker.service.waitReady())).then(
+			() => undefined,
+		);
 	}
 
 	getVersion(): Promise<string> {
@@ -236,11 +276,19 @@ class YtdlpWorkerManager {
 	}
 
 	extractInfo(url: string, options?: Record<string, unknown>): Promise<unknown> {
-		return this.enqueueTask((worker) => this.runOnWorker(worker, async (service) => await service.extractInfo(url, options)));
+		return this.enqueueTask((worker) =>
+			this.runOnWorker(worker, async (service) => await service.extractInfo(url, options)),
+		);
 	}
 
-	download(url: string, options?: Record<string, unknown>, callOptions?: { onRequestCreated?: (id: string) => void }): Promise<unknown> {
-		return this.enqueueTask((worker) => this.runOnWorker(worker, async (service) => await service.download(url, options, callOptions)));
+	download(
+		url: string,
+		options?: Record<string, unknown>,
+		callOptions?: { onRequestCreated?: (id: string) => void },
+	): Promise<unknown> {
+		return this.enqueueTask((worker) =>
+			this.runOnWorker(worker, async (service) => await service.download(url, options, callOptions)),
+		);
 	}
 
 	onOutput(listener: (event: YtdlpOutputEvent) => void): () => void {
@@ -253,10 +301,6 @@ class YtdlpWorkerManager {
 	shutdown(): void {
 		if (this.isShuttingDown) return;
 		this.isShuttingDown = true;
-		if (this.restartTimer) {
-			clearTimeout(this.restartTimer);
-			this.restartTimer = null;
-		}
 		const error = new Error("YtdlpWorkerManager shutdown");
 		while (this.taskQueue.length > 0) {
 			const task = this.taskQueue.shift();
