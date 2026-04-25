@@ -44,6 +44,7 @@ export default function LinkList({ className }: LinkListProps): JSX.Element {
 	const [search, setSearch] = useSearchStore();
 	const [searchEngine] = useState(() => new SearchEngine());
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+	const [lastInteractedSelectionId, setLastInteractedSelectionId] = useState<string | null>(null);
 	const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
 	const [bulkDeleteMode, setBulkDeleteMode] = useState<"db" | "file" | null>(null);
 	const { mutateAsync: deleteFromId } = trpc.ytdl.delete.useMutation();
@@ -231,17 +232,43 @@ export default function LinkList({ className }: LinkListProps): JSX.Element {
 		});
 	}, [rows, selectedIds.size]);
 
-	const handleSelectRow = useCallback((id: string, checked: boolean): void => {
-		setSelectedIds((previousIds) => {
-			const nextIds = new Set(previousIds);
-			if (checked) nextIds.add(id);
-			else nextIds.delete(id);
-			return nextIds;
-		});
-	}, []);
+	useEffect(() => {
+		if (!lastInteractedSelectionId) return;
+		if (!rowIdsForSelection.includes(lastInteractedSelectionId)) {
+			setLastInteractedSelectionId(null);
+		}
+	}, [lastInteractedSelectionId, rowIdsForSelection]);
+
+	const handleSelectRow = useCallback(
+		(id: string, checked: boolean, shiftKey: boolean): void => {
+			setSelectedIds((previousIds) => {
+				const nextIds = new Set(previousIds);
+				if (shiftKey && lastInteractedSelectionId) {
+					const fromIndex = rowIdsForSelection.indexOf(lastInteractedSelectionId);
+					const toIndex = rowIdsForSelection.indexOf(id);
+					if (fromIndex !== -1 && toIndex !== -1) {
+						const rangeStart = Math.min(fromIndex, toIndex);
+						const rangeEnd = Math.max(fromIndex, toIndex);
+						for (let index = rangeStart; index <= rangeEnd; index += 1) {
+							const targetId = rowIdsForSelection[index];
+							if (checked) nextIds.add(targetId);
+							else nextIds.delete(targetId);
+						}
+						return nextIds;
+					}
+				}
+				if (checked) nextIds.add(id);
+				else nextIds.delete(id);
+				return nextIds;
+			});
+			setLastInteractedSelectionId(id);
+		},
+		[lastInteractedSelectionId, rowIdsForSelection],
+	);
 
 	const clearSelection = useCallback((): void => {
 		setSelectedIds(new Set());
+		setLastInteractedSelectionId(null);
 		setHoveredRowId(null);
 	}, []);
 
@@ -288,8 +315,8 @@ export default function LinkList({ className }: LinkListProps): JSX.Element {
 										isSelected={selectedIds.has(String(row.original.id))}
 										showCheckbox={hasSelection || hoveredRowId === String(row.original.id)}
 										disableSelection={bulkDeleteMode !== null}
-										onSelectChange={(checked) => {
-											handleSelectRow(String(row.original.id), checked);
+										onSelectChange={(checked, shiftKey) => {
+											handleSelectRow(String(row.original.id), checked, shiftKey);
 										}}
 										onHoverChange={(isHovering) => {
 											setHoveredRowId(isHovering ? String(row.original.id) : null);
@@ -307,7 +334,9 @@ export default function LinkList({ className }: LinkListProps): JSX.Element {
 						hasSelection ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2 pointer-events-none",
 					)}>
 					<div className='flex items-center gap-2 rounded-lg border border-border bg-background/95 shadow-lg px-2 py-2 backdrop-blur'>
-						<span className='text-xs text-muted-foreground px-2'>{selectedCount} selected</span>
+						<span className='text-xs text-muted-foreground px-2 tabular-nums min-w-24 text-right'>
+							{selectedCount} selected
+						</span>
 						<Button
 							size='sm'
 							variant='outline'

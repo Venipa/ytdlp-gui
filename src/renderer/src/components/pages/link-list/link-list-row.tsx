@@ -51,7 +51,7 @@ type LinkListRowProps = {
 	isSelected: boolean;
 	showCheckbox: boolean;
 	disableSelection?: boolean;
-	onSelectChange: (checked: boolean) => void;
+	onSelectChange: (checked: boolean, shiftKey: boolean) => void;
 	onHoverChange: (isHovering: boolean) => void;
 };
 export function LinkListRow({
@@ -137,11 +137,10 @@ export function LinkListRow({
 									"transition-opacity",
 									showCheckbox ? "opacity-100" : "opacity-0 pointer-events-none",
 								)}
-								onCheckedChange={(checked) => {
-									onSelectChange(checked === true);
-								}}
 								onClick={(event) => {
 									event.stopPropagation();
+									event.preventDefault();
+									onSelectChange(!isSelected, event.shiftKey);
 								}}
 								variant={"ghost"}
 								size='sm'

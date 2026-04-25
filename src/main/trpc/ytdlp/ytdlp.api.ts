@@ -207,7 +207,8 @@ class DownloadQueueManager {
 	private async fetchNewMetadata(dbFile: SelectDownload): Promise<{ dbFile: SelectDownload; videoInfo: VideoInfo }> {
 		const { url } = dbFile;
 		let videoInfo: VideoInfo | null = null;
-		const outtmpl = getOuttmpl().replace("%(source)s", sanitizeFilename(new URL(url).hostname.toLowerCase()));
+		const hostname = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+		const outtmpl = getOuttmpl().replace("%(source)s", sanitizeFilename(hostname));
 		try {
 			videoInfo = await ytdl.extractInfo(url, {
 				...(isAudioMediaType((dbFile.type ?? "auto") as YTDLMediaType) && { format: "bestaudio/best" }),
