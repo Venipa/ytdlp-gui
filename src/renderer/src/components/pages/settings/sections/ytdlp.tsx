@@ -45,8 +45,8 @@ export const meta: SectionMeta = {
 export default function YtdlpSection({ meta }: { meta: SectionMeta }) {
 	const Icon = meta.icon;
 	const form = useSettingsForm();
-	const cliFormatter = useCallback((values: string[]) => values?.join(" "), []);
-	const cliParser = useCallback((value: string) => value.split(" "), []);
+	const cliFormatter = useCallback((values: string[]) => values?.join(" ") ?? "", []);
+	const cliParser = useCallback((value: string) => value.split(" ").filter(Boolean), []);
 	return (
 		<PageContent icon={Icon} title={meta.title} description={meta.description} tabId={meta.title}>
 			<div className='flex flex-col gap-0'>

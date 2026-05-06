@@ -5,7 +5,7 @@ import { dependenciesManager } from "@main/trpc/dependencies/handler";
 import { checkForUpdates, checkForUpdatesAndNotify, setUpdateHandledByFrontend } from "@main/updater";
 import { nextTick } from "@shared/promises/helper";
 import { TRPCError } from "@trpc/server";
-import { shell } from "electron";
+import { app, shell } from "electron";
 import { autoUpdater } from "electron-updater";
 import { z } from "zod";
 import { mainProcedure, publicProcedure, router } from "../core/trpc";
@@ -96,5 +96,8 @@ export const internalRouter = router({
 		await checkForUpdatesAndNotify();
 		appInitialized = true;
 		return appStore.store.ytdlp.version ?? "Unknown State";
+	}),
+	quit: publicProcedure.mutation(() => {
+		return app.quit();
 	}),
 } as const);

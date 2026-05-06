@@ -2,7 +2,7 @@ import { type AppStore } from "@main/stores/app/AppStore";
 import { trpc } from "@renderer/lib/api/trpc-link";
 import { logger } from "@shared/logger";
 import { uniq } from "lodash-es";
-import { Context, Provider, createContext, useContext, useMemo } from "react";
+import { Context, Provider, createContext, useCallback, useContext, useMemo } from "react";
 import { toast } from "sonner";
 import { useDebounceCallback } from "usehooks-ts";
 import { z } from "zod";
@@ -53,7 +53,10 @@ const AppContextProvider: Provider<AppContext> = (({ value, ...props }) => {
 			});
 		},
 	});
-	const getSetting = useMemo(() => (key?: string) => (!key ? utils.internals.getAll.fetch() : utils.settings.key.fetch(key)), [utils.internals.get]);
+	const getSetting = useMemo(
+		() => (key?: string) => (!key ? utils.internals.getAll.fetch() : utils.settings.key.fetch(key)),
+		[utils.internals.get],
+	);
 	const onUpdateCallback = useDebounceCallback((res) => {
 		toast.success("Settings have been saved.");
 		return res;
@@ -68,16 +71,19 @@ const AppContextProvider: Provider<AppContext> = (({ value, ...props }) => {
 		[],
 	);
 	const { mutateAsync: _updateSettings } = trpc.settings.updateMany.useMutation();
-	const updateSettings = useMemo(
-		() =>
-			<T extends Record<string, any>>(settings: T, showToast?: boolean) =>
-				_updateSettings(settings as unknown as AppStore).then((s) => {
-					if (showToast) onUpdateCallback(s);
-					return s;
-				}) as Promise<T>,
+	const updateSettings = useCallback(
+		<T extends Record<string, any>>(settings: T, showToast?: boolean) =>
+			_updateSettings(settings as unknown as AppStore).then((s) => {
+				if (showToast) onUpdateCallback(s);
+				return s;
+			}) as Promise<T>,
 		[],
 	);
 
-	return <appContext.Provider value={{ getSetting, setSetting, updateSettings, settings }} {...props}></appContext.Provider>;
+	return (
+		<appContext.Provider
+			value={{ getSetting, setSetting, updateSettings, settings }}
+			{...props}></appContext.Provider>
+	);
 }) as any;
 export { AppContextProvider, useApp };

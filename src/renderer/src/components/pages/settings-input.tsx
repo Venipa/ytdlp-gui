@@ -2,6 +2,7 @@ import { useSettingsForm } from "@renderer/components/pages/settings/form";
 import { FormControl, FormDescription, FormField, FormItem, FormMessage } from "@renderer/components/ui/form";
 import { Input, InputProps } from "@renderer/components/ui/input";
 import { cn } from "@renderer/lib/ui/utils";
+import { logger } from "@shared/logger";
 import { forwardRef, useCallback, useId, useMemo } from "react";
 type SettingsInputProps<TKey extends string> = {
 	name: TKey;
@@ -11,17 +12,26 @@ type SettingsInputProps<TKey extends string> = {
 	title: any;
 	hint?: string | React.ReactNode;
 } & Omit<InputProps, "title">;
-export default forwardRef<HTMLInputElement, SettingsInputProps<string>>(function SettingsInput({ className, name: key, title: placeholder, hint, ...props }, ref) {
+export default forwardRef<HTMLInputElement, SettingsInputProps<string>>(function SettingsInput(
+	{ className, name: key, title: placeholder, hint, ...props },
+	ref,
+) {
 	const form = useSettingsForm();
 	const id = useId();
-	const formatter = useCallback((value: any) => (props.formatter ? props.formatter(value) : value), [form, props.formatter]);
-	const parser = useCallback((value: any) => (props.parser ? props.parser(value) : value), [form, props.parser]);
-	const fieldValue = useMemo(() => formatter(form.getValues(key as any)), [form, key, parser]);
+	const formatter = useCallback(
+		(value: any) => (props.formatter ? props.formatter(value) : value),
+		[props.formatter],
+	);
+	const parser = useCallback((value: any) => (props.parser ? props.parser(value) : value), [props.parser]);
+	const fieldValue = useMemo(
+		() => formatter(form.getValues(key as any)),
+		[form, key, parser, props.formatter, props.parser],
+	);
 	return (
 		<FormField
 			control={form.control}
 			name={key as any}
-			render={({ field: { onChange, value, ...field }, fieldState }) => (
+			render={({ field: { value, ...field }, fieldState }) => (
 				<>
 					<FormItem>
 						<FormControl>
@@ -37,7 +47,13 @@ export default forwardRef<HTMLInputElement, SettingsInputProps<string>>(function
 									defaultValue={props.defaultValue ?? fieldValue}
 									value={formatter(value)}
 									onChange={(ev) => {
-										onChange(parser(ev.target.value));
+										const parsedValue = parser(ev.target.value);
+										logger.debug("onChange", key, { ev: ev.target.value, parsedValue });
+										form.setValue(key as any, parsedValue, {
+											shouldDirty: true,
+											shouldTouch: true,
+											shouldValidate: form.control._options.mode === "onChange",
+										});
 									}}
 									className={cn("dark:bg-background h-12", fieldState.error && "border-destructive")}
 								/>

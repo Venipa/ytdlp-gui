@@ -22,7 +22,8 @@ export const appStoreSchema = z
 						if (!v) return [] as string[];
 						if (typeof v === "string") return v.split(" ");
 						return v;
-					}),
+					})
+					.transform((v) => v.filter(Boolean)),
 			})
 			.fallback({}),
 		download: z

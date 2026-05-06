@@ -22,10 +22,14 @@ export default function AboutTab() {
 			formatDistanceToNow((config.git?.committer?.date as any) * 1000, { addSuffix: true }),
 		[],
 	);
-	const buildInfo = useMemo(() => `v${config.appInfo.version} ${config.git.shortHash ? `#${config.git.shortHash}` : ""} (${NodeEnv})`, []);
+	const buildInfo = useMemo(
+		() => `v${config.appInfo.version} ${config.git.shortHash ? `#${config.git.shortHash}` : ""} (${NodeEnv})`,
+		[],
+	);
 	const { mutateAsync: checkForUpdates } = trpc.internals.checkUpdate.useMutation();
 	const { mutateAsync: downloadUpdate } = trpc.internals.downloadUpdate.useMutation();
 	const { mutateAsync: quitAndInstallUpdate } = trpc.internals.quitAndInstallUpdate.useMutation();
+	const { mutateAsync: quitApp } = trpc.internals.quit.useMutation();
 	const [checking, setChecking] = useState(false);
 	const handleUpdatePromise = async () => {
 		setChecking(true);
@@ -77,6 +81,11 @@ export default function AboutTab() {
 			setChecking(false);
 		}
 	};
+	const handleShutdownApp = async () => {
+		await quitApp().catch((err) => {
+			throwErrorToast(err);
+		});
+	};
 	return (
 		<div className='p-2 pt-16 flex flex-col space-y-4'>
 			<div className='flex items-center space-x-6 group'>
@@ -88,13 +97,24 @@ export default function AboutTab() {
 				<div className='flex flex-col'>
 					<div>About {config.title}</div>
 					<div className='text-xs pt-0.5 whitespace-nowrap text-muted-foreground flex items-center flex-wrap gap-x-2'>
-						<ClickableText onClick={() => buildInfo && navigator.clipboard.writeText(buildInfo).then(() => toast("Copied build info"))}>{buildInfo}</ClickableText>
+						<ClickableText
+							onClick={() =>
+								buildInfo &&
+								navigator.clipboard.writeText(buildInfo).then(() => toast("Copied build info"))
+							}>
+							{buildInfo}
+						</ClickableText>
 						{!checking && (
 							<>
 								<DotIcon className='size-4 -mx-2' />
 								<ClickableText onClick={handleUpdatePromise}>Check for updates</ClickableText>
 							</>
 						)}
+
+						<>
+							<DotIcon className='size-4 -mx-2' />
+							<ClickableText onClick={handleShutdownApp}>Shutdown Application</ClickableText>
+						</>
 						{lastCommitDate && (
 							<>
 								<DotIcon className='size-4 -mx-2' />

@@ -21,6 +21,7 @@ export function SettingsFormProvider({ children }: PropsWithChildren) {
 		async defaultValues() {
 			const settings = await utils.settings.index.fetch();
 			const parsedSettings = settingsSchema.parse(settings);
+			log.child("defaultValues").info("parsedSettings", { parsedSettings });
 			return parsedSettings;
 		},
 	});

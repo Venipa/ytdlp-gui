@@ -5,7 +5,6 @@ import config from "@shared/config";
 import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { app, dialog } from "electron";
-import { merge } from "lodash-es";
 import { z } from "zod";
 import { publicProcedure, router } from "../core/trpc";
 const settingsChangeEmitter = new EventEmitter();
@@ -29,7 +28,8 @@ export const settingsRouter = router({
 					ctx.log.debug("change", value);
 					if (
 						appStore.store.download.paths?.length &&
-						(!appStore.store.download.selected || !appStore.store.download.paths.find((d) => d === appStore.store.download.selected))
+						(!appStore.store.download.selected ||
+							!appStore.store.download.paths.find((d) => d === appStore.store.download.selected))
 					) {
 						appStore.store.download.selected = appStore.store.download.paths[0];
 					}
@@ -56,8 +56,8 @@ export const settingsRouter = router({
 			return { key, value };
 		}),
 	updateMany: publicProcedure.input(appStoreSchema).mutation(async ({ ctx, input: settings }) => {
-		appStore.set(appStoreSchema.parse(merge({}, appStore.store, settings)));
-		Object.keys(settings).forEach((key) => {
+		Object.entries(settings).forEach(([key, value]) => {
+			appStore.set(key, value);
 			settingsChangeEmitter.emit(handleKey, { key });
 		});
 		return appStore.store;
@@ -89,7 +89,14 @@ export const settingsRouter = router({
 		window.setAlwaysOnTop(false);
 	}),
 	deleteDownloadPath: publicProcedure
-		.input(z.string().refine((d) => appStore.store.download.paths.find((p) => p.toLowerCase() === d.toLowerCase()), "Path does not exist in database."))
+		.input(
+			z
+				.string()
+				.refine(
+					(d) => appStore.store.download.paths.find((p) => p.toLowerCase() === d.toLowerCase()),
+					"Path does not exist in database.",
+				),
+		)
 		.mutation(async ({ ctx: { window }, input: downloadPath }) => {
 			appStore.set(
 				"download.paths",
