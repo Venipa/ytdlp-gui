@@ -22,7 +22,12 @@ function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimiti
 	return <TooltipPrimitive.Trigger data-slot='tooltip-trigger' {...props} />;
 }
 
-function TooltipContent({ className, sideOffset = 0, children, ...props }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+function TooltipContent({
+	className,
+	sideOffset = 0,
+	children,
+	...props
+}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
 	return (
 		<TooltipPrimitive.Portal>
 			<TooltipPrimitive.Content
@@ -38,10 +43,12 @@ function TooltipContent({ className, sideOffset = 0, children, ...props }: React
 		</TooltipPrimitive.Portal>
 	);
 }
-
+type QTooltipContent = string | JSX.Element | React.ReactElement | React.ReactNode | React.ComponentType;
+type QTooltipProps = React.ComponentPropsWithoutRef<typeof TooltipContent> &
+	React.PropsWithChildren<{ content: QTooltipContent }>;
 const QTooltip = React.forwardRef<
 	React.ElementRef<typeof Tooltip>,
-	React.ComponentPropsWithoutRef<typeof TooltipContent> & React.PropsWithChildren<{ content: string | React.ReactElement | React.ReactNode | React.ComponentType }>
+	React.ComponentPropsWithoutRef<typeof TooltipContent> & React.PropsWithChildren<{ content: QTooltipContent }>
 >(({ className, children, content, asChild, side, ...props }, ref) => {
 	const contentElement = React.useMemo(() => {
 		if (typeof content === "string") return <div>{content}</div>;

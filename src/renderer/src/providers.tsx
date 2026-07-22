@@ -1,6 +1,7 @@
 import { ThemeProvider } from "@renderer/components/app/theme-provider";
 import { AppContextProvider } from "@renderer/components/pages/app-context";
 import { LogsContextProvider } from "@renderer/components/pages/logs-context";
+import { NotificationCenterProvider } from "@renderer/components/pages/notifications-context";
 import { SettingsContextProvider } from "@renderer/components/pages/settings/context";
 import SettingsDialogWrapper from "@renderer/components/pages/settings/dialog";
 import { YTDLContextProvider } from "@renderer/components/pages/ytdl-context";
@@ -17,7 +18,12 @@ export default function AppProviders({ children }: PropsWithChildren) {
 	const [trpcClient] = useState(() => client);
 	return (
 		<>
-			<ThemeProvider attribute='class' defaultTheme='system' enableColorScheme disableTransitionOnChange enableSystem>
+			<ThemeProvider
+				attribute='class'
+				defaultTheme='system'
+				enableColorScheme
+				disableTransitionOnChange
+				enableSystem>
 				<TooltipProvider>
 					<Suspense fallback={<SuspenseLoader />}>
 						<trpc.Provider client={trpcClient} queryClient={queryClient as any}>
@@ -31,10 +37,12 @@ export default function AppProviders({ children }: PropsWithChildren) {
 														data: [],
 													} as any
 												}>
-												<YTDLContextProvider value={{} as any}>
-													{children}
-													<YTLDPObserver />
-												</YTDLContextProvider>
+												<NotificationCenterProvider value={{} as any}>
+													<YTDLContextProvider value={{} as any}>
+														{children}
+														<YTLDPObserver />
+													</YTDLContextProvider>
+												</NotificationCenterProvider>
 											</LogsContextProvider>
 											<SettingsDialogWrapper />
 										</SettingsContextProvider>

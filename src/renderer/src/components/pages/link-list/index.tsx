@@ -12,10 +12,10 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useAtom } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchStore } from "../add-link.store";
+import LinkListItem from "../link-list-item";
 import LinkListProvider from "./link-list-context";
 import LinkListEmptyState from "./link-list-empty-state";
 import LinkListHeader from "./link-list-header";
-import LinkListRow from "./link-list-row";
 import { linkListSortingStore } from "./link-list.store";
 import { LinkListTableItem } from "./link-list.types";
 
@@ -309,7 +309,7 @@ export default function LinkList({ className }: LinkListProps): JSX.Element {
 									ref={rowVirtualizer.measureElement}
 									className='absolute left-0 top-0 w-full'
 									style={{ transform: `translateY(${virtualRow.start}px)` }}>
-									<LinkListRow
+									<LinkListItem
 										className={cn(virtualRow.index === rows.length - 1 && "border-b-0")}
 										row={row}
 										isSelected={selectedIds.has(String(row.original.id))}

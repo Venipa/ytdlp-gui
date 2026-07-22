@@ -5,7 +5,6 @@ import { uniq } from "lodash-es";
 import { Context, Provider, createContext, useCallback, useContext, useMemo } from "react";
 import { toast } from "sonner";
 import { useDebounceCallback } from "usehooks-ts";
-import { z } from "zod";
 import { useLinkBoxStore } from "./add-link.store";
 type AppContext = {
 	settings: AppStore & Record<string, any>;
@@ -25,22 +24,6 @@ const AppContextProvider: Provider<AppContext> = (({ value, ...props }) => {
 			console.log("settings", { newData: data });
 			utils.settings.index.setData(undefined, data);
 			utils.settings.index.invalidate();
-		},
-	});
-	trpc.ytdl.onAutoAddCapture.useSubscription(undefined, {
-		onData(data) {
-			toast.info("A new url has been captured.", { description: data.url });
-		},
-	});
-	trpc.ytdl.onToast.useSubscription(undefined, {
-		onData([message, description, type = "default"]) {
-			const messageType = z.enum(["warning", "error", "success", "default", "info"]).parse(type);
-			if (!messageType) return;
-			if (messageType === "default") toast(message, { description });
-			else toast[messageType](message, { description });
-			if (messageType === "error") {
-				logger.error("An error occurred", { message, description });
-			}
 		},
 	});
 	const [, setAddLinkContent] = useLinkBoxStore();

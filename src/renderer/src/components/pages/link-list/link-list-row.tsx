@@ -45,6 +45,20 @@ const getStateLabel = (state: YTDLItem["state"]): string => {
 			return "Idle";
 	}
 };
+
+const buildStatusTooltipLine = (status: YTDLDownloadStatus): string => {
+	const parts: string[] = [];
+	if (typeof status.percent === "number") {
+		parts.push(`${status.percent.toFixed(0)}%`);
+	}
+	if (typeof status.speed === "number" && status.speed > 0) {
+		parts.push(formatSpeed(status.speed));
+	}
+	if (status.eta) {
+		parts.push(`${status.eta} ETA`);
+	}
+	return parts.join(" • ");
+};
 type LinkListRowProps = {
 	className?: string;
 	row: Row<LinkListTableItem>;
@@ -111,6 +125,21 @@ export function LinkListRow({
 		};
 	}, [state, created]);
 	const isSingleLine = completed || cancelled || error || queued;
+	const statusTooltipContent = useMemo(() => {
+		const statusTitle = error ? "Error" : stateLabel;
+		if (!downloading || !status) {
+			return <div>{statusTitle}</div>;
+		}
+		const statusLine = buildStatusTooltipLine(status);
+		return (
+			<div className='flex flex-col gap-0.5'>
+				<span className='font-medium leading-none'>{statusTitle}</span>
+				{statusLine ? (
+					<span className='text-[11px] text-muted-foreground leading-none tabular-nums'>{statusLine}</span>
+				) : null}
+			</div>
+		);
+	}, [downloading, error, stateLabel, status]);
 	return (
 		<div
 			onMouseEnter={() => {
@@ -152,7 +181,7 @@ export function LinkListRow({
 				if (cell.column.id === "status") {
 					return (
 						<div key={cell.id} className='flex items-center justify-center'>
-							<QTooltip content={stateLabel} side='right' asChild>
+							<QTooltip content={statusTooltipContent as any} side='right' asChild>
 								<div className='flex items-center justify-center'>
 									<LinkListStatusIndicator
 										cancelled={cancelled}

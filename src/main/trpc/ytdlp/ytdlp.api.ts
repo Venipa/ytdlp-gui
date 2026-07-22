@@ -623,10 +623,10 @@ export const ytdlpRouter = router({
 					(await queries.downloads.findDownloadByUrl(url, ["completed", "fetching_meta", "downloading"]))
 						.length
 				) {
-					ytdlpEvents.emit("toast", { message: "File already downloaded.", type: "error" });
+					pushToastToClient("File already downloaded.", "error");
 					return;
 				}
-				ytdlpEvents.emit("autoAddCapture", url);
+				pushToastToClient("A new url has been captured.", "info", new URL(url).toString());
 				let videoInfo: VideoInfo | null = null;
 				try {
 					videoInfo = await ytdl.extractInfo(url);
@@ -641,34 +641,6 @@ export const ytdlpRouter = router({
 
 			return () => {
 				ytdlpEvents.off("autoAdd", onAutoAddHandle);
-			};
-		});
-	}),
-	onAutoAddCapture: publicProcedure.subscription(() => {
-		return observable<{ url: string }>((emit) => {
-			async function onAutoAddCaptureHandle(url: string) {
-				emit.next({ url: new URL(url).toString() });
-			}
-
-			ytdlpEvents.on("autoAddCapture", onAutoAddCaptureHandle);
-
-			return () => {
-				ytdlpEvents.off("autoAddCapture", onAutoAddCaptureHandle);
-			};
-		});
-	}),
-	onToast: publicProcedure.subscription(() => {
-		return observable<string[]>((emit) => {
-			async function onToastRelay(data: string | { message: string; type?: string; description?: string }) {
-				emit.next(
-					typeof data === "string" ? [data] : ([data.message, data.description, data.type] as string[]),
-				);
-			}
-
-			ytdlpEvents.on("toast", onToastRelay);
-
-			return () => {
-				ytdlpEvents.off("toast", onToastRelay);
 			};
 		});
 	}),
