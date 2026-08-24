@@ -2,8 +2,6 @@ import { electronApp, optimizer, platform } from "@electron-toolkit/utils";
 import { isDevelopmentOrDebug, isProduction } from "@shared/config";
 import { Logger } from "@shared/logger";
 import "@shared/primitivies";
-import { execSync } from "child_process";
-import { existsSync } from "fs";
 import { join } from "path";
 import { BrowserWindow, Menu, MenuItem, Tray, app, shell } from "electron";
 // @ts-ignore
@@ -14,7 +12,6 @@ import iconWin from "~/build/icon.ico?asset";
 import icon from "~/build/icon_24x24.png?asset";
 // @ts-ignore
 import builderConfig from "../../electron-builder.yml";
-import { executableIsAvailable } from "./lib/system/bin.utils";
 import { ClipboardMonitor } from "./lib/window/clipboardMonitor";
 import contextMenu from "./lib/window/contextMenu";
 import { wrapWindowHandler } from "./lib/window/windowUtils";
@@ -29,33 +26,6 @@ import { ytdlpEvents } from "./trpc/ytdlp/ytdlp.ee";
 import { attachAutoUpdaterIPC } from "./updater";
 const log = new Logger("App");
 const trayIcon = platform.isWindows ? iconWin : icon;
-
-if (import.meta.env.DEV) {
-	const pythonPath = executableIsAvailable("python")
-		? executableIsAvailable("python3.13")
-		: executableIsAvailable("python3");
-	if (!pythonPath) {
-		throw new Error("Python not found");
-	}
-	function createVenv() {
-		const venvPath = join(process.cwd(), ".venv");
-		if (existsSync(venvPath)) {
-			return;
-		}
-		execSync(`${pythonPath} -m venv --copies ${venvPath}`, { stdio: "inherit" });
-		if (platform.isMacOS) {
-			execSync(`${venvPath}/bin/activate`, { stdio: "inherit" });
-		} else if (platform.isLinux) {
-			execSync(`source ${venvPath}/bin/activate`, { stdio: "inherit" });
-		}
-		execSync(`${venvPath}/bin/pip install -r requirements.txt`, {
-			env: { PYTHONPATH: venvPath },
-			stdio: "inherit",
-		});
-	}
-
-	createVenv();
-}
 
 async function createWindow() {
 	// Create the browser window.

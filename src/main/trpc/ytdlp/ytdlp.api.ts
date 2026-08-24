@@ -1,5 +1,5 @@
 import { existsSync, rmSync, statSync } from "fs";
-import { YtdlpOptions } from "@main/lib/downloads/ytdlp-service/ytdlp-options";
+import type { YtdlpOptions } from "@main/lib/downloads/ytdlp-cli/types";
 import platform from "@main/lib/system/platform";
 import { appStore } from "@main/stores/app/app.store";
 import { db } from "@main/stores/database/app-database";
@@ -406,7 +406,7 @@ class DownloadQueueManager {
 		try {
 			await ytdl.downloadWithOutput(dbFile.url, ytdlpOptions, (requestId) => {
 				activeRequestId = requestId;
-			});
+			}, controller.signal);
 		} finally {
 			stopOutputListener();
 		}
@@ -504,6 +504,11 @@ const downloadQueueManager = new DownloadQueueManager();
 const log = logger.child("ytdlp.api");
 export const ytdlpRouter = router({
 	state: publicProcedure.query(() => ytdl.state.toString()),
+	checkYtdlpUpdate: publicProcedure
+		.input(z.object({ force: z.boolean().optional() }).optional())
+		.mutation(async ({ input }) => {
+			return await ytdl.checkForYtdlpUpdate(input?.force ?? false);
+		}),
 	downloadMedia: publicProcedure
 		.input(
 			z.object({

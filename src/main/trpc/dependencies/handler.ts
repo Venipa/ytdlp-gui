@@ -1,8 +1,11 @@
 import EventEmitter from "events";
 import { execFileSync } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { copyFile, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
+import { chmod, copyFile, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
+import { clearYtdlpVersionCache, getYtdlpFallbackDownloadUrl, listYtdlpGithubReleases, normalizeYtdlpTag, pickYtdlpAsset } from "@main/lib/downloads/ytdlp-cli/binary";
+import { getActiveDownloadCount } from "@main/lib/downloads/ytdlp-cli/download";
+import { getYtdlpExtractPool } from "@main/lib/downloads/ytdlp-cli/extract-pool";
 import { executableIsAvailable } from "@main/lib/system/bin.utils";
 import { appStore } from "@main/stores/app/app.store";
 import { logger } from "@shared/logger";
@@ -141,11 +144,34 @@ export class DependenciesManager {
 		return Array.from(this.activeDownloads.values());
 	}
 
-	public getDefinitions() {
+	public async getDefinitions() {
 		const platform = getRuntimePlatform();
-		const arch = getRuntimeArch();
+		let arch: DependencyTarget["arch"];
+		try {
+			arch = getRuntimeArch();
+		} catch {
+			arch = process.arch === "arm64" ? "arm64" : "x64";
+		}
+		const ytdlpGithubReleases = await listYtdlpGithubReleases().catch(() => []);
 		return Object.entries(dependencyDefinitions).map(([key, definition]) => {
-			const installed = this.getInstallState(key as DependencyKey);
+			const typedKey = key as DependencyKey;
+			const installed = this.getInstallState(typedKey);
+			if (typedKey === "ytdlp") {
+				const compatibleVersions = ytdlpGithubReleases
+					.filter((release) => pickYtdlpAsset(release))
+					.map((release) => normalizeYtdlpTag(release.tag_name));
+				const latestVersion = compatibleVersions[0] ?? definition.releases[0]?.version ?? null;
+				return {
+					key,
+					name: definition.name,
+					description: definition.description,
+					latestVersion,
+					versions: compatibleVersions.length ? compatibleVersions : definition.releases.map((release) => release.version),
+					compatibleVersions: compatibleVersions.length ? compatibleVersions : definition.releases.map((release) => release.version),
+					installed,
+					isDownloading: this.activeDownloads.has(typedKey),
+				};
+			}
 			const compatibleVersions = definition.releases
 				.filter((release) => release.targets.some((target) => target.platform === platform || (target.platform === "all" && target.arch === arch) || target.arch === "all"))
 				.map((release) => release.version);
@@ -157,12 +183,15 @@ export class DependenciesManager {
 				versions: definition.releases.map((release) => release.version),
 				compatibleVersions,
 				installed,
-				isDownloading: this.activeDownloads.has(key as DependencyKey),
+				isDownloading: this.activeDownloads.has(typedKey),
 			};
 		});
 	}
 
-	public resolveRelease(key: DependencyKey, version?: string): ResolvedRelease {
+	public async resolveRelease(key: DependencyKey, version?: string): Promise<ResolvedRelease> {
+		if (key === "ytdlp") {
+			return this.resolveYtdlpRelease(version);
+		}
 		const definition = dependencyDefinitions[key];
 		const platform = getRuntimePlatform();
 		const arch = getRuntimeArch();
@@ -179,6 +208,43 @@ export class DependenciesManager {
 		return { release, target };
 	}
 
+	private async resolveYtdlpRelease(version?: string): Promise<ResolvedRelease> {
+		const platform = getRuntimePlatform();
+		let arch: DependencyTarget["arch"];
+		try {
+			arch = getRuntimeArch();
+		} catch {
+			arch = process.arch === "arm64" ? "arm64" : "x64";
+		}
+		const githubReleases = await listYtdlpGithubReleases().catch(() => []);
+		const matchedGithub =
+			version && version !== "latest"
+				? githubReleases.find((release) => normalizeYtdlpTag(release.tag_name) === version)
+				: githubReleases[0];
+		if (matchedGithub) {
+			const asset = pickYtdlpAsset(matchedGithub);
+			if (asset) {
+				const tag = normalizeYtdlpTag(matchedGithub.tag_name);
+				const target: DependencyTarget = {
+					platform,
+					arch,
+					sources: [{ id: "ytdlp", kind: "binary", url: asset.browser_download_url }],
+				};
+				return {
+					release: { version: tag, targets: [target] },
+					target,
+				};
+			}
+		}
+		const tag = version && version !== "latest" ? version : "latest";
+		const target: DependencyTarget = {
+			platform,
+			arch,
+			sources: [{ id: "ytdlp", kind: "binary", url: getYtdlpFallbackDownloadUrl() }],
+		};
+		return { release: { version: tag, targets: [target] }, target };
+	}
+
 	public cancelDownload(key: DependencyKey): boolean {
 		const active = this.activeDownloads.get(key);
 		if (!active) return false;
@@ -190,8 +256,14 @@ export class DependenciesManager {
 		if (this.activeDownloads.has(key)) {
 			throw new Error(`Dependency ${key} is already downloading`);
 		}
+		if (key === "ytdlp") {
+			if (getActiveDownloadCount() > 0) {
+				throw new Error("Cannot update yt-dlp while a download is running");
+			}
+			await getYtdlpExtractPool().killAll("binary-update");
+		}
 
-		const resolved = this.resolveRelease(key, version);
+		const resolved = await this.resolveRelease(key, version);
 		const controller = new AbortController();
 		const startedAt = new Date().toISOString();
 		const job: ActiveDownload = {
@@ -211,7 +283,7 @@ export class DependenciesManager {
 		if (this.activeDownloads.has(key)) {
 			throw new Error(`Dependency ${key} is already downloading`);
 		}
-		const resolved = this.resolveRelease(key, version);
+		const resolved = await this.resolveRelease(key, version);
 		const startedAt = new Date().toISOString();
 		const job = {
 			key,
@@ -239,6 +311,10 @@ export class DependenciesManager {
 		if (active) {
 			active.controller.abort();
 			this.activeDownloads.delete(key);
+		}
+		if (key === "ytdlp") {
+			await getYtdlpExtractPool().killAll("dependency-removed");
+			clearYtdlpVersionCache();
 		}
 
 		const installed = this.getInstallState(key);
@@ -351,6 +427,9 @@ export class DependenciesManager {
 		if (!archiveType) {
 			const destinationPath = join(exportRootPath, fileName);
 			await this.moveFile(downloadedPath, destinationPath);
+			if (source.kind === "binary" && process.platform !== "win32") {
+				await chmod(destinationPath, 0o755);
+			}
 			return [destinationPath];
 		}
 
@@ -440,6 +519,10 @@ export class DependenciesManager {
 				updatedAt: new Date().toISOString(),
 			};
 			dependencyStore.set(job.key, installedState);
+			if (job.key === "ytdlp") {
+				clearYtdlpVersionCache();
+				appStore.set("ytdlp.version", job.version);
+			}
 
 			this.createProgressEvent({
 				key: job.key,
@@ -495,7 +578,11 @@ export class DependenciesManager {
 			message: `Downloading ${fileName}`,
 		});
 
-		const response = await fetch(source.url, { signal: controller.signal });
+		const response = await fetch(source.url, {
+			signal: controller.signal,
+			redirect: "follow",
+			headers: { "User-Agent": "ytdlp-gui" },
+		});
 		if (!response.ok || !response.body) {
 			throw new Error(`Failed to download ${source.url}: ${response.status} ${response.statusText}`);
 		}

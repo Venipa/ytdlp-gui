@@ -29,14 +29,14 @@ files:
   - "!src/*"
   - "!electron.vite.config.{js,ts,mjs,cjs}"
   - "!{.*rc,*.config.js,*.config.ts,*config.json,.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
-  - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
+  - "!{.env,.env.*,.npmrc,pnpm-lock.yaml,bun.lockb}"
   - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,tsconfig*.json}"
   - "!test-*.py"
   - "!test*.mjs"
   - "!test*.js"
   - "!{out}/*.{db,meta.bin,db-shm,db-wal}"
   - "!{scripts}/**"
-  - "!{lefthook.yml,pnpm-workspace.yaml,git-config.cjs,requirements.txt}"
+  - "!{lefthook.yml,pnpm-workspace.yaml,git-config.cjs}"
 asar:
   smartUnpack: true
 asarUnpack:

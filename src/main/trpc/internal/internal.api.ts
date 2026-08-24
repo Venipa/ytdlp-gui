@@ -86,13 +86,12 @@ export const internalRouter = router({
 	initializeApp: publicProcedure.mutation(async () => {
 		if (appInitialized) throw new TRPCError({ message: "App already initialized", code: "INTERNAL_SERVER_ERROR" });
 		await nextTick();
-		await ytdl.initialize();
 		const staticFfmpegDep = dependenciesManager.getInstallState("ffmpeg");
-		// const isEnvironmentFfmpeg = staticFfmpegDep?.version === "environment";
-
-		if (!staticFfmpegDep && !dependenciesManager.executableIsAvailable("ffmpeg", true)) {
-			await dependenciesManager.downloadDependencyPromise("ffmpeg"); // so we can wait for the download to complete and push updates to the frontend
-		}
+		const ffmpegTask =
+			!staticFfmpegDep && !dependenciesManager.executableIsAvailable("ffmpeg", true)
+				? dependenciesManager.downloadDependencyPromise("ffmpeg")
+				: Promise.resolve();
+		await Promise.all([ytdl.initialize(), ffmpegTask]);
 		await checkForUpdatesAndNotify();
 		appInitialized = true;
 		return appStore.store.ytdlp.version ?? "Unknown State";

@@ -26,15 +26,10 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v5
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: 10.32.1
-      - name: Install Python3
-        uses: actions/setup-python@v6.2.0
-        with:
-          python-version: '3.13.12'
-          cache: 'pip'
+          bun-version: 1.4.0
       - if: github.ref_type == 'tag'
         id: getVersion
         uses: actions/github-script@v7.0.1
@@ -56,36 +51,16 @@ jobs:
       - if: matrix.os != 'macos-latest'
         name: Install dependencies for windows, linux and intel macos runners
         run: |
-          pnpm i --frozen-lockfile
+          bun install --frozen-lockfile
       - if: matrix.os == 'macos-latest'
         name: Install dependencies for macos arm64 runner
         run: |
           # rebuild libsql deps for macos arm64
-          pnpm install --config.platform=darwin --config.arch=arm64 --config.target_arch=arm64 --frozen-lockfile
-          pnpm rebuild --config.platform=darwin --config.arch=arm64 --config.target_arch=arm64
+          bun install --frozen-lockfile --os darwin --cpu arm64
 
-      - if: matrix.os != 'windows-latest'
-        name: Install Python dependencies (unix)
-        run: |
-          python -m venv --copies .venv
-          # Copy Python executable for portability (might not work 😅)
-          cp $(which python) .venv/bin/python
-          source .venv/bin/activate
-          .venv/bin/pip install -r requirements.txt
-          rm -rf .venv/bin/pip* # remove pip from venv
-          rm -rf .venv/lib/python*/site-packages/pip* # remove pip from venv
-      - if: matrix.os == 'windows-latest'
-        name: Install Python dependencies (win32)
-        run: |
-          python -m venv --copies .venv
-          # Copy Python executable for portability (might not work 😅)
-          Copy-Item (Get-Command python).Source .\.venv\Scripts\python.exe
-          & .\.venv\Scripts\Activate.ps1
-          pip install -r requirements.txt
-          Remove-Item .\.venv\Scripts\pip*.exe
       - name: Build Electron release
         run: |
-          pnpm run release
+          bun run release
         env:
           # MAIN_VITE_ANYSTACK_API_KEY: ${{ secrets.ANYSTACK_API_KEY }}
           # MAIN_VITE_ANYSTACK_PRODUCT_ID: ${{ secrets.ANYSTACK_PRODUCT_ID }}

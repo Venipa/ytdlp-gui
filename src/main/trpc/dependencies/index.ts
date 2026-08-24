@@ -16,7 +16,7 @@ const dependenciesRouter = router({
 			}),
 		)
 		.query(async ({ input: { key } }) => {
-			const definition = dependenciesManager.getDefinitions().find((item) => item.key === key);
+			const definition = (await dependenciesManager.getDefinitions()).find((item) => item.key === key);
 			if (!definition) throw new TRPCError({ code: "NOT_FOUND", message: `${key} dependency not found` });
 			return definition;
 		}),
@@ -27,9 +27,9 @@ const dependenciesRouter = router({
 				version: z.string().optional(),
 			}),
 		)
-		.query(({ input: { key, version } }) => {
+		.query(async ({ input: { key, version } }) => {
 			try {
-				return dependenciesManager.resolveRelease(key, version);
+				return await dependenciesManager.resolveRelease(key, version);
 			} catch (error: unknown) {
 				throw new TRPCError({
 					code: "BAD_REQUEST",

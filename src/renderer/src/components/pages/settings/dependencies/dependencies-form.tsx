@@ -1,12 +1,39 @@
+import type { DependencyKey } from "@main/trpc/dependencies/meta";
 import { Button } from "@renderer/components/ui/button";
 import ClickableText from "@renderer/components/ui/clickable-text";
 import { Progress } from "@renderer/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select";
-import { Spinner } from "@renderer/components/ui/spinner";
+import { Skeleton } from "@renderer/components/ui/skeleton";
 import { trpc } from "@renderer/lib/api/trpc-link";
 import prettyBytes from "pretty-bytes";
-import { useEffect, useMemo, useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
+
+const dependencyFormSkeleton = (
+	<div className='flex flex-col gap-4'>
+		<div className='rounded-md border border-border p-3 flex flex-col gap-3' role='status' aria-label='Loading dependency'>
+			<div className='flex items-start justify-between gap-4'>
+				<div className='flex flex-col gap-1 flex-1'>
+					<Skeleton className='h-4 w-24' />
+					<Skeleton className='h-3 w-3/4 max-w-md' />
+				</div>
+				<div className='flex flex-col gap-1 items-end'>
+					<Skeleton className='h-3 w-16' />
+					<Skeleton className='h-3 w-12' />
+				</div>
+			</div>
+			<div className='flex items-center gap-2'>
+				<Skeleton className='h-9 flex-1' />
+				<Skeleton className='h-8 w-16' />
+				<Skeleton className='h-8 w-16' />
+			</div>
+			<div className='flex flex-col gap-1.5'>
+				<Skeleton className='h-2 w-full' />
+				<Skeleton className='h-3 w-32' />
+			</div>
+		</div>
+	</div>
+);
 
 type DependencyProgress = {
 	key: string;
@@ -20,8 +47,7 @@ type DependencyProgress = {
 };
 
 interface DependenciesFormProps {
-	dependencyKey: string;
-	loadingText?: string;
+	dependencyKey: DependencyKey;
 	selectVersionPlaceholder?: string;
 	installLabel?: string;
 	updateLabel?: string;
@@ -46,14 +72,15 @@ function resolveDefaultVersion(dependency: {
 	compatibleVersions: string[];
 	latestVersion: string | null;
 }): string {
-	if (dependency.installed?.version) return dependency.installed.version;
+	if (dependency.installed?.version && dependency.compatibleVersions.includes(dependency.installed.version)) {
+		return dependency.installed.version;
+	}
 	if (dependency.compatibleVersions.length) return dependency.compatibleVersions[0];
 	return dependency.latestVersion ?? "";
 }
 
 export function DependenciesForm({
 	dependencyKey,
-	loadingText = "Loading dependency...",
 	selectVersionPlaceholder = "Select a version",
 	installLabel = "Install",
 	updateLabel = "Update",
@@ -73,40 +100,40 @@ export function DependenciesForm({
 	failedRemoveMessage = "Failed to remove",
 }: DependenciesFormProps) {
 	const utils = trpc.useUtils();
-	const { data: dependencies, isLoading } = trpc.dependencies.list.useQuery();
-	const [selectedVersion, setSelectedVersion] = useState<string>("");
+	const { data: dependency, isLoading } = trpc.dependencies.getDependency.useQuery({ key: dependencyKey });
+	const [pickedVersion, setPickedVersion] = useState<string | null>(null);
 	const [progress, setProgress] = useState<DependencyProgress | null>(null);
 	const { mutateAsync: installDependency, isLoading: isInstalling } = trpc.dependencies.download.useMutation();
 	const { mutateAsync: removeDependency, isLoading: isRemoving } = trpc.dependencies.removeDependency.useMutation();
 	const { mutateAsync: openPath } = trpc.internals.openPath.useMutation();
-	const [toastId, setToastId] = useState<number | string | undefined>();
-	trpc.dependencies.downloadProgress.useSubscription(undefined, {
-		onData: (progress) => {
-			if (progress.key !== dependencyKey) return;
-			setProgress(progress as DependencyProgress);
-			if (progress.state === "completed") {
-				toast.success(`${completedDownloadMessage}`, { description: `${dependencyKey}`, id: toastId });
-				void utils.dependencies.list.invalidate();
-				setToastId(undefined);
-			}
-			if (progress.state === "error") {
-				toast.error(`${failedDownloadMessage}`, { description: `${dependencyKey} ${progress.message}`, id: toastId });
-				setToastId(undefined);
-			}
-			if (progress.state === "cancelled") {
-				toast.error(`${cancelledDownloadMessage}`, { description: `${dependencyKey}`, id: toastId });
-				setToastId(undefined);
-			}
+	const toastIdRef = useRef<number | string | undefined>(undefined);
+
+	const defaultVersion = dependency ? resolveDefaultVersion(dependency) : "";
+	const selectedVersion =
+		pickedVersion && dependency?.compatibleVersions.includes(pickedVersion) ? pickedVersion : defaultVersion;
+
+	trpc.dependencies.downloadProgress.useSubscription(
+		{ key: dependencyKey },
+		{
+			onData: (event) => {
+				if (event.key !== dependencyKey) return;
+				setProgress(event as DependencyProgress);
+				if (event.state === "completed") {
+					toast.success(completedDownloadMessage, { description: dependencyKey, id: toastIdRef.current });
+					void utils.dependencies.getDependency.invalidate({ key: dependencyKey });
+					toastIdRef.current = undefined;
+				}
+				if (event.state === "error") {
+					toast.error(failedDownloadMessage, { description: `${dependencyKey} ${event.message}`, id: toastIdRef.current });
+					toastIdRef.current = undefined;
+				}
+				if (event.state === "cancelled") {
+					toast.error(cancelledDownloadMessage, { description: dependencyKey, id: toastIdRef.current });
+					toastIdRef.current = undefined;
+				}
+			},
 		},
-	});
-
-	const dependency = useMemo(() => dependencies?.find((item) => item.key === dependencyKey) ?? null, [dependencies, dependencyKey]);
-
-	useEffect(() => {
-		if (!dependency) return;
-		if (selectedVersion) return;
-		setSelectedVersion(resolveDefaultVersion(dependency));
-	}, [dependency, selectedVersion]);
+	);
 
 	const isMutating = isInstalling || isRemoving;
 	const isBusy = !!dependency?.isDownloading || progress?.state === "downloading";
@@ -123,17 +150,14 @@ export function DependenciesForm({
 	const statusPercent = isBusy ? `${progress?.percent ?? 0}%` : "";
 	const statusDownloadedBytes = progress?.downloadedBytes ? prettyBytes(progress.downloadedBytes) : "";
 	const statusTotalBytes = progress?.totalBytes ? prettyBytes(progress.totalBytes) : "";
+	const installedPath = dependency?.installed?.path;
+
+	if (isLoading) return dependencyFormSkeleton;
 
 	return (
 		<div className='flex flex-col gap-4'>
-			{isLoading && (
-				<div className='flex items-center gap-2 text-sm text-muted-foreground'>
-					<Spinner size='sm' />
-					<span>{loadingText}</span>
-				</div>
-			)}
-			{dependency && (
-				<div key={dependency.key} className='rounded-md border border-border p-3 flex flex-col gap-3'>
+			{dependency ? (
+				<div className='rounded-md border border-border p-3 flex flex-col gap-3'>
 					<div className='flex items-start justify-between gap-4'>
 						<div className='flex flex-col gap-1'>
 							<h3 className='text-sm font-medium'>{dependency.name}</h3>
@@ -150,7 +174,7 @@ export function DependenciesForm({
 					</div>
 
 					<div className='flex items-center gap-2'>
-						<Select value={selectedVersion} onValueChange={setSelectedVersion} disabled={!hasCompatibleVersions || isBusy}>
+						<Select value={selectedVersion} onValueChange={setPickedVersion} disabled={!hasCompatibleVersions || isBusy}>
 							<SelectTrigger className='h-9'>
 								<SelectValue placeholder={selectVersionPlaceholder} />
 							</SelectTrigger>
@@ -167,16 +191,16 @@ export function DependenciesForm({
 							disabled={!canInstall}
 							onClick={() => {
 								const toastId = toast.loading(`${startedDownloadMessage} ${dependency.name} ${selectedVersion}`, { duration: 0 });
-								setToastId(toastId);
-								installDependency({ key: dependency.key as never, version: selectedVersion })
+								toastIdRef.current = toastId;
+								installDependency({ key: dependencyKey, version: selectedVersion })
 									.then(() => {
-										toast.success(`${completedDownloadMessage}`, { description: `${dependency.name} ${selectedVersion}`, id: toastId });
+										toast.success(completedDownloadMessage, { description: `${dependency.name} ${selectedVersion}`, id: toastId });
 									})
 									.catch((error: Error) => {
-										toast.error(`${failedDownloadMessage}`, { description: `${dependency.name} ${selectedVersion} ${error.message}` });
+										toast.error(failedDownloadMessage, { description: `${dependency.name} ${selectedVersion} ${error.message}` });
 									})
 									.finally(() => {
-										setToastId(undefined);
+										toastIdRef.current = undefined;
 									});
 							}}>
 							{dependency.installed?.version === selectedVersion ? reinstallLabel : dependency.installed ? updateLabel : installLabel}
@@ -187,30 +211,22 @@ export function DependenciesForm({
 							disabled={!canRemove}
 							onClick={() => {
 								const toastId = toast.loading(`${removedMessage} ${dependency.name}`, { duration: 0 });
-								setToastId(toastId);
-								removeDependency({ key: dependency.key as never })
+								toastIdRef.current = toastId;
+								removeDependency({ key: dependencyKey })
 									.then((result) => {
 										toast.success(`${removedMessage} ${dependency.name}`, {
 											description: `Reclaimed ${prettyBytes(result.reclaimedBytes ?? 0)}`,
 											id: toastId,
 										});
-										void utils.dependencies.list.invalidate();
-										setProgress({
-											key: dependency.key,
-											version: dependency.installed?.version ?? selectedVersion,
-											state: "idle",
-											fileName: null,
-											percent: 0,
-											downloadedBytes: 0,
-											totalBytes: null,
-											message: "Dependency removed",
-										});
+										void utils.dependencies.getDependency.invalidate({ key: dependencyKey });
+										setPickedVersion(null);
+										setProgress(null);
 									})
 									.catch((error: Error) => {
 										toast.error(`${failedRemoveMessage} ${dependency.name}`, { description: error.message, id: toastId });
 									})
 									.finally(() => {
-										setToastId(undefined);
+										toastIdRef.current = undefined;
 									});
 							}}>
 							{deleteLabel}
@@ -230,22 +246,18 @@ export function DependenciesForm({
 									<span>/</span>
 									<span className='tabular-nums'>{statusTotalBytes}</span>
 								</div>
-							) : dependency?.installed?.path ? (
-								<>
-									<ClickableText
-										onClick={() => {
-											if (dependency?.installed?.path) {
-												openPath({ path: dependency.installed.path, openParent: true });
-											}
-										}}>
-										Open folder
-									</ClickableText>
-								</>
+							) : installedPath ? (
+								<ClickableText
+									onClick={() => {
+										openPath({ path: installedPath, openParent: true });
+									}}>
+									Open folder
+								</ClickableText>
 							) : null}
 						</div>
 					</div>
 				</div>
-			)}
+			) : null}
 		</div>
 	);
 }

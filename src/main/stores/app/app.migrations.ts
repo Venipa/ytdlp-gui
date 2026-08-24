@@ -1,7 +1,5 @@
-import { MAX_PARALLEL_DOWNLOADS } from "@main/trpc/ytdlp/ytdlp.core";
-import { DEFAULT_OUTTMPL } from "@main/trpc/ytdlp/ytdlp.utils";
 import { Migration } from "electron-conf";
-import { AppStore } from "./AppStore";
+import { AppStore, DEFAULT_OUTTMPL } from "./AppStore";
 const removeProperty = (instance: any, property: string) => {
 	if (property in instance) delete (instance as any)[property];
 };
@@ -10,7 +8,7 @@ const appStoreMigrations: Migration<AppStore>[] = [
 	{
 		version: 0,
 		hook(instance, currentVersion) {
-			instance.store.features.concurrentDownloads = MAX_PARALLEL_DOWNLOADS;
+			instance.store.features.concurrentDownloads = 2;
 		},
 	},
 	{

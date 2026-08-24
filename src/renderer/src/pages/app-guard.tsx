@@ -20,17 +20,14 @@ export default function AppGuard({ children }: { children: React.ReactNode }) {
 		},
 	});
 	const [progress, setProgress] = useState<DependencyProgressEvent | null>(null);
-	trpc.dependencies.downloadProgress.useSubscription(
-		{ key: "ffmpeg" },
-		{
-			onData: (data) => {
-				setProgress(data);
-				if ((data.state === "downloading" && data.percent === 100) || data.state === "completed") {
-					setProgress(null);
-				}
-			},
+	trpc.dependencies.downloadProgress.useSubscription(undefined, {
+		onData: (data) => {
+			setProgress(data);
+			if ((data.state === "downloading" && data.percent === 100) || data.state === "completed") {
+				setProgress(null);
+			}
 		},
-	);
+	});
 	useEffect(() => {
 		if (appInitialized) return;
 		initialize()
@@ -52,7 +49,13 @@ export default function AppGuard({ children }: { children: React.ReactNode }) {
 				<SuspenseLoaderOptions
 					label={<RotateWords words={["Initializing app and ytdlp...", "Checking for updates...", "Moving full speed ahead...", "Almost there..."]} delay={2000} />}
 					progress={progress?.percent ?? null}
-					progressLabel={progress?.state === "downloading" ? "Downloading ffmpeg..." : null}
+					progressLabel={
+						progress?.state === "downloading"
+							? progress.key === "ytdlp"
+								? "Downloading yt-dlp..."
+								: "Downloading ffmpeg..."
+							: null
+					}
 				/>
 			) : (
 				children
