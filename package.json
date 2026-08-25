@@ -175,6 +175,10 @@
   },
   "trustedDependencies": [
     "@biomejs/biome",
-    "@swc/core"
+    "@swc/core",
+    "better-sqlite3",
+    "electron",
+    "esbuild",
+    "lefthook"
   ]
 }
