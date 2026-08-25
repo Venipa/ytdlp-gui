@@ -41,9 +41,11 @@ jobs:
             core.setOutput("ok", String(isVersion.test(id)))
 
       # Avoid parallel pack jobs racing on release create.
+      # No checkout in this job, so gh needs GH_REPO to locate the repository.
       - name: Ensure draft GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
           tag="${{ github.ref_name }}"
