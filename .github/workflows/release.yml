@@ -16,31 +16,18 @@ permissions:
 env:
   NODE_VERSION: "24.14.0"
   BUN_VERSION: "1.4.0"
-  COMPILE_ARTIFACT: electron-compile
 
 jobs:
-  # Shared electron-vite build. Pack jobs download this artifact and run electron-builder only (no vite).
-  compile:
+  # Version resolution + draft release only. The electron-vite build itself must run
+  # on the target platform: build.bytecode emits V8 code cache (.jsc) via
+  # v8.Script.createCachedData(), which is not portable across OS/arch and is
+  # rejected at runtime with "cachedDataRejected".
+  prepare:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.getVersion.outputs.value }}
       version_ok: ${{ steps.getVersion.outputs.ok }}
     steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Use Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
       - if: github.ref_type == 'tag'
         id: getVersion
         uses: actions/github-script@v9
@@ -53,46 +40,6 @@ jobs:
             core.setOutput("value", id);
             core.setOutput("ok", String(isVersion.test(id)))
 
-      # outputs.ok is the string "true"/"false" - bare `if: outputs.ok` is truthy for "false".
-      - if: github.ref_type == 'tag' && steps.getVersion.outputs.ok == 'true'
-        name: set app version
-        shell: bash
-        env:
-          APP_VERSION: ${{ steps.getVersion.outputs.value }}
-        run: |
-          node <<'EOF'
-          const fs = require('fs');
-          const p = 'package.json';
-          const text = fs.readFileSync(p, 'utf8');
-          const next = text.replace(/("version"\s*:\s*")[^"]*(")/, `$1${process.env.APP_VERSION}$2`);
-          fs.writeFileSync(p, next);
-          EOF
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Compile Electron app
-        run: bun run release:compile
-        env:
-          VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          VITE_GITHUB_REPOSITORY: ${{ github.repository }}
-
-      - name: Verify compile output
-        shell: bash
-        run: |
-          test -f out/main/index.js
-          test -f package.json
-
-      - name: Upload compile artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.COMPILE_ARTIFACT }}
-          path: |
-            out
-            package.json
-          if-no-files-found: error
-          retention-days: 3
-
       # Avoid parallel pack jobs racing on release create.
       - name: Ensure draft GitHub release
         env:
@@ -104,11 +51,11 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag already exists"
           else
-            gh release create "$tag" --draft --title "$title" --notes "Publishing assets…"
+            gh release create "$tag" --draft --title "$title" --notes "Publishing assets..."
           fi
 
   build-windows:
-    needs: compile
+    needs: prepare
     runs-on: windows-latest
     steps:
       - name: Check out Git repository
@@ -126,24 +73,28 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      # outputs.version_ok is the string "true"/"false" - bare `if: ...` is truthy for "false".
+      - if: github.ref_type == 'tag' && needs.prepare.outputs.version_ok == 'true'
+        name: Set app version
+        shell: bash
+        env:
+          APP_VERSION: ${{ needs.prepare.outputs.version }}
+        run: node scripts/set-app-version.cjs
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Download compile artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.COMPILE_ARTIFACT }}
-          path: .
+      - name: Compile Electron app
+        run: bun run release:compile
+        env:
+          VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          VITE_GITHUB_REPOSITORY: ${{ github.repository }}
 
       - name: Verify compile output
-        shell: pwsh
+        shell: bash
         run: |
-          if (-not (Test-Path -LiteralPath "out/main/index.js")) {
-            throw "missing out/main/index.js"
-          }
-          if (-not (Test-Path -LiteralPath "package.json")) {
-            throw "missing package.json"
-          }
+          test -f out/main/index.js
+          test -f out/main/bytecode-loader.cjs
 
       - name: Pack Windows release
         run: bun run release:pack:win
@@ -154,7 +105,7 @@ jobs:
           VITE_GITHUB_REPOSITORY: ${{ github.repository }}
 
   build-macos:
-    needs: compile
+    needs: prepare
     runs-on: macos-latest
     steps:
       - name: Check out Git repository
@@ -172,20 +123,27 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - if: github.ref_type == 'tag' && needs.prepare.outputs.version_ok == 'true'
+        name: Set app version
+        shell: bash
+        env:
+          APP_VERSION: ${{ needs.prepare.outputs.version }}
+        run: node scripts/set-app-version.cjs
+
       - name: Install dependencies for macos arm64 runner
         run: bun install --frozen-lockfile --os darwin --cpu arm64
 
-      - name: Download compile artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.COMPILE_ARTIFACT }}
-          path: .
+      - name: Compile Electron app
+        run: bun run release:compile
+        env:
+          VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          VITE_GITHUB_REPOSITORY: ${{ github.repository }}
 
       - name: Verify compile output
         shell: bash
         run: |
           test -f out/main/index.js
-          test -f package.json
+          test -f out/main/bytecode-loader.cjs
 
       # Signing / notarization (disabled).
       # Secrets: MACOS_DEVELOPER_ID_APPLICATION_P12 (+ _PASSWORD),
@@ -215,7 +173,7 @@ jobs:
       #   run: rm -rf .secrets
 
   build-linux:
-    needs: compile
+    needs: prepare
     runs-on: ubuntu-latest
     steps:
       - name: Check out Git repository
@@ -233,20 +191,27 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - if: github.ref_type == 'tag' && needs.prepare.outputs.version_ok == 'true'
+        name: Set app version
+        shell: bash
+        env:
+          APP_VERSION: ${{ needs.prepare.outputs.version }}
+        run: node scripts/set-app-version.cjs
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Download compile artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.COMPILE_ARTIFACT }}
-          path: .
+      - name: Compile Electron app
+        run: bun run release:compile
+        env:
+          VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          VITE_GITHUB_REPOSITORY: ${{ github.repository }}
 
       - name: Verify compile output
         shell: bash
         run: |
           test -f out/main/index.js
-          test -f package.json
+          test -f out/main/bytecode-loader.cjs
 
       - name: Pack Linux release
         run: bun run release:pack:linux
