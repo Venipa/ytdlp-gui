@@ -1,4 +1,3 @@
-import { base64 } from "@shared/base64";
 import { logger } from "@shared/logger";
 import { generateRandom } from "@shared/randomString";
 import slugify, { SlugifyOptions } from "@shared/slug";
@@ -33,7 +32,7 @@ export const createYmlStore = <T extends Record<string, any> = Record<string, an
 
 export const createEncryptedStore = <T extends Record<string, any> = Record<string, any>>(name: string, options: Options<T> = {} as Options<T>) => {
 	const encryptionKeyPath = path.join(getStoreUserData(), slugify(name, slugifyOptions) + ".key");
-	const secret = base64.encode(name + "_app_secret_salt");
+	const secret = name.padStart(32, "0");
 	logger.debug(name, { secret });
 	const enc = new Encryption({ secret: secret });
 	if (!existsSync(encryptionKeyPath)) writeFileSync(encryptionKeyPath, enc.encrypt({ name, secret: generateRandom(32) }));
@@ -47,7 +46,18 @@ export const createEncryptedStore = <T extends Record<string, any> = Record<stri
 		...options,
 		serializer: {
 			read(raw) {
-				return storeEncryptor.decrypt(raw) as T;
+				try {
+          const decrypted = storeEncryptor.decrypt(raw);
+				if (!decrypted || typeof decrypted !== "object") {
+					logger.error(`Failed to decrypt store "${name}" - file unreadable, using empty store`);
+					return {} as T;
+				}
+				return decrypted as T;
+        } catch (ex) {
+          logger.error(`Failed to decrypt store "${name}" - file unreadable, using empty store`, ex);
+          const newStore = options.defaults ?? {} as T; // return empty store on encryption error
+          return newStore;
+        }
 			},
 			write(value) {
 				return storeEncryptor.encrypt(value);
