@@ -1,14 +1,14 @@
 import { spawn } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { mkdirSync } from "node:fs";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
-import { EventEmitter } from "node:events";
-import { appStore } from "@main/stores/app/app.store";
 import { createLogger } from "@shared/logger";
 import { PROGRESS_MARKER, buildDownloadArgs, getYtdlpCachePath } from "./argv";
 import { getYtdlpBinaryPath, hasYtdlpBinary } from "./binary";
+import { getConcurrencyDomain, getConcurrencyPolicy } from "./concurrency";
 import type { YtdlpOptions, YtdlpOutputEvent } from "./types";
 
 const IN_PROGRESS_PERCENT_MAX = 99.9;
@@ -16,13 +16,8 @@ const log = createLogger("ytdlp-download");
 
 const outputEmitter = new EventEmitter();
 let activeDownloads = 0;
-const downloadWaiters: Array<() => void> = [];
-
-function getMaxConcurrency(): number {
-	const raw = appStore.store.features.concurrentDownloads;
-	if (!Number.isFinite(raw) || raw < 1) return 1;
-	return Math.floor(raw);
-}
+const activeDownloadsByDomain = new Map<string, number>();
+const downloadWaiters: Array<{ domain: string; resolve: () => void }> = [];
 
 export function getActiveDownloadCount(): number {
 	return activeDownloads;
@@ -35,21 +30,38 @@ export function onYtdlpDownloadOutput(listener: (event: YtdlpOutputEvent) => voi
 	};
 }
 
-async function acquireDownloadSlot(): Promise<void> {
-	if (activeDownloads < getMaxConcurrency()) {
-		activeDownloads += 1;
+function canAcquireDownloadSlot(domain: string): boolean {
+	const policy = getConcurrencyPolicy();
+	if (policy.mode === "global") return activeDownloads < policy.limit;
+	return (activeDownloadsByDomain.get(domain) ?? 0) < policy.limit;
+}
+
+function reserveDownloadSlot(domain: string): void {
+	activeDownloads += 1;
+	activeDownloadsByDomain.set(domain, (activeDownloadsByDomain.get(domain) ?? 0) + 1);
+}
+
+async function acquireDownloadSlot(domain: string): Promise<void> {
+	if (canAcquireDownloadSlot(domain)) {
+		reserveDownloadSlot(domain);
 		return;
 	}
 	await new Promise<void>((resolve) => {
-		downloadWaiters.push(resolve);
+		downloadWaiters.push({ domain, resolve });
 	});
-	activeDownloads += 1;
 }
 
-function releaseDownloadSlot(): void {
+function releaseDownloadSlot(domain: string): void {
 	activeDownloads = Math.max(0, activeDownloads - 1);
-	const next = downloadWaiters.shift();
-	if (next) next();
+	const domainCount = Math.max(0, (activeDownloadsByDomain.get(domain) ?? 1) - 1);
+	if (domainCount) activeDownloadsByDomain.set(domain, domainCount);
+	else activeDownloadsByDomain.delete(domain);
+
+	const nextIndex = downloadWaiters.findIndex((waiter) => canAcquireDownloadSlot(waiter.domain));
+	if (nextIndex === -1) return;
+	const [next] = downloadWaiters.splice(nextIndex, 1);
+	reserveDownloadSlot(next.domain);
+	next.resolve();
 }
 
 function parseNumber(value: unknown): number | null {
@@ -150,7 +162,8 @@ export async function runYtdlpDownload(
 	}
 	const requestId = genRequestId();
 	hooks?.onRequestCreated?.(requestId);
-	await acquireDownloadSlot();
+	const concurrencyDomain = getConcurrencyDomain(url);
+	await acquireDownloadSlot(concurrencyDomain);
 	const cacheDir = getYtdlpCachePath();
 	mkdirSync(cacheDir, { recursive: true });
 	let infoDir: string | null = null;
@@ -214,7 +227,7 @@ export async function runYtdlpDownload(
 			});
 		});
 	} finally {
-		releaseDownloadSlot();
+		releaseDownloadSlot(concurrencyDomain);
 		if (infoDir) {
 			await rm(infoDir, { recursive: true, force: true }).catch((error) => {
 				log.warn("Failed to remove info json temp dir", { error });

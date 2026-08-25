@@ -36,7 +36,9 @@ export const appStoreSchema = z
 			.object({
 				clipboardMonitor: z.boolean().fallback(false),
 				clipboardMonitorAutoAdd: z.boolean().fallback(true),
+				concurrencyMode: z.enum(["global", "domain"]).fallback("global"),
 				concurrentDownloads: z.coerce.number().fallback(DEFAULT_PARALLEL_DOWNLOADS),
+				concurrentDownloadsPerDomain: z.coerce.number().fallback(DEFAULT_PARALLEL_DOWNLOADS),
 				advancedView: z.boolean().fallback(false),
 			})
 			.fallback({}),

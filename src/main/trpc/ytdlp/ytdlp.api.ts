@@ -41,8 +41,12 @@ const MEDIA_TYPE_TO_FORMAT: Record<YTDLMediaType, string | null> = {
 };
 
 const parseSpeedToBytesPerSecond = (speed: string): number => {
-	// Matches patterns like "1234KiB/s", "12.3MiB/s", "567B/s", etc.
-	const match = speed.match(/^(\d+(?:\.\d+)?)([KMGT]?i?B)\/s$/i);
+	const normalizedSpeed = speed.trim();
+	const rawBytesPerSecond = Number(normalizedSpeed);
+	if (Number.isFinite(rawBytesPerSecond)) return Math.max(0, Math.round(rawBytesPerSecond));
+
+	// Backward compatibility for formatted values like "12.3MiB/s".
+	const match = normalizedSpeed.match(/^(\d+(?:\.\d+)?)([KMGT]?i?B)\/s$/i);
 	if (!match) return 0;
 	const value = parseFloat(match[1]);
 	const unit = match[2].toUpperCase();

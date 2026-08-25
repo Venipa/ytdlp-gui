@@ -30,7 +30,9 @@ const store = createYmlStore<AppStore>("app-settings", {
 			features: {
 				clipboardMonitor: true,
 				clipboardMonitorAutoAdd: true,
+				concurrencyMode: "global",
 				concurrentDownloads: 2,
+				concurrentDownloadsPerDomain: 2,
 				advancedView: false,
 			},
 			updateChannel: "stable",

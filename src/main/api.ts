@@ -1,6 +1,7 @@
 import { router } from "@main/trpc/core/trpc";
 import dependenciesRouter from "@main/trpc/dependencies";
 import { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
+import { cookiesRouter } from "./trpc/cookies/cookies.api";
 import { dialogRouter } from "./trpc/dialog/dialog.api";
 import { eventsRouter } from "./trpc/events/events.api";
 import { internalRouter } from "./trpc/internal/internal.api";
@@ -13,6 +14,7 @@ export const appRouter = router({
 	dependencies: dependenciesRouter,
 	window: windowRouter,
 	dialog: dialogRouter,
+	cookies: cookiesRouter,
 	internals: internalRouter,
 	ytdl: ytdlpRouter,
 	settings: settingsRouter,

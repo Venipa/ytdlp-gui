@@ -67,7 +67,10 @@ const QTooltip = React.forwardRef<
 				sideOffset={4}
 				updatePositionStrategy='optimized'
 				ref={ref}
-				className='bg-white dark:bg-background border border-muted fill-muted dark:border-muted/60 shadow-md text-primary'>
+				className={cn(
+					"bg-white dark:bg-background border border-muted fill-muted dark:border-muted/60 shadow-md text-primary",
+					className,
+				)}>
 				{contentElement}
 			</TooltipContent>
 		</Tooltip>

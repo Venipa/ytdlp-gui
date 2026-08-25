@@ -3,6 +3,7 @@ import GroupSection from "@renderer/components/pages/group-section";
 import SettingsInput from "@renderer/components/pages/settings-input";
 import { useSettingsForm } from "@renderer/components/pages/settings/form";
 import { Badge } from "@renderer/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@renderer/components/ui/tabs";
 import { QTooltip } from "@renderer/components/ui/tooltip";
 import { LucideDownload } from "lucide-react";
 import PageContent from "../page-content";
@@ -46,6 +47,7 @@ const OUTTMPL_EXAMPLES: OuttmplExample[] = [
 export default function DownloaderSection({ meta }: { meta: SectionMeta }) {
 	const Icon = meta.icon;
 	const form = useSettingsForm();
+	const concurrencyMode = form.watch("features.concurrencyMode");
 	return (
 		<PageContent icon={Icon} title={meta.title} description={meta.description} tabId={meta.title}>
 			<div className='flex flex-col gap-0'>
@@ -54,13 +56,40 @@ export default function DownloaderSection({ meta }: { meta: SectionMeta }) {
 			</div>
 			<GroupSection title='Download'>
 				<div className='flex flex-col gap-6'>
-					<SettingsInput
-						name='features.concurrentDownloads'
-						type='number'
-						min={1}
-						max={window.api.maxParallelism}
-						title={"Max concurrent downloads"}
-						hint={`Recommended: 2`}></SettingsInput>
+					<Tabs
+						value={concurrencyMode}
+						onValueChange={(mode) => {
+							form.setValue("features.concurrencyMode", mode as "global" | "domain", {
+								shouldDirty: true,
+								shouldTouch: true,
+								shouldValidate: true,
+							});
+						}}>
+						<TabsList aria-label='Download concurrency type'>
+							<TabsTrigger value='global'>Global</TabsTrigger>
+							<TabsTrigger value='domain'>Per domain</TabsTrigger>
+						</TabsList>
+						<TabsContent value='global'>
+							<SettingsInput
+								name='features.concurrentDownloads'
+								type='number'
+								min={1}
+								max={window.api.maxParallelism}
+								title='Max concurrent downloads'
+								hint='Maximum downloads across all domains. Recommended: 2'
+							/>
+						</TabsContent>
+						<TabsContent value='domain'>
+							<SettingsInput
+								name='features.concurrentDownloadsPerDomain'
+								type='number'
+								min={1}
+								max={window.api.maxParallelism}
+								title='Max concurrent downloads per domain'
+								hint='Subdomains share their parent domain, for example *.xyz.com. Recommended: 2'
+							/>
+						</TabsContent>
+					</Tabs>
 					<SettingsInput
 						name='ytdlp.outtmpl'
 						defaultValue={DEFAULT_OUTTMPL}

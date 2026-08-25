@@ -50,9 +50,11 @@ declare module "ytdlp-gui/types" {
 		error?: any;
 	}
 	export interface YTDLCookie {
+		id: string;
+		name: string;
 		domain: string;
 		cookie: string;
-		type: string;
+		type: "imported" | "cookie";
 	}
 }
 

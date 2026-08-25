@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { appStore } from "@main/stores/app/app.store";
+import { getYtdlpCookiesFilePath } from "@main/stores/cookies/cookies.store";
 import { dependencyStore } from "@main/trpc/dependencies/store";
 import { app } from "electron";
 import type { YtdlpOptions, YtdlpPostprocessorOption } from "./types";
@@ -10,7 +11,7 @@ export function getYtdlpCachePath(): string {
 
 export const PROGRESS_MARKER = "__ytdlp_progress__";
 
-const PROGRESS_TEMPLATE = `download:{"${PROGRESS_MARKER}":true,"status":"%(progress.status)s","videoId":"%(info.id)s","percent":"%(progress._percent)s","speed":"%(progress._speed_str)s","eta":"%(progress._eta_str)s","fragmentIndex":"%(progress.fragment_index)s","fragmentCount":"%(progress.fragment_count)s"}`;
+const PROGRESS_TEMPLATE = `download:{"${PROGRESS_MARKER}":true,"status":"%(progress.status)s","videoId":"%(info.id)s","percent":"%(progress._percent)s","speed":"%(progress.speed|0)s","eta":"%(progress._eta_str)s","fragmentIndex":"%(progress.fragment_index)s","fragmentCount":"%(progress.fragment_count)s"}`;
 
 export function getFfmpegLocation(): string | null {
 	const installed = dependencyStore.get("ffmpeg")?.files?.[0];
@@ -26,6 +27,8 @@ export function buildBaseArgs(): string[] {
 	const args = ["--ignore-config", "--no-update", "--no-warnings", "--cache-dir", getYtdlpCachePath()];
 	const ffmpeg = getFfmpegLocation();
 	if (ffmpeg) args.push("--ffmpeg-location", ffmpeg);
+	const cookiesFile = getYtdlpCookiesFilePath();
+	if (cookiesFile) args.push("--cookies", cookiesFile);
 	return args;
 }
 

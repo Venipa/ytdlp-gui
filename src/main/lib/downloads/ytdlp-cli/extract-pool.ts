@@ -1,9 +1,9 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
-import { appStore } from "@main/stores/app/app.store";
 import { createLogger } from "@shared/logger";
 import { buildExtractArgs, getYtdlpCachePath } from "./argv";
 import { getYtdlpBinaryPath, hasYtdlpBinary } from "./binary";
+import { getConcurrencyDomain, getConcurrencyPolicy } from "./concurrency";
 import type { YtdlpOptions } from "./types";
 
 const EXTRACT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -17,14 +17,9 @@ interface ExtractTask {
 }
 
 interface ActiveExtract {
+	domain: string;
 	process: ChildProcess;
 	reject: (reason: unknown) => void;
-}
-
-function getMaxConcurrency(): number {
-	const raw = appStore.store.features.concurrentDownloads;
-	if (!Number.isFinite(raw) || raw < 1) return 1;
-	return Math.floor(raw);
 }
 
 function parseYtdlpJson(stdout: string): unknown {
@@ -86,10 +81,25 @@ export class YtdlpExtractPool {
 
 	private schedule(): void {
 		if (this.shuttingDown) return;
-		while (this.queue.length > 0 && this.active.size < getMaxConcurrency()) {
-			const task = this.queue.shift();
-			if (task) this.run(task);
+		while (this.queue.length > 0) {
+			const taskIndex = this.findRunnableTaskIndex();
+			if (taskIndex === -1) return;
+			const [task] = this.queue.splice(taskIndex, 1);
+			this.run(task);
 		}
+	}
+
+	private findRunnableTaskIndex(): number {
+		const policy = getConcurrencyPolicy();
+		if (policy.mode === "global") return this.active.size < policy.limit ? 0 : -1;
+		return this.queue.findIndex((task) => {
+			const domain = getConcurrencyDomain(task.url);
+			let activeForDomain = 0;
+			for (const job of this.active) {
+				if (job.domain === domain) activeForDomain += 1;
+			}
+			return activeForDomain < policy.limit;
+		});
 	}
 
 	private run(task: ExtractTask): void {
@@ -100,7 +110,11 @@ export class YtdlpExtractPool {
 			windowsHide: true,
 			cwd: cacheDir,
 		});
-		const job: ActiveExtract = { process: child, reject: task.reject };
+		const job: ActiveExtract = {
+			domain: getConcurrencyDomain(task.url),
+			process: child,
+			reject: task.reject,
+		};
 		this.active.add(job);
 		let stdout = "";
 		let stderr = "";
