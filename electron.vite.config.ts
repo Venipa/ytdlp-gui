@@ -23,7 +23,7 @@ const resolveOptions: { resolve: ResolveOptions & { alias: AliasOptions } } = {
 		},
 	},
 };
-const externalizedEsmDeps = ["lodash-es", "@faker-js/faker", "@trpc-limiter/memory", "got", "encryption.js", "filenamify", "p-queue"];
+const externalizedEsmDeps = ["lodash-es", "@faker-js/faker", "@trpc-limiter/memory", "got", "encryption.js", "filenamify", "p-queue", "superjson"];
 const isProduction = process.env.NODE_ENV === "production";
 
 function injectExtensionsPlugin(): Plugin {

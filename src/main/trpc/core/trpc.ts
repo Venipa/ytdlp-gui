@@ -1,8 +1,9 @@
 import { TRPCError, initTRPC } from "@trpc/server";
 import { BrowserWindow, IpcMainInvokeEvent } from "electron";
+import superjson from "superjson";
 import { Logger } from "~/src/shared/logger";
 import { pushLogToClient } from "../events/events.ee";
-const t = initTRPC.context<{ window: BrowserWindow; event: IpcMainInvokeEvent; log: Logger; path: string }>().create({ isServer: true });
+const t = initTRPC.context<{ window: BrowserWindow; event: IpcMainInvokeEvent; log: Logger; path: string }>().create({ isServer: true, transformer: superjson });
 export const router = t.router;
 /**
  * procedures that are allowed to be used everywhere
