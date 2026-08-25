@@ -53,7 +53,7 @@ jobs:
             core.setOutput("value", id);
             core.setOutput("ok", String(isVersion.test(id)))
 
-      # outputs.ok is the string "true"/"false" — bare `if: outputs.ok` is truthy for "false".
+      # outputs.ok is the string "true"/"false" - bare `if: outputs.ok` is truthy for "false".
       - if: github.ref_type == 'tag' && steps.getVersion.outputs.ok == 'true'
         name: set app version
         shell: bash
@@ -81,12 +81,15 @@ jobs:
         shell: bash
         run: |
           test -f out/main/index.js
+          test -f package.json
 
       - name: Upload compile artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.COMPILE_ARTIFACT }}
-          path: out
+          path: |
+            out
+            package.json
           if-no-files-found: error
           retention-days: 3
 
@@ -123,20 +126,6 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - if: needs.compile.outputs.version_ok == 'true'
-        name: set app version
-        shell: bash
-        env:
-          APP_VERSION: ${{ needs.compile.outputs.version }}
-        run: |
-          node <<'EOF'
-          const fs = require('fs');
-          const p = 'package.json';
-          const text = fs.readFileSync(p, 'utf8');
-          const next = text.replace(/("version"\s*:\s*")[^"]*(")/, `$1${process.env.APP_VERSION}$2`);
-          fs.writeFileSync(p, next);
-          EOF
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
@@ -144,13 +133,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.COMPILE_ARTIFACT }}
-          path: out
+          path: .
 
       - name: Verify compile output
         shell: pwsh
         run: |
           if (-not (Test-Path -LiteralPath "out/main/index.js")) {
             throw "missing out/main/index.js"
+          }
+          if (-not (Test-Path -LiteralPath "package.json")) {
+            throw "missing package.json"
           }
 
       - name: Pack Windows release
@@ -180,20 +172,6 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - if: needs.compile.outputs.version_ok == 'true'
-        name: set app version
-        shell: bash
-        env:
-          APP_VERSION: ${{ needs.compile.outputs.version }}
-        run: |
-          node <<'EOF'
-          const fs = require('fs');
-          const p = 'package.json';
-          const text = fs.readFileSync(p, 'utf8');
-          const next = text.replace(/("version"\s*:\s*")[^"]*(")/, `$1${process.env.APP_VERSION}$2`);
-          fs.writeFileSync(p, next);
-          EOF
-
       - name: Install dependencies for macos arm64 runner
         run: bun install --frozen-lockfile --os darwin --cpu arm64
 
@@ -201,12 +179,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.COMPILE_ARTIFACT }}
-          path: out
+          path: .
 
       - name: Verify compile output
         shell: bash
         run: |
           test -f out/main/index.js
+          test -f package.json
 
       # Signing / notarization (disabled).
       # Secrets: MACOS_DEVELOPER_ID_APPLICATION_P12 (+ _PASSWORD),
@@ -254,20 +233,6 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - if: needs.compile.outputs.version_ok == 'true'
-        name: set app version
-        shell: bash
-        env:
-          APP_VERSION: ${{ needs.compile.outputs.version }}
-        run: |
-          node <<'EOF'
-          const fs = require('fs');
-          const p = 'package.json';
-          const text = fs.readFileSync(p, 'utf8');
-          const next = text.replace(/("version"\s*:\s*")[^"]*(")/, `$1${process.env.APP_VERSION}$2`);
-          fs.writeFileSync(p, next);
-          EOF
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
@@ -275,12 +240,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.COMPILE_ARTIFACT }}
-          path: out
+          path: .
 
       - name: Verify compile output
         shell: bash
         run: |
           test -f out/main/index.js
+          test -f package.json
 
       - name: Pack Linux release
         run: bun run release:pack:linux
