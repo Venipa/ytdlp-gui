@@ -1,38 +1,49 @@
+name: Release Desktop App
+
 on:
   push:
-    # Sequence of patterns matched against refs/tags
     tags:
-      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+      - "v*"
+
+# One release per tag; do not cancel mid-publish (assets would be partial).
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: "24.14.0"
+  BUN_VERSION: "1.4.0"
+  COMPILE_ARTIFACT: electron-compile
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-
-    # Platforms to build on/for
-    strategy:
-      matrix:
-        os: [
-          windows-latest,
-          macos-latest,
-          ubuntu-latest,
-         ]
-        node-version: [24.14.0]
-
+  # Shared electron-vite build. Pack jobs download this artifact and run electron-builder only (no vite).
+  compile:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.getVersion.outputs.value }}
+      version_ok: ${{ steps.getVersion.outputs.ok }}
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v6
-      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v6
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: ${{ env.BUN_VERSION }}
+
       - if: github.ref_type == 'tag'
         id: getVersion
-        uses: actions/github-script@v7.0.1
+        uses: actions/github-script@v9
         env:
           REF_NAME: ${{ github.ref_name }}
         with:
@@ -40,31 +51,313 @@ jobs:
             const isVersion = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
             const id = process.env.REF_NAME && process.env.REF_NAME.split('v')[1] || process.env.REF_NAME
             core.setOutput("value", id);
-            core.setOutput("ok", isVersion.test(id))
-      - if: github.ref_type == 'tag' && steps.getVersion.outputs.ok
-        name: set app version
-        uses: jossef/action-set-json-field@v2.2
-        with:
-          file: package.json
-          field: version
-          value: ${{ steps.getVersion.outputs.value }}
-      - if: matrix.os != 'macos-latest'
-        name: Install dependencies for windows, linux and intel macos runners
-        run: |
-          bun install --frozen-lockfile
-      - if: matrix.os == 'macos-latest'
-        name: Install dependencies for macos arm64 runner
-        run: |
-          # rebuild libsql deps for macos arm64
-          bun install --frozen-lockfile --os darwin --cpu arm64
+            core.setOutput("ok", String(isVersion.test(id)))
 
-      - name: Build Electron release
-        run: |
-          bun run release
+      # outputs.ok is the string "true"/"false" — bare `if: outputs.ok` is truthy for "false".
+      - if: github.ref_type == 'tag' && steps.getVersion.outputs.ok == 'true'
+        name: set app version
+        shell: bash
         env:
-          # MAIN_VITE_ANYSTACK_API_KEY: ${{ secrets.ANYSTACK_API_KEY }}
-          # MAIN_VITE_ANYSTACK_PRODUCT_ID: ${{ secrets.ANYSTACK_PRODUCT_ID }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ACTION_RUNNER: ${{ matrix.os }}
+          APP_VERSION: ${{ steps.getVersion.outputs.value }}
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const p = 'package.json';
+          const text = fs.readFileSync(p, 'utf8');
+          const next = text.replace(/("version"\s*:\s*")[^"]*(")/, `$1${process.env.APP_VERSION}$2`);
+          fs.writeFileSync(p, next);
+          EOF
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Compile Electron app
+        run: bun run release:compile
+        env:
           VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           VITE_GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Verify compile output
+        shell: bash
+        run: |
+          test -f out/main/index.js
+
+      - name: Upload compile artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.COMPILE_ARTIFACT }}
+          path: out
+          if-no-files-found: error
+          retention-days: 3
+
+      # Avoid parallel pack jobs racing on release create.
+      - name: Ensure draft GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          tag="${{ github.ref_name }}"
+          title="v${{ steps.getVersion.outputs.value }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists"
+          else
+            gh release create "$tag" --draft --title "$title" --notes "Publishing assets…"
+          fi
+
+  build-windows:
+    needs: compile
+    runs-on: windows-latest
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - if: needs.compile.outputs.version_ok == 'true'
+        name: set app version
+        shell: bash
+        env:
+          APP_VERSION: ${{ needs.compile.outputs.version }}
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const p = 'package.json';
+          const text = fs.readFileSync(p, 'utf8');
+          const next = text.replace(/("version"\s*:\s*")[^"]*(")/, `$1${process.env.APP_VERSION}$2`);
+          fs.writeFileSync(p, next);
+          EOF
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Download compile artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.COMPILE_ARTIFACT }}
+          path: out
+
+      - name: Verify compile output
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath "out/main/index.js")) {
+            throw "missing out/main/index.js"
+          }
+
+      - name: Pack Windows release
+        run: bun run release:pack:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTION_RUNNER: windows-latest
+          VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          VITE_GITHUB_REPOSITORY: ${{ github.repository }}
+
+  build-macos:
+    needs: compile
+    runs-on: macos-latest
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - if: needs.compile.outputs.version_ok == 'true'
+        name: set app version
+        shell: bash
+        env:
+          APP_VERSION: ${{ needs.compile.outputs.version }}
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const p = 'package.json';
+          const text = fs.readFileSync(p, 'utf8');
+          const next = text.replace(/("version"\s*:\s*")[^"]*(")/, `$1${process.env.APP_VERSION}$2`);
+          fs.writeFileSync(p, next);
+          EOF
+
+      - name: Install dependencies for macos arm64 runner
+        run: bun install --frozen-lockfile --os darwin --cpu arm64
+
+      - name: Download compile artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.COMPILE_ARTIFACT }}
+          path: out
+
+      - name: Verify compile output
+        shell: bash
+        run: |
+          test -f out/main/index.js
+
+      # Signing / notarization (disabled).
+      # Secrets: MACOS_DEVELOPER_ID_APPLICATION_P12 (+ _PASSWORD),
+      # APPLE_NOTARY_API_KEY_P8, APPLE_NOTARY_API_KEY_ID, APPLE_NOTARY_API_ISSUER_ID
+      # - name: Prepare Apple notarization key
+      #   run: |
+      #     mkdir -p .secrets
+      #     echo "${{ secrets.APPLE_NOTARY_API_KEY_P8 }}" > .secrets/AuthKey.p8
+      #     chmod 600 .secrets/AuthKey.p8
+
+      - name: Pack macOS release
+        run: bun run release:pack:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTION_RUNNER: macos-latest
+          VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          VITE_GITHUB_REPOSITORY: ${{ github.repository }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # CSC_LINK: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_P12 }}
+          # CSC_KEY_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_PASSWORD }}
+          # APPLE_API_KEY: ${{ format('{0}/.secrets/AuthKey.p8', github.workspace) }}
+          # APPLE_API_KEY_ID: ${{ secrets.APPLE_NOTARY_API_KEY_ID }}
+          # APPLE_API_ISSUER: ${{ secrets.APPLE_NOTARY_API_ISSUER_ID }}
+
+      # - if: always()
+      #   name: Cleanup Apple secrets
+      #   run: rm -rf .secrets
+
+  build-linux:
+    needs: compile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - if: needs.compile.outputs.version_ok == 'true'
+        name: set app version
+        shell: bash
+        env:
+          APP_VERSION: ${{ needs.compile.outputs.version }}
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const p = 'package.json';
+          const text = fs.readFileSync(p, 'utf8');
+          const next = text.replace(/("version"\s*:\s*")[^"]*(")/, `$1${process.env.APP_VERSION}$2`);
+          fs.writeFileSync(p, next);
+          EOF
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Download compile artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.COMPILE_ARTIFACT }}
+          path: out
+
+      - name: Verify compile output
+        shell: bash
+        run: |
+          test -f out/main/index.js
+
+      - name: Pack Linux release
+        run: bun run release:pack:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTION_RUNNER: ubuntu-latest
+          VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          VITE_GITHUB_REPOSITORY: ${{ github.repository }}
+
+  finalize-release:
+    needs:
+      - build-windows
+      - build-macos
+      - build-linux
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag'
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Parse version from tag
+        id: version
+        shell: bash
+        run: |
+          tag="${{ github.ref_name }}"
+          version="${tag#v}"
+          echo "Tag=$tag Version=$version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build release notes from commits
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          tag="${{ steps.version.outputs.tag }}"
+          prev=""
+          if prev=$(gh release list --exclude-drafts --limit 20 --json tagName --jq ".[] | select(.tagName != \"$tag\") | .tagName" | head -n1); then
+            :
+          else
+            prev=""
+          fi
+
+          if [ -z "$prev" ]; then
+            prev=$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null || true)
+          fi
+
+          if [ -z "$prev" ]; then
+            echo "No previous published release, listing all commits reachable from $tag"
+            git log --pretty=tformat:"- %s (%h)" "$tag" > release-notes-commits.txt || true
+          else
+            echo "Commits: $prev..$tag"
+            git log --pretty=tformat:"- %s (%h)" "$prev..$tag" > release-notes-commits.txt || true
+          fi
+
+          if [ ! -s release-notes-commits.txt ]; then
+            echo "- No commits listed for this range." > release-notes-commits.txt
+          fi
+
+          {
+            echo "## Changes"
+            echo
+            cat release-notes-commits.txt
+            echo
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Set draft release title and notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          tag="${{ steps.version.outputs.tag }}"
+          version="${{ steps.version.outputs.version }}"
+          gh release edit "$tag" \
+            --draft \
+            --title "v$version" \
+            --notes-file release-notes.md
