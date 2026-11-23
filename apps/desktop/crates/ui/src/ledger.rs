@@ -89,12 +89,20 @@ pub enum Rule {
 #[derive(IntoElement)]
 pub struct ProgressRule {
     rule: Rule,
+    spoken: Option<(ElementId, SharedString)>,
 }
 
 impl ProgressRule {
     /// A rule in state `rule`.
     pub fn new(rule: Rule) -> Self {
-        Self { rule }
+        Self { rule, spoken: None }
+    }
+
+    /// Puts the rule in the accessibility tree as a progress indicator named `name`; a rule
+    /// that only decorates a row that already speaks stays out of it.
+    pub fn spoken(mut self, id: impl Into<ElementId>, name: impl Into<SharedString>) -> Self {
+        self.spoken = Some((id.into(), name.into()));
+        self
     }
 }
 
@@ -102,7 +110,13 @@ impl RenderOnce for ProgressRule {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = *cx.theme();
         let rule = self.rule;
-        canvas(
+        let spoken = self.spoken;
+        let fraction = match rule {
+            Rule::Fill(done) => Some(f64::from(done.clamp(0., 1.))),
+            Rule::Solid => Some(1.),
+            _ => None,
+        };
+        let line = canvas(
             |_, _, _| (),
             move |bounds, _, window, cx| {
                 let base = bounds.origin.y + bounds.size.height;
@@ -170,7 +184,24 @@ impl RenderOnce for ProgressRule {
         )
         .w_full()
         .h(px(FILL))
-        .flex_none()
+        .flex_none();
+        let node = div()
+            .id(spoken
+                .as_ref()
+                .map_or_else(|| "rule".into(), |(id, _)| id.clone()))
+            .w_full()
+            .child(line);
+        match spoken {
+            Some((_, name)) => node
+                .role(Role::ProgressIndicator)
+                .aria_label(name)
+                .when_some(fraction, |this, value| {
+                    this.aria_numeric_value(value)
+                        .aria_min_numeric_value(0.)
+                        .aria_max_numeric_value(1.)
+                }),
+            None => node,
+        }
     }
 }
 
@@ -182,6 +213,7 @@ pub struct Thumbnail {
     width: Pixels,
     audio: bool,
     pill: Option<SharedString>,
+    alt: Option<(ElementId, SharedString)>,
 }
 
 impl Thumbnail {
@@ -198,12 +230,19 @@ impl Thumbnail {
             width,
             audio: false,
             pill: None,
+            alt: None,
         }
     }
 
     /// Shows a note icon instead of a film strip when there is no image.
     pub fn audio(mut self, audio: bool) -> Self {
         self.audio = audio;
+        self
+    }
+
+    /// Puts the cover in the accessibility tree as an image described by `alt`.
+    pub fn alt(mut self, id: impl Into<ElementId>, alt: impl Into<SharedString>) -> Self {
+        self.alt = Some((id.into(), alt.into()));
         self
     }
 
@@ -226,7 +265,12 @@ impl RenderOnce for Thumbnail {
                 true => "icons/music.svg",
                 false => "icons/film.svg",
             });
+        let alt = self.alt;
         div()
+            .id(alt
+                .as_ref()
+                .map_or_else(|| "thumbnail".into(), |(id, _)| id.clone()))
+            .when_some(alt, |this, (_, alt)| this.role(Role::Image).aria_label(alt))
             .relative()
             .flex_none()
             .w(self.width)
@@ -435,6 +479,7 @@ impl RenderOnce for SideNav {
 pub struct TokenInput {
     input: Entity<Input>,
     tokens: Vec<(SharedString, bool)>,
+    spoken: Option<(ElementId, SharedString)>,
 }
 
 impl TokenInput {
@@ -443,14 +488,28 @@ impl TokenInput {
         Self {
             input: input.clone(),
             tokens,
+            spoken: None,
         }
+    }
+
+    /// Puts the field and its tokens in the accessibility tree as a search region named `name`.
+    pub fn spoken(mut self, id: impl Into<ElementId>, name: impl Into<SharedString>) -> Self {
+        self.spoken = Some((id.into(), name.into()));
+        self
     }
 }
 
 impl RenderOnce for TokenInput {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = *cx.theme();
+        let spoken = self.spoken;
         div()
+            .id(spoken
+                .as_ref()
+                .map_or_else(|| "token-input".into(), |(id, _)| id.clone()))
+            .when_some(spoken, |this, (_, name)| {
+                this.role(Role::Search).aria_label(name)
+            })
             .flex()
             .items_center()
             .gap_2()

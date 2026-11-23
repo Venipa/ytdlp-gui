@@ -144,7 +144,11 @@ impl Downloads {
             .flex()
             .gap_3()
             .items_start()
-            .child(Thumbnail::new(thumb, px(112.)).audio(s.kind == MediaKind::Audio))
+            .child(
+                Thumbnail::new(thumb, px(112.))
+                    .alt("detail-cover", t!("dl-cover-alt"))
+                    .audio(s.kind == MediaKind::Audio),
+            )
             .child(
                 div()
                     .flex()
