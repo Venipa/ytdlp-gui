@@ -82,6 +82,8 @@ pub struct Settings {
     pub theme: String,
     pub language: String,
     pub compact_mode: bool,
+    /// Whether download rows show a thumbnail (ledger rows) instead of the compact style.
+    pub show_thumbnails: bool,
     pub font_size: f32,
     pub output_dir: String,
     pub outtmpl: String,
@@ -118,6 +120,7 @@ impl Default for Settings {
             theme: "dark".into(),
             language: "en-US".into(),
             compact_mode: false,
+            show_thumbnails: false,
             font_size: 13.0,
             output_dir: dirs::video_dir()
                 .or_else(dirs::home_dir)
