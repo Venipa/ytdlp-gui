@@ -2,6 +2,7 @@
 
 mod assets;
 mod platform;
+mod selftest;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -67,6 +68,9 @@ fn build_app(_data_dir: Option<PathBuf>, _cx: &mut App) -> Backend {
 }
 
 fn main() -> ExitCode {
+    if let Some(code) = selftest::dispatch() {
+        return code;
+    }
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("ytdlpd=info"))
         .init();
     let args = Args::parse();

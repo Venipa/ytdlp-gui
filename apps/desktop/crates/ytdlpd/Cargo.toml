@@ -5,15 +5,16 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-# The embedded yt-dlp engine. Does nothing yet; `--no-default-features` builds against the fake
-# backend with no Python (D-043).
+# The embedded yt-dlp engine (links the PBS libpython, run `bun run setup` first).
+# `--no-default-features` builds against the fake backend with no Python (D-043).
 default = ["real-engine"]
-real-engine = []
+real-engine = ["dep:engine"]
 
 [dependencies]
 anyhow.workspace = true
 cli.workspace = true
 clap.workspace = true
+engine = { workspace = true, optional = true }
 env_logger.workspace = true
 futures.workspace = true
 gpui.workspace = true
