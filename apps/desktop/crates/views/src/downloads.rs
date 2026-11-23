@@ -15,15 +15,15 @@ use domain::{
 };
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, App, ClipboardItem, Context, Entity, ExternalPaths, FocusHandle, Pixels, Point,
-    ScrollStrategy, SharedString, Subscription, UniformListScrollHandle, Window, div, px,
-    uniform_list,
+    AnyElement, App, ClipboardItem, Context, Entity, ExternalPaths, FocusHandle, Focusable as _,
+    MouseButton, Pixels, Point, ScrollStrategy, SharedString, Subscription,
+    UniformListScrollHandle, Window, div, px, uniform_list,
 };
 use i18n::t;
 use state::{AppState, DownloadsEvent, IntakeEvent, ProbeState};
 use ui::{
-    ActiveTheme as _, Button, Chip, FORM_CONTEXT, Input, Kbd, MONO, Scrollbar, Scroller, Submit,
-    Text, TextArea, TokenInput, Vacancy,
+    ActiveTheme as _, Button, Chip, FORM_CONTEXT, Input, Kbd, Scrollbar, Scroller, Submit, Text,
+    TextArea, TokenInput, Vacancy,
 };
 
 use crate::format;
@@ -38,6 +38,8 @@ const UNDO: Duration = Duration::from_secs(6);
 pub(crate) const FADE: Duration = Duration::from_millis(160);
 /// How often the free space of the output drive is read again.
 const FREE_EVERY: Duration = Duration::from_secs(5);
+/// How many lines the editor of several links shows before it scrolls.
+const EDITOR_LINES: f32 = 8.;
 /// The narrowest window that docks the detail panel beside the list; narrower ones lay it over.
 const DOCK_AT: f32 = 1100.;
 
@@ -99,6 +101,8 @@ pub struct Downloads {
     pub(crate) skipped: Vec<String>,
     /// Enter was pressed while the page was still being read.
     enter_waits: bool,
+    /// The editor of several links is open over the list.
+    pub(crate) editing: bool,
     last_text: String,
     /// The open Choose formats modal.
     pub(crate) formats: Option<Draft>,
@@ -145,8 +149,7 @@ impl Downloads {
             TextArea::new("dl-intake-hint", cx)
                 .name("dl-intake-name")
                 .icon("icons/link.svg")
-                // shortcut: one line tall in the layout until the owner picks how it grows
-                // (preview round), the lines scroll inside it
+                // one line tall in the layout; several lines open the editor over the list
                 .max_lines(1.)
                 .clearable()
         });
@@ -167,7 +170,13 @@ impl Downloads {
                 }
             }),
             cx.observe(&search, |_, _, cx| cx.notify()),
-            cx.observe(&intake, |this, _, cx| this.intake_changed(cx)),
+            cx.observe_in(&intake, window, |this, _, window, cx| {
+                // only an edit opens it: Esc folds it while the field keeps focus
+                if this.intake_changed(cx) {
+                    this.editor_follows(window, cx);
+                }
+            }),
+            cx.on_focus(&intake.focus_handle(cx), window, Self::editor_follows),
             cx.subscribe(&intake, |this, _, _: &ui::Pasted, cx| this.pasted(cx)),
             cx.observe(&app.downloads, |_, _, cx| cx.notify()),
             cx.observe(&app.settings, |_, _, cx| cx.notify()),
@@ -205,6 +214,7 @@ impl Downloads {
             urls: Vec::new(),
             skipped: Vec::new(),
             enter_waits: false,
+            editing: false,
             last_text: String::new(),
             formats: None,
             format_scroll: Default::default(),
@@ -347,21 +357,64 @@ impl Downloads {
     }
 
     /// Typing edits a link, pasting starts reading it.
-    fn intake_changed(&mut self, cx: &mut Context<Self>) {
+    /// Whether the text changed (a caret move notifies too).
+    fn intake_changed(&mut self, cx: &mut Context<Self>) -> bool {
         let text = self.intake.read(cx).text().to_owned();
         if text == self.last_text {
-            return;
+            return false;
         }
         let pasted = text.len() > self.last_text.len() + 1;
         self.last_text.clone_from(&text);
         if text.trim().is_empty() {
             self.clear_card(cx);
+            self.close_editor(cx);
         } else if pasted {
             self.begin(cx);
-        } else if !self.urls.is_empty() {
+        } else if !self.urls.is_empty() && !self.editing {
+            // the editor keeps what was read while lines are typed; Enter reads the new ones
             self.clear_card(cx);
         }
         cx.notify();
+        true
+    }
+
+    /// Opens the editor while the focused field holds more than one line (owner pick 3A: on
+    /// focus, on Shift+Enter, on a paste of several links).
+    fn editor_follows(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let several = self.intake.read(cx).text().contains('\n');
+        if several && !self.editing && self.intake.focus_handle(cx).is_focused(window) {
+            self.open_editor(window, cx);
+        }
+    }
+
+    pub(crate) fn open_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editing = true;
+        self.intake.update(cx, |area, cx| {
+            area.set_max_lines(EDITOR_LINES, cx);
+            area.focus(window, cx);
+        });
+        cx.notify();
+    }
+
+    /// Folds the editor back into the one-line field, which shows the first link again.
+    pub(crate) fn close_editor(&mut self, cx: &mut Context<Self>) {
+        if !std::mem::take(&mut self.editing) {
+            return;
+        }
+        self.intake.update(cx, |area, cx| {
+            area.set_notes(None, cx);
+            area.set_max_lines(1., cx);
+            area.move_to_start(cx);
+        });
+        cx.notify();
+    }
+
+    /// Whether a link of the card is still being read.
+    fn reading(&self, cx: &App) -> bool {
+        let probes = self.app.probes.read(cx);
+        self.urls
+            .iter()
+            .any(|url| matches!(probes.get(url), None | Some(ProbeState::Loading)))
     }
 
     fn probe_opts(&self, cx: &App) -> ProbeOpts {
@@ -378,7 +431,13 @@ impl Downloads {
     pub(crate) fn begin(&mut self, cx: &mut Context<Self>) {
         let text = self.intake.read(cx).text().to_owned();
         let split = split_urls(&text);
-        self.release(cx);
+        // a link that stays keeps its probe (a failed one is read again)
+        for url in std::mem::take(&mut self.urls) {
+            if !split.urls.contains(&url) {
+                self.app.probes.update(cx, |p, cx| p.remove(&url, cx));
+            }
+        }
+        self.enter_waits = false;
         self.skipped = split.invalid.into_iter().map(|(_, word)| word).collect();
         self.urls = split.urls;
         self.playlist_off.clear();
@@ -427,7 +486,12 @@ impl Downloads {
     }
 
     fn probes_changed(&mut self, cx: &mut Context<Self>) {
-        if self.enter_waits && matches!(self.card(cx), Card::Result(_)) {
+        let settled = match self.card(cx) {
+            Card::Result(_) => true,
+            Card::Batch => !self.reading(cx),
+            _ => false,
+        };
+        if self.enter_waits && settled {
             self.enter_waits = false;
             self.download(cx);
         }
@@ -440,6 +504,13 @@ impl Downloads {
 
     /// Enter in the field and the Download button.
     pub(crate) fn submit(&mut self, cx: &mut Context<Self>) {
+        // links typed in the editor since the last read are read first, then downloaded
+        let links = split_urls(self.intake.read(cx).text()).urls;
+        if (self.editing || links.len() > 1) && !links.is_empty() && links != self.urls {
+            self.begin(cx);
+            self.enter_waits = true;
+            return;
+        }
         match self.card(cx) {
             Card::None | Card::NotLink => self.begin(cx),
             Card::Probing => self.enter_waits = true,
@@ -448,6 +519,7 @@ impl Downloads {
                 let urls = self.urls.clone();
                 self.fill(&urls, cx);
             }
+            Card::Batch if self.reading(cx) => self.enter_waits = true,
             Card::Result(_) | Card::Batch | Card::Playlist(_) => self.download(cx),
         }
     }
@@ -527,6 +599,7 @@ impl Downloads {
         self.intake.update(cx, |input, cx| input.set_text("", cx));
         self.last_text.clear();
         self.clear_card(cx);
+        self.close_editor(cx);
     }
 
     /// Adds one download; `format_spec` is for the Custom preset.
@@ -1091,33 +1164,45 @@ impl Downloads {
             .into_any_element()
     }
 
-    fn intake_strip(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn intake_strip(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let theme = *cx.theme();
         let text = self.intake.read(cx).text().trim().to_owned();
         let links = split_urls(&text).urls.len();
         let valid = links > 0;
         let invalid = !text.is_empty() && !valid;
-        let note = match (invalid, links) {
-            (true, _) => Some(t!("dl-intake-invalid")),
-            (false, 2..) => Some(t!("dl-intake-count", count = links)),
-            _ => None,
-        };
+        let note = invalid.then(|| t!("dl-intake-invalid"));
+        // several links: the first shows, a chip counts the rest (owner pick 2A)
+        let badge = (links > 1).then(|| t!("dl-intake-more", count = links - 1));
+        self.intake.update(cx, |area, cx| area.set_badge(badge, cx));
         // the card has its own Download once it can download; one primary action at a time
         let own = matches!(
             self.card(cx),
-            Card::Result(_) | Card::Batch | Card::Playlist(_) | Card::Failed(_)
+            Card::Result(_) | Card::Playlist(_) | Card::Failed(_)
         );
-        // the box grows a line at a time; the note and the button stay level with its first line
+        // the field keeps one line in the layout; the editor of several lies over the list
+        let field = match self.editing {
+            true => self.intake.read(cx).face(window, cx).into_any_element(),
+            false => self.intake.clone().into_any_element(),
+        };
         div()
             .flex()
             .items_start()
             .gap(theme.metrics.pad)
             .child(
                 div()
+                    .relative()
                     .flex_1()
                     .min_w_0()
-                    .font_family(MONO)
-                    .child(self.intake.clone()),
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _, window, cx| {
+                            if !this.editing && this.intake.read(cx).text().contains('\n') {
+                                this.open_editor(window, cx);
+                            }
+                        }),
+                    )
+                    .child(field)
+                    .when(self.editing, |this| this.child(self.editor(cx))),
             )
             .when_some(note, |this, note| {
                 this.child(
@@ -1339,7 +1424,11 @@ impl Render for Downloads {
             });
         let selected = self.selected.and_then(|id| self.summary(id, cx));
         // the card gives a list row back where the list drops its format column
-        let card = self.card_view(!cols.format, cx);
+        // the editor says what became of each link itself, and nothing under it may move
+        let card = match self.editing {
+            true => None,
+            false => self.card_view(!cols.format, cx),
+        };
         let banner = self.tools_banner(cx);
         let menu = self.row_menu(cx);
         let confirm = self.confirm_view(cx);
@@ -1379,7 +1468,7 @@ impl Render for Downloads {
                                             .on_action(cx.listener(|this, _: &Submit, _, cx| {
                                                 this.submit(cx)
                                             }))
-                                            .child(self.intake_strip(cx)),
+                                            .child(self.intake_strip(window, cx)),
                                     )
                                     .children(card)
                                     .children(banner)
@@ -1406,9 +1495,26 @@ impl Render for Downloads {
 }
 
 /// Every whitespace-separated word of `text` on a line of its own.
+/// Every whitespace-separated word of a line that holds a link on a line of its own; a line
+/// without one stays whole, so a stray sentence is one skipped line.
 fn one_per_line(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(
-        "
-",
-    )
+    text.lines()
+        .flat_map(|line| match split_urls(line).urls.is_empty() {
+            true => vec![line.trim()],
+            false => line.split_whitespace().collect(),
+        })
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_paste_splits_links_and_keeps_a_stray_line_whole() {
+        assert_eq!(
+            super::one_per_line("https://a.example/1 https://b.example/2\r\n\nnot a link  \n"),
+            "https://a.example/1\nhttps://b.example/2\nnot a link"
+        );
+    }
 }
