@@ -18,7 +18,6 @@ use crate::tooltip::{Perch, Tipped as _};
 /// The fill of an unselected chip and the one it lifts to on hover, as shares of the foreground.
 const CHIP_FILL: f32 = 0.08;
 const CHIP_HOVER: f32 = 0.14;
-const FADED: f32 = 0.55;
 /// How much of a white tint a frosted ghost or outline button shows when hovered
 /// and when pressed, so the fill lightens the content under the glass blur rather than
 /// laying a themed slab over it.
@@ -523,6 +522,14 @@ impl RenderOnce for Button {
             on_hover,
         } = self;
 
+        // an icon alone sits in a square as tall as the button
+        let square = label.is_none()
+            && leading.is_none()
+            && detail.is_none()
+            && trailing.is_none()
+            && reserve.is_empty()
+            && icon.is_some();
+
         let shape = window.use_keyed_state(
             ElementId::NamedChild(Arc::new(id.clone()), "shape".into()),
             cx,
@@ -607,11 +614,14 @@ impl RenderOnce for Button {
             palette.active = None;
         }
         if disabled {
-            palette.foreground = match palette.background.is_some() {
-                true => theme.muted_foreground,
-                false => theme.muted_foreground.opacity(FADED),
+            // disabled reads from the fill, not from fading the label: pencil stays above 4.5:1
+            // on the flat drawer an outline button takes, and above 3:1 on the edge fill
+            palette.foreground = theme.muted_foreground;
+            palette.background = match (palette.background, palette.border) {
+                (Some(_), _) => Some(theme.muted),
+                (None, Some(_)) => Some(theme.secondary),
+                (None, None) => None,
             };
-            palette.background = palette.background.map(|_| theme.muted);
             palette.border = palette.border.map(|_| theme.border);
             palette.hover = None;
             palette.active = None;
@@ -820,6 +830,7 @@ impl RenderOnce for Button {
             .gap(gap)
             .h(height)
             .px(padding)
+            .when(square, |this| this.w(height).px(px(0.)))
             .rounded(radius)
             // Mid-resize the box is narrower or wider than what it holds, so the content keeps
             // its own width from the leading edge and the box clips it as it grows. It leaves the

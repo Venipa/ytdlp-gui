@@ -129,9 +129,10 @@ impl RenderOnce for Switch {
             true => (theme.secondary_hover, theme.primary_hover),
             false => (theme.primary_hover, theme.secondary_hover),
         };
+        // the off handle is paper, so it stands out of the dark track as clearly as the on one
         let (knob_was, knob_is) = match checked {
-            true => (theme.muted_foreground, theme.primary_foreground),
-            false => (theme.primary_foreground, theme.muted_foreground),
+            true => (theme.foreground, theme.primary_foreground),
+            false => (theme.primary_foreground, theme.foreground),
         };
         let check = theme.primary;
         // The handle at `t` of the way from off to on: its place, its size and how much of the

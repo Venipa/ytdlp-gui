@@ -1,8 +1,8 @@
-//! The keyboard focus ring every focusable part shares: a 1px ink-blue edge that shows only when
-//! focus arrived by keyboard.
+//! The keyboard focus ring every focusable part shares: an ink-blue edge with a 2px halo, the
+//! same ring a focused field wears, shown only when focus arrived by keyboard.
 
 use gpui::prelude::*;
-use gpui::{App, ElementId, FocusHandle, Window};
+use gpui::{App, BoxShadow, ElementId, FocusHandle, Window, point, px};
 
 use crate::theme::ActiveTheme as _;
 
@@ -14,9 +14,17 @@ where
 {
     let ring = cx.theme().table_active_border;
     let handle = handle(id, window, cx);
+    // the halo sits outside the edge, so a selected part (ink edge too) still shows its focus
+    let halo = BoxShadow {
+        color: ring.opacity(0.4),
+        offset: point(px(0.), px(0.)),
+        blur_radius: px(0.),
+        spread_radius: px(2.),
+        inset: false,
+    };
     element
         .track_focus(&handle)
-        .focus_visible(move |style| style.border_1().border_color(ring))
+        .focus_visible(move |style| style.border_1().border_color(ring).shadow(vec![halo]))
 }
 
 /// The focus handle `focusable` keeps for `id`, for callers that move focus to it.
