@@ -65,7 +65,7 @@ Exit checklist (G0):
 | Lane D: hidden flags `--demo`, `--self-test`, `--frame-stats` (debug), `scripts/screenshot.ps1` | open | `crates/ytdlpd`, `scripts/screenshot.ps1` |
 
 Exit checklist (G1):
-- [ ] migration 0001 applies on `sqlite::memory:` and a temp file; `PRAGMA journal_mode=wal`, `foreign_keys=1`, all 7 tables, CHECKs reject bad status/kind
+- [ ] migration 0001 applies on `sqlite::memory:` and a temp file; `PRAGMA journal_mode=wal`, `foreign_keys=1`, all 6 tables, CHECKs reject bad status/kind
 - [ ] settings.json round trip + hot reload < 1 s; invalid JSON keeps last good and logs; `settings_used` green
 - [ ] contrast test green for dark and light
 - [ ] engine: fixture mp4 download returns `Finished{path}` equal to the file on disk; kill-tree test (child spawns child, kill, both dead) green on Windows

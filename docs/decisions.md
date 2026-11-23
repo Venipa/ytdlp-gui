@@ -109,3 +109,11 @@ Status: adopted or retired. "Orig" is the id used in the round 1 to 3 notes (D-0
 
 ## UI picks recorded during the build
 (Empty. Lanes append rows here: id, screen, pick, alternative, screenshot path under `F:\tmp\ytdlpd-rs\shots\`.)
+
+## Build log (decisions made during implementation)
+| ID | Area | Decision | Why | Owner may change | Status |
+|---|---|---|---|---|---|
+| D-068 | Engine | G1 passed on Windows x64: PyO3 0.30.1 embeds PBS CPython 3.14.10 via `PYO3_CONFIG_FILE`, PEP 741 init; `--engine-worker` child per download, Job Object per worker with KILL_ON_JOB_CLOSE; worker.py fallback NOT built. Measured: Python init 6-8 ms, import yt_dlp 250-330 ms, worker ready ~266 ms, worker RSS ~66 MB, runtime 80 MB on disk / 28.4 MB tar.gz (.pyc kept: saves ~0.6 s per worker start). Spike report: `apps/desktop/crates/engine/SPIKE.md` | measured | no | adopted |
+| D-069 | Data | sqlx 0.9.1 works (runtime-tokio, sqlite, migrate, macros); `query*` take `&'static str` so column lists use `concat!` | verified by lane C | no | adopted |
+| D-070 | Tools | `zip` pinned to 2.x (tested API) instead of the unverified 9 in Phase 0a | tools crate built and tested against 2.x | no | adopted |
+| D-071 | Tools | BtbN branch discovered from `checksums.sha256` (no GitHub API, no rate limit); deno Windows `.sha256sum` is PowerShell `Get-FileHash` format, parser accepts both | live findings | no | adopted |

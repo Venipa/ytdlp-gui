@@ -6,3 +6,22 @@ license.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+anyhow.workspace = true
+dirs.workspace = true
+flate2.workspace = true
+liblzma.workspace = true
+log.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tar.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["fs"] }
+zip.workspace = true
+
+[dev-dependencies]
+env_logger.workspace = true

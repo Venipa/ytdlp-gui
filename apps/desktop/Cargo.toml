@@ -119,7 +119,7 @@ zbus = { version = "6", default-features = false, features = [
     "proxy",
     "tokio",
 ] }
-zip = { version = "9", default-features = false, features = ["deflate"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
 windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_Graphics_Direct3D",
