@@ -40,6 +40,7 @@ pub struct Workspace {
     routed: bool,
     /// Whether the left button went down on the bar and has not moved the window yet.
     grabbed: bool,
+    _focus_lost: gpui::Subscription,
 }
 
 impl Workspace {
@@ -92,7 +93,17 @@ impl Workspace {
         .detach();
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
+        // a focused part that leaves (a toast timing out under the keyboard) leaves nothing
+        // focused, and keys then reach no handler: focus falls back to the closest part still
+        // shown, else the workspace, so Tab carries on
+        let focus_lost = cx.on_focus_lost(window, |this: &mut Self, window, cx| {
+            let to = window
+                .focus_lost_restore_target(cx)
+                .unwrap_or_else(|| this.focus.clone());
+            window.focus(&to, cx);
+        });
         Self {
+            _focus_lost: focus_lost,
             navigation,
             focus,
             downloads,
@@ -197,6 +208,8 @@ impl Workspace {
             .rounded(theme.radius)
             .cursor_pointer()
             .text_color(tint)
+            // the open page's tab carries the selection wash as well as its ink underline
+            .when(on, |this| this.bg(theme.table_active))
             .hover(|style| style.bg(theme.secondary_hover).text_color(theme.foreground))
             .active(|style| style.bg(theme.secondary_active))
             .tip(tip, Perch::Below)

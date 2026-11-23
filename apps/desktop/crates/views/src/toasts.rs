@@ -230,12 +230,21 @@ impl Render for ToastLayer {
                 }
                 let fade = item.leaving;
                 let kept = item.left.as_secs_f32() / item.life.as_secs_f32().max(0.001);
-                // the card sits in a tray of its own, so it casts no shadow over the page
+                // the card sits in a tray of its own, so it casts no shadow over the page; cards
+                // side by side stretch to one height, so their edges and countdowns line up
                 div()
                     .relative()
+                    .flex()
+                    .flex_col()
                     .w(px(400.))
                     .max_w_full()
-                    .child(card.shadow_none())
+                    .child(
+                        card.shadow_none()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .justify_center(),
+                    )
                     .child(
                         div()
                             .absolute()
@@ -243,7 +252,8 @@ impl Render for ToastLayer {
                             .bottom(px(1.))
                             .h(px(2.))
                             .w(relative(kept.clamp(0., 1.)))
-                            .bg(theme.muted_foreground.opacity(0.5)),
+                            // the countdown takes the card's icon colour
+                            .bg(theme.popover_foreground.opacity(0.6)),
                     )
                     .with_animation(
                         ("toast-fade", id as usize * 2 + usize::from(fade)),

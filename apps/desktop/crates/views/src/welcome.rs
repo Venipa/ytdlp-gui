@@ -104,14 +104,14 @@ pub fn welcome(cx: &App) -> AnyElement {
             let mut danger = false;
             let (state, rule): (SharedString, Rule) = match &tool.state {
                 ToolState::Ready if tool.source == Some(ToolSource::Path) => {
-                    (t!("welcome-found"), Rule::Solid)
+                    (t!("welcome-found"), Rule::Hairline)
                 }
-                ToolState::Ready => (t!("welcome-ready"), Rule::Solid),
-                ToolState::Checking => (t!("welcome-checking"), Rule::Dotted),
-                ToolState::Missing => (t!("welcome-waiting"), Rule::Dotted),
+                ToolState::Ready => (t!("welcome-ready"), Rule::Hairline),
+                ToolState::Checking => (t!("welcome-checking"), Rule::Pulse),
+                ToolState::Missing => (t!("welcome-waiting"), Rule::Hairline),
                 ToolState::Failed(error) => {
                     danger = true;
-                    (error_text(error.code), Rule::Failed)
+                    (error_text(error.code), Rule::Hairline)
                 }
                 ToolState::Downloading { done, total } => (
                     match total {
