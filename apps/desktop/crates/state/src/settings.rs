@@ -88,6 +88,11 @@ impl AppSettings {
 
     /// Re-reads the file. Invalid JSON keeps the last good value and records the error.
     pub fn reload(&mut self, cx: &mut Context<Self>) {
+        // An own edit is waiting to be written: the file is older than memory (often the echo of
+        // our previous save), and reloading it would undo that edit.
+        if self.save.is_some() {
+            return;
+        }
         let loaded = Settings::load(&self.path, &self.settings);
         self.error = loaded.error;
         if self.error.is_some() {
@@ -194,6 +199,21 @@ fn watch_file(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gpui::AppContext as _;
+
+    #[gpui::test]
+    fn reload_keeps_an_edit_that_is_not_saved_yet(cx: &mut gpui::TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        Settings::default().save(&path).unwrap();
+        let s = cx.new(|_| AppSettings::detached(path, Settings::default()));
+        s.update(cx, |s, cx| {
+            s.update(|v| v.theme = "nord".into(), cx);
+            // the watcher's echo of an earlier save arrives while this edit is pending
+            s.reload(cx);
+            assert_eq!(s.get().theme, "nord");
+        });
+    }
 
     #[test]
     fn watcher_signals_an_edit_within_a_second() {
