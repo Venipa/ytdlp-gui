@@ -89,6 +89,27 @@ maple `motion` presets only. Result card unfold 160 ms ease-out (`Unfold`); ledg
 
 ## Screens
 
+### Navigation (shell, D-223, D-224)
+```
++-----------------------------------------------------------------------+
+| [v] ytdlpd                      (drag area)                 _  []  x  |  title bar 40: mark, drag, controls only
++--------------------+--------------------------------------------------+
+| [v] Downloads  253 |  current page                                    |
+|  =  Logs           |                                                  |
+|  *  Settings     v |                                                  |
+|     | General      |                                                  |
+|     | Downloads    |                                                  |
+|     | ...  About   |                                                  |
++--------------------+--------------------------------------------------+
+```
+- Left sidebar 180 wide (`views::workspace`, rows from `ui::nav_item`), border right `sidebar_border`, padding `pad`, rows `control` + 4 high with a 16 icon and the label; Downloads shows the count of unfinished jobs as a plain muted number at the row end (4B), no badge.
+- Active state everywhere (2B): the quiet filled pill, `secondary_active` under `foreground` text and icon, no accent and no underline; others `muted_foreground`. Hover: the lighter `table_hover` fill. Focus: the ink focus ring. Press: `PRESS_SCALE` as maple.
+- Settings (3A): its pages nest under the Settings row while Settings is open (chevron down, `expanded`), on a guide line under its icon, each with its page icon; the open page takes the same pill and the Settings row itself only turns `foreground` (one pill at a time). There is no second side list in Settings.
+- Narrow window (< 900): the sidebar folds to a 48 icon rail; each icon names itself in a tooltip to its right (with Ctrl+N), Downloads speaks its count. While Settings is open the rail lists its pages as icons under a hairline, so every page stays one click away (no flyout).
+- Filter chips (5B): the chosen chip takes the same filled pill; the others are bare muted text (no border) that light on hover.
+- Tools block at the sidebar foot (owner request): one line per tool (yt-dlp, ffmpeg, ffprobe, JavaScript) with the name, the short version in mono (`short_version`) and a 12px glyph: check (ready, muted), circle-alert (missing or failed, `danger`), refresh (downloading or updating, amber) with the ledger rule as progress under the line. The tooltip lists full versions and the source (Managed, Found on this computer, Custom path, Bundled for yt-dlp). The whole block is one control (hover `table_hover`, focus ring, press scale) that opens Settings > Tools; on the rail it is a wrench with a 6px dot, red when a tool is missing, amber while one is busy. Read from `state::Tools` and the yt-dlp version Settings already holds; nothing new is fetched.
+- Ctrl+1..3 open Downloads, Logs, Settings; the sidebar is a `Navigation` landmark ("Pages"), the Settings pages a `Group`.
+
 ### Getting ready (first run, `Destination::Welcome`)
 ```
 +--------------------------------------------------------------+
@@ -112,7 +133,7 @@ Each tool row: name, version (tabular), state; progress as the same ledger rule.
 ### Downloads (home)
 ```
 +----------------------------------------------------------------------------------+
-| ytdlpd    Downloads  Logs  Settings                                  _   []   x  |
+| ytdlpd   (sidebar on the left: Downloads 253, Logs, Settings)       _   []   x  |
 +----------------------------------------------------------------------------------+
 |  [ https://www.youtube.com/watch?v=dQw4w9WgXcQ                  ]    [ Download ]|  intake 40px, mono
 |  +----------------------------------------------------------------------------+  |
@@ -211,13 +232,13 @@ Lazy: `extract_flat` first, entries filled in as they are probed. Created rows s
 ```
 Ids and codec strings mono; sizes tabular sans. Selection rows use ink-blue.
 
-### Settings (left `SideNav`, right form with `Form/Field/SwitchRow/Dropdown`)
+### Settings (pages nested in the sidebar, form with `Form/Field/SwitchRow/Dropdown`)
 ```
 +--------------------------------------------------------------------------+
-| ytdlpd    Downloads  Logs  Settings                                      |
+| ytdlpd                                                                   |
 +----------------+---------------------------------------------------------+
-|  General       |  Downloads                                              |
-|  Downloads  <  |  Save to        D:\Videos\ytdlpd          [Choose]      |
+|  Settings   v  |  Downloads                                              |
+|  | Downloads < |  Save to        D:\Videos\ytdlpd          [Choose]      |
 |  Formats       |  File name      %(title).180B [%(id)s].%(ext)s          |
 |  Network       |  Preview        Never Gonna Give You Up [dQw4w9WgXcQ].mp4
 |  Tools         |  At once        [3]   Per site [2]                      |
@@ -287,9 +308,9 @@ Verified against `E:\git\ytm-maple-rs\apps\desktop\crates\ui\src` (file list rea
 | `ProgressRule` (ledger rule: amber fill on a faint track, travelling pulse, plain hairline) | build (lane A) |
 | `CallNumber` (4-digit mono) | build |
 | `Thumbnail` (gpui img + Skeleton + 16:9 crop; replaces music `Artwork` use) | build |
-| `Chip` (filter chip with count, selected state) | build |
+| `Chip` (filter chip with count, selected state: filled pill, D-224) | built |
 | `TokenInput` (Input with token highlighting for `type:`, `size:`, `status:`, `site:`) | build |
-| `SideNav` (vertical list for Settings) | build (about 1 day) |
+| `nav_item` (sidebar row on `Button`: filled pill, rail mode; replaced `SideNav`, D-224) | built |
 | `Dropzone` overlay for drag and drop | build (Phase 5) |
 | `MONO` const | add |
 | Music-only: Artwork (kept: coupled to card, picker, table, drag), Visualizer, Waves, LevelMeter, ResponseGraph, ResponseSketch, Lattice, Rail, Brand, Deck, Scrubber, Pin, CoverPalette | copy verbatim in 0a, prune leaf ones in Phase 6 |
