@@ -26,8 +26,11 @@ const DOT: f32 = 1.;
 /// Where the probing pulse's clock starts.
 static PULSE_EPOCH: std::sync::LazyLock<std::time::Instant> =
     std::sync::LazyLock::new(std::time::Instant::now);
-/// Thickness of the amber fill over the track.
-const FILL: f32 = 2.;
+/// Thickness of the amber fill and of the faint track it runs along.
+const FILL: f32 = 3.;
+/// How strong an active rule's track is, as an alpha of amber: the whole row width reads as
+/// the distance to go.
+const TRACK: f32 = 0.24;
 /// How strong the dots of a track are, as an alpha of pencil: a quiet ruled line under the text.
 const DOTS: f32 = 0.35;
 /// A chip's side padding and the gap between its label and count.
@@ -147,14 +150,20 @@ impl RenderOnce for ProgressRule {
                             color,
                         ));
                     }
-                    Rule::Dotted | Rule::Fill(_) | Rule::Pulse => {
-                        // the dots start where the fill ends, so an active row has one rule
-                        let mut x = match rule {
-                            Rule::Fill(done) => {
-                                bounds.origin.x + bounds.size.width * done.clamp(0., 1.)
-                            }
-                            _ => bounds.origin.x,
-                        };
+                    Rule::Fill(done) => {
+                        // one line: a faint amber track the row wide, the fill solid over it
+                        window.paint_quad(fill(
+                            at(bounds.origin.x, bounds.size.width, px(FILL)),
+                            theme.progress_bar.opacity(TRACK),
+                        ));
+                        let width = bounds.size.width * done.clamp(0., 1.);
+                        window.paint_quad(fill(
+                            at(bounds.origin.x, width, px(FILL)),
+                            theme.progress_bar,
+                        ));
+                    }
+                    Rule::Dotted | Rule::Pulse => {
+                        let mut x = bounds.origin.x;
                         let end = bounds.origin.x + bounds.size.width;
                         while x < end {
                             window.paint_quad(fill(
@@ -182,13 +191,6 @@ impl RenderOnce for ProgressRule {
                                     theme.progress_bar,
                                 ));
                             }
-                        }
-                        if let Rule::Fill(done) = rule {
-                            let width = bounds.size.width * done.clamp(0., 1.);
-                            window.paint_quad(fill(
-                                at(bounds.origin.x, width, px(FILL)),
-                                theme.progress_bar,
-                            ));
                         }
                     }
                 }
@@ -297,7 +299,7 @@ impl RenderOnce for Thumbnail {
                         .absolute()
                         .right_1()
                         .bottom_1()
-                        .px_1()
+                        .px(px(4.))
                         .rounded(px(2.))
                         .bg(gpui::black().opacity(0.7))
                         .text_color(gpui::white())
@@ -391,7 +393,10 @@ impl RenderOnce for Chip {
             .when_some(self.count, |this, count| {
                 this.child(
                     div()
-                        .text_color(theme.muted_foreground)
+                        .text_color(match selected {
+                            true => theme.table_active_border,
+                            false => theme.foreground.opacity(0.72),
+                        })
                         .font_features(tabular())
                         .child(count.to_string()),
                 )
@@ -567,7 +572,7 @@ impl RenderOnce for TokenInput {
             .gap(px(6.))
             .children(self.tokens.into_iter().map(|(text, valid)| {
                 div()
-                    .px_1()
+                    .px(px(4.))
                     .rounded(theme.radius)
                     .font_family(MONO)
                     .text_size(theme.text(Text::Small))

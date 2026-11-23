@@ -252,7 +252,7 @@ impl RenderOnce for Toast {
             .flex_col()
             .flex_1()
             .min_w_0()
-            .gap_0p5()
+            .gap(px(2.))
             .child(
                 div()
                     .min_w_0()
@@ -269,7 +269,7 @@ impl RenderOnce for Toast {
             .flex()
             .flex_none()
             .items_center()
-            .gap_3()
+            .gap(px(12.))
             .w_full()
             .p(pad)
             .opacity(shown)
@@ -290,7 +290,7 @@ impl RenderOnce for Toast {
                         .flex()
                         .flex_none()
                         .items_center()
-                        .gap_1p5()
+                        .gap(px(4.))
                         .children(cancel.map(|(label, press)| {
                             Button::new((id.clone(), "cancel"))
                                 .ghost()

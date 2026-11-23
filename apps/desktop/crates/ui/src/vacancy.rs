@@ -8,10 +8,10 @@ use crate::label::vacant;
 use crate::metrics::Text;
 use crate::theme::ActiveTheme as _;
 
-const GLYPH: f32 = 0.35;
+/// The glyph's strength, as an alpha of pencil: about 3:1 on the ground, a graphic that reads.
+const GLYPH: f32 = 0.7;
 const GLYPH_SIZE: f32 = 0.5;
 const COMPACT_SIZE: f32 = 0.22;
-const DETAIL: f32 = 0.8;
 const WORDS: f32 = 2.5;
 
 #[derive(IntoElement)]
@@ -144,20 +144,21 @@ fn caption(label: SharedString, detail: SharedString, cx: &App) -> Div {
         .flex()
         .flex_col()
         .items_center()
-        .gap_1()
+        .gap(gpui::px(4.))
         .p(theme.metrics.pad * 2.)
         .max_w(theme.metrics.cover * WORDS)
         .text_align(TextAlign::Center)
         .child(
             div()
-                .text_size(theme.text(Text::Label))
-                .text_color(theme.muted_foreground)
+                .text_size(theme.text(Text::Heading))
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .text_color(theme.foreground)
                 .child(label),
         )
         .child(
             div()
-                .text_size(theme.text(Text::Small))
-                .text_color(theme.muted_foreground.opacity(DETAIL))
+                .text_size(theme.text(Text::Body))
+                .text_color(theme.muted_foreground)
                 .child(detail),
         )
 }
