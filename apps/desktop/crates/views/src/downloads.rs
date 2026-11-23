@@ -234,7 +234,7 @@ impl Downloads {
                 let urls = urls.clone();
                 let intake = self.app.intake.clone();
                 let message = match urls.len() {
-                    1 => t!("dl-toast-clip-one"),
+                    1 => t!("dl-toast-clip-one", link = format::short_link(&urls[0], 36)),
                     n => t!("dl-toast-clip-many", count = n),
                 };
                 toast(

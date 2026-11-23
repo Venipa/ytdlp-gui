@@ -42,6 +42,19 @@ pub fn preset_label(preset: domain::Preset) -> String {
 }
 
 /// `14:03:09` in the local time zone from unix milliseconds.
+/// A link without its scheme and `www.`, cut to `max` characters with an ellipsis.
+pub fn short_link(url: &str, max: usize) -> String {
+    let bare = url.split_once("://").map_or(url, |(_, rest)| rest);
+    let bare = bare.strip_prefix("www.").unwrap_or(bare);
+    match bare.chars().count() > max {
+        true => format!(
+            "{}…",
+            bare.chars().take(max.saturating_sub(1)).collect::<String>()
+        ),
+        false => bare.to_string(),
+    }
+}
+
 pub fn clock(at_ms: i64) -> String {
     jiff::Timestamp::from_millisecond(at_ms)
         .map(|t| {
@@ -54,6 +67,18 @@ pub fn clock(at_ms: i64) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn links_are_shortened() {
+        assert_eq!(
+            super::short_link("https://www.youtube.com/watch?v=abc", 40),
+            "youtube.com/watch?v=abc"
+        );
+        assert_eq!(
+            super::short_link("https://example.com/a-very-long-path", 12),
+            "example.com…"
+        );
+    }
+
     use super::*;
 
     #[test]
