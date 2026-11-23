@@ -292,3 +292,4 @@ Status values per item; Ref is review until the lead sets done. Shots F:\tmp\ytd
 | Round | Item | Status | Ref |
 |---|---|---|---|
 | 1 | Control system (24/28/36, text floor 10/11), `ui::Stepper`, ink focus, title-bar tabs, page gutters, rows with responsive columns, card states, detail overlay, settings side list icons + narrow, logs toolbar, toasts wrap | review | D-180..184; shots F:\tmp\ytdlpd-rs\screenshots\after-round-1 |
+| 2 | Scorecard round 1 fixes 1-17, 19, 20: ruled progress with track, toasts above the status bar, Failed-only detail header, disabled by fill, empty state, card note on the meta line, column captions, state glyphs, detail copy link + two-line facts, focus halo (Tab rings captured), square icon buttons, light amber, settings row hover, switch handle, logs tint; 4px grid in views; thumbnail fetch failures logged | review | D-185..188; shots F:\tmp\ytdlpd-rs\screenshots\after-round-2 |
