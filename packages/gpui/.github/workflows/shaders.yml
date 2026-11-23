@@ -1,0 +1,39 @@
+name: shaders
+
+# Compiles the Metal and HLSL shaders with Apple's and Microsoft's own compilers, which only run
+# on their systems, and builds the squircle example on each so the shapes can be checked by eye.
+# The WGSL shaders are validated by the gpui_wgpu tests instead.
+on:
+  pull_request:
+    paths:
+      - "crates/gpui/src/scene.rs"
+      - "crates/gpui/examples/squircle.rs"
+      - "crates/gpui_apple/**"
+      - "crates/gpui_windows/**"
+  workflow_dispatch:
+
+jobs:
+  metal:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      # The build script generates the scene header and compiles shaders.metal with xcrun.
+      - run: cargo build --release --package gpui --example squircle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: squircle-macos
+          path: target/release/examples/squircle
+
+  hlsl:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      # The build script compiles shaders.hlsl with fxc from the Windows SDK, in release builds
+      # only. Debug builds compile them when the app starts.
+      - run: cargo build --release --package gpui --example squircle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: squircle-windows
+          path: target/release/examples/squircle.exe

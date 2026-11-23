@@ -1,0 +1,67 @@
+[package]
+name = "gpui_macos"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "Apache-2.0"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/gpui_macos.rs"
+doctest = false
+
+[features]
+default = ["gpui/default"]
+bench-support = ["gpui/bench-support", "gpui_apple/bench-support"]
+test-support = ["gpui/test-support", "gpui_apple/test-support"]
+runtime_shaders = ["gpui_apple/runtime_shaders"]
+font-kit = ["gpui_apple/font-kit"]
+screen-capture = ["gpui/screen-capture", "dep:objc2-core-graphics", "dep:objc2-core-media", "dep:objc2-screen-capture-kit"]
+
+[dependencies]
+gpui.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+accesskit.workspace = true
+accesskit_macos.workspace = true
+anyhow.workspace = true
+block2.workspace = true
+cocoa.workspace = true
+collections.workspace = true
+core-foundation.workspace = true
+core-foundation-sys.workspace = true
+core-graphics.workspace = true
+ctor.workspace = true
+dispatch2 = { workspace = true, features = ["block2", "objc2"] }
+foreign-types.workspace = true
+futures.workspace = true
+gpui_apple.workspace = true
+gpui_util.workspace = true
+image.workspace = true
+itertools.workspace = true
+log.workspace = true
+objc.workspace = true
+objc2.workspace = true
+objc2-app-kit.workspace = true
+objc2-core-graphics = { workspace = true, optional = true }
+objc2-core-media = { workspace = true, optional = true }
+objc2-core-video = { workspace = true, features = ["CVHostTime"] }
+objc2-foundation.workspace = true
+objc2-screen-capture-kit = { workspace = true, optional = true }
+objc2-user-notifications.workspace = true
+parking_lot.workspace = true
+raw-window-handle.workspace = true
+scheduler.workspace = true
+semver.workspace = true
+smallvec.workspace = true
+strum.workspace = true
+uuid.workspace = true
+
+# The macOS test-only window implementation depends on test-only APIs from both
+# GPUI and the extracted renderer. A dependency does not inherit this crate's
+# `cfg(test)`, so dev-dependencies enable those APIs only for test builds.
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
+gpui_apple = { workspace = true, features = ["test-support"] }

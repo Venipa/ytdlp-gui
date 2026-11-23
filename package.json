@@ -1,0 +1,16 @@
+{
+  "name": "ytdlpd",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter @ytdlpd/desktop dev",
+    "build": "bun run --filter @ytdlpd/desktop build",
+    "check": "bun run --filter @ytdlpd/desktop check",
+    "setup": "bun run --filter @ytdlpd/desktop setup",
+    "dev:hot": "bun run --filter @ytdlpd/desktop dev:hot"
+  }
+}

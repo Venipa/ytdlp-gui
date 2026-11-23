@@ -1,0 +1,8 @@
+target/
+runtime/
+node_modules/
+*.db
+*.log
+.env*
+!.env.example
+.DS_Store
