@@ -16,6 +16,9 @@ use ui::{
 use crate::downloads::{Downloads, Line, error_text_of};
 use crate::format;
 
+/// How much of the paper a paused row's title keeps.
+const PAUSED: f32 = 0.78;
+
 /// The row height of the list (headers included, the list is uniform).
 fn height(thumbs: bool) -> gpui::Pixels {
     match thumbs {
@@ -109,7 +112,7 @@ impl Downloads {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         match line {
-            Line::Header(key, count) => self.header(key, count, thumbs, cx),
+            Line::Header(key, count) => self.header(key, count, thumbs, cols, cx),
             Line::Row(at) => {
                 let Some(s) = self.app.downloads.read(cx).rows().get(at).cloned() else {
                     return div().h(height(thumbs)).into_any_element();
@@ -119,19 +122,31 @@ impl Downloads {
         }
     }
 
+    /// A group's name and count, with the captions of the columns its rows fill.
     fn header(
         &self,
         key: &'static str,
         count: usize,
         thumbs: bool,
+        cols: Columns,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = *cx.theme();
+        let caption = |key: &'static str, width: f32, right: bool| {
+            div()
+                .w(px(width))
+                .flex_none()
+                .truncate()
+                .when(right, |this| this.text_right())
+                .child(i18n::lookup(key, None))
+        };
+        // only rows in progress have a speed to show
+        let speed = cols.speed && key == "dl-group-progress";
         div()
             .flex()
             .flex_none()
             .items_end()
-            .gap_2()
+            .gap(px(12.))
             .h(height(thumbs))
             .w_full()
             .px(theme.metrics.gutter)
@@ -140,10 +155,28 @@ impl Downloads {
             .text_color(theme.muted_foreground)
             .child(
                 div()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(i18n::lookup(key, None)),
+                    .flex()
+                    .flex_1()
+                    .min_w_0()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child(i18n::lookup(key, None)),
+                    )
+                    .child(div().font_features(tabular()).child(count.to_string())),
             )
-            .child(div().font_features(tabular()).child(count.to_string()))
+            .when(cols.format, |this| {
+                this.child(caption("dl-col-format", 88., false))
+            })
+            .child(caption("dl-col-size-head", 72., true))
+            .when(cols.speed, |this| {
+                this.child(match speed {
+                    true => caption("dl-col-speed", 112., true),
+                    false => div().w(px(112.)).flex_none(),
+                })
+            })
+            .child(caption("dl-col-status", cols.status, true))
             .into_any_element()
     }
 
@@ -213,7 +246,7 @@ impl Downloads {
             (Some(speed), DownloadStatus::Downloading) => {
                 let eta = live
                     .and_then(|l| l.eta)
-                    .map(|e| format!("  {}", format::duration(e)))
+                    .map(|e| format!(" · {}", format::duration(e)))
                     .unwrap_or_default();
                 format!("{}{eta}", format::speed(speed))
             }
@@ -329,6 +362,15 @@ impl Downloads {
             .map(SharedString::from);
         let fade = self.fresh.contains_key(&id) && ui::motion::animates(cx);
         let muted = theme.muted_foreground;
+        // a paused row steps back a little, and the state words carry a glyph, so a long list
+        // of paused, done and failed rows separates without reading
+        let paused = s.status == DownloadStatus::Paused;
+        let glyph = match s.status {
+            DownloadStatus::Paused => Some("icons/pause.svg"),
+            DownloadStatus::Completed if !s.file_missing => Some("icons/check.svg"),
+            DownloadStatus::Failed => Some("icons/circle-alert.svg"),
+            _ => None,
+        };
         let row = self
             .shell(s, thumbs, ring, cx)
             .child(
@@ -356,6 +398,9 @@ impl Downloads {
                                 div()
                                     .min_w_0()
                                     .truncate()
+                                    .when(paused, |this| {
+                                        this.text_color(theme.foreground.opacity(PAUSED))
+                                    })
                                     .when(thumbs, |this| {
                                         this.text_size(theme.text(Text::Heading))
                                             .font_weight(FontWeight::MEDIUM)
@@ -410,9 +455,24 @@ impl Downloads {
                             .flex_none()
                             .flex()
                             .justify_end()
+                            .items_center()
                             .gap(px(8.))
                             .text_color(tone)
-                            .child(div().min_w_0().truncate().child(status))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .min_w_0()
+                                    .gap(px(4.))
+                                    .children(glyph.map(|path| {
+                                        gpui::svg()
+                                            .path(icons::path(path))
+                                            .size(px(12.))
+                                            .flex_none()
+                                            .text_color(tone)
+                                    }))
+                                    .child(div().min_w_0().truncate().child(status)),
+                            )
                             .when(active, |this| {
                                 this.child(
                                     div()

@@ -271,21 +271,20 @@ impl Downloads {
             Card::Result(probe) => {
                 let remembered = self.preset == self.remembered;
                 let remembered_label = format::preset_label(self.remembered);
+                // the remembered preset is said once, on the meta line, so the chip rows keep
+                // one line each at any width
                 let meta = [
                     probe.uploader.clone().unwrap_or_default(),
                     domain::domain_of(&probe.url),
+                    match remembered {
+                        true => t!("dl-remembered", preset = remembered_label.as_str()).into(),
+                        false => String::new(),
+                    },
                 ]
                 .into_iter()
                 .filter(|part| !part.is_empty())
                 .collect::<Vec<_>>()
                 .join("  \u{b7}  ");
-                let note = div()
-                    .flex_none()
-                    .text_size(theme.text(Text::Small))
-                    .text_color(muted)
-                    .when(remembered, |this| {
-                        this.child(t!("dl-remembered", preset = remembered_label.as_str()))
-                    });
                 let actions = div()
                     .flex()
                     .flex_none()
@@ -336,9 +335,11 @@ impl Downloads {
                                             .text_color(muted)
                                             .child(meta),
                                     )
-                                    .child(
-                                        div().mt(px(8.)).child(self.preset_rows(note, actions, cx)),
-                                    ),
+                                    .child(div().mt(px(8.)).child(self.preset_rows(
+                                        div(),
+                                        actions,
+                                        cx,
+                                    ))),
                             ),
                     )
                     .child(

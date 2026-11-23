@@ -241,7 +241,7 @@ impl Downloads {
             .flex_col()
             .child(
                 div()
-                    .py_1()
+                    .py(px(4.))
                     .text_color(match active {
                         true => theme.foreground,
                         false => muted,
@@ -363,14 +363,14 @@ impl Downloads {
                     div()
                         .flex()
                         .flex_col()
-                        .gap_2()
+                        .gap(px(8.))
                         .w_full()
                         .child(self.format_table(t!("dl-formats-video"), video, true, cx))
                         .child(self.format_table(t!("dl-formats-audio"), audio, false, cx))
                         .child(
                             div()
                                 .flex()
-                                .gap_3()
+                                .gap(px(8.))
                                 .items_center()
                                 .child(
                                     div()
@@ -379,8 +379,8 @@ impl Downloads {
                                 )
                                 .child(
                                     div()
-                                        .px_2()
-                                        .py_0p5()
+                                        .px(px(8.))
+                                        .py(px(2.))
                                         .rounded(theme.radius)
                                         .bg(theme.secondary)
                                         .font_family(MONO)

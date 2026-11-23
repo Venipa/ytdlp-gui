@@ -154,7 +154,7 @@ pub fn welcome(cx: &App) -> AnyElement {
                         .flex()
                         .h(px(40.))
                         .items_center()
-                        .gap_3()
+                        .gap(px(8.))
                         .child(
                             svg()
                                 .path(icons::path(tool_icon(tool.kind)))
@@ -203,10 +203,10 @@ pub fn welcome(cx: &App) -> AnyElement {
             div()
                 .w_full()
                 .max_w(px(560.))
-                .px_4()
+                .px(px(12.))
                 .flex()
                 .flex_col()
-                .gap_3()
+                .gap(px(8.))
                 .child(
                     div()
                         .text_size(theme.text(Text::Title))
@@ -214,19 +214,17 @@ pub fn welcome(cx: &App) -> AnyElement {
                         .child(t!("welcome-title")),
                 )
                 .child(div().text_color(pencil).child(t!("welcome-detail")))
-                .child(div().flex().flex_col().mt_2().children(rows))
+                .child(div().flex().flex_col().mt(px(8.)).children(rows))
                 .child(
                     div()
                         .flex()
                         .items_center()
                         .justify_between()
-                        .mt_3()
+                        .mt(px(12.))
                         .child(
                             Button::new("own-ffmpeg")
-                                .ghost()
+                                .outline()
                                 .icon("icons/folder-open.svg")
-                                // the ghost's text lines up with the tool names above it
-                                .ml(px(-12.))
                                 .label(t!("welcome-own-ffmpeg"))
                                 .on_click(|_, _, cx| choose_ffmpeg(cx)),
                         )
@@ -234,7 +232,7 @@ pub fn welcome(cx: &App) -> AnyElement {
                             div()
                                 .flex()
                                 .items_center()
-                                .gap_3()
+                                .gap(px(8.))
                                 .when(!go && !failed, |this| {
                                     this.child(
                                         div().text_color(pencil).child(t!("welcome-continue-wait")),

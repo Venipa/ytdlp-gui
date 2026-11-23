@@ -1002,7 +1002,7 @@ impl Downloads {
             .px(theme.metrics.gutter)
             .border_t_1()
             .border_color(theme.border)
-            .text_size(theme.text(Text::Small))
+            .text_size(theme.text(Text::Body))
             .text_color(theme.muted_foreground)
             .font_features(ui::tabular())
             .child(match queued {
@@ -1169,7 +1169,7 @@ impl Render for Downloads {
                 .detail(t!("dl-empty-detail"))
                 .action(
                     Button::new("empty-paste")
-                        .outline()
+                        .primary()
                         .icon("icons/clipboard-paste.svg")
                         .label(t!("dl-empty-paste"))
                         .on_click(
@@ -1282,6 +1282,8 @@ impl Render for Downloads {
                     )
                     .children(selected.map(|row| self.detail_panel(&row, !docked, cx))),
             )
+            // toasts stack above the status bar in the page's flow, so they never cover a row
+            .children(crate::toasts::layer(cx).map(|layer| div().flex_none().child(layer)))
             .child(status)
             .children(menu)
             .children(confirm)

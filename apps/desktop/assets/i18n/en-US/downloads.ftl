@@ -3,7 +3,7 @@ dl-intake-name = Link to download
 dl-download = Download
 dl-download-count = Download { $count }
 dl-empty = Paste a link to start
-dl-empty-detail = Or drop one here.
+dl-empty-detail = Or drop one here. YouTube, SoundCloud, Vimeo and over a thousand other sites work.
 dl-filtered-empty = Nothing matches { $filter }
 dl-clear-filter = Clear filter
 dl-search-hint = Search, or type:audio size:>50mb
@@ -133,3 +133,10 @@ dl-logs-search-name = Search log lines
 dl-logs-follow = Follow
 dl-logs-no-match = No log line matches.
 dl-cover-alt = Cover image
+
+# UI refine round 2
+dl-copied = Copied
+dl-col-format = Format
+dl-col-size-head = Size
+dl-col-speed = Speed
+dl-col-status = Status

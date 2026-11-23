@@ -105,7 +105,7 @@ impl SettingsView {
         let folder = div()
             .flex()
             .items_center()
-            .gap_2()
+            .gap(px(8.))
             .child(self.value_box(s.output_dir.clone(), cx))
             .child(
                 Button::new("choose-dir")
@@ -133,7 +133,10 @@ impl SettingsView {
                     row(
                         t!("set-file-name"),
                         Some(t!("set-file-name-desc")),
-                        self.input(Field::Template, 300., cx),
+                        // a template is code, set in the mono face like its preview
+                        div()
+                            .font_family(MONO)
+                            .child(self.input(Field::Template, 300., cx)),
                         cx,
                     ),
                     stacked(t!("set-preview"), None, preview, cx),
@@ -219,7 +222,7 @@ impl SettingsView {
                 div()
                     .flex()
                     .flex_wrap()
-                    .gap_2()
+                    .gap(px(8.))
                     .children(SPONSOR_CATEGORIES.map(|(id, key)| {
                         let on = s.sponsorblock.categories.iter().any(|c| c == id);
                         Chip::new(
@@ -361,7 +364,7 @@ impl SettingsView {
         } else {
             let buttons = div()
                 .flex()
-                .gap_2()
+                .gap(px(8.))
                 .child(
                     Button::new("import-cookies")
                         .outline()
@@ -398,7 +401,7 @@ impl SettingsView {
             cookies.push(stacked(
                 t!("set-cookies-file-title"),
                 Some(t!("set-cookies-file-desc")),
-                div().flex().flex_col().gap_2().child(buttons).children(
+                div().flex().flex_col().gap(px(8.)).child(buttons).children(
                     self.cookie_note.clone().map(|(note, failed)| {
                         div()
                             .text_size(theme.text(Text::Small))
@@ -575,7 +578,7 @@ impl SettingsView {
                             .min_w_0()
                             .flex()
                             .flex_col()
-                            .gap_0p5()
+                            .gap(px(2.))
                             .child(i18n::lookup(tool_key(kind), None))
                             .child(
                                 div()
@@ -592,7 +595,7 @@ impl SettingsView {
                     )
                     .child(div().flex().flex_none().gap(px(8.)).children(actions)),
             )
-            .children(rule.map(|rule| div().pb_2().child(ProgressRule::new(rule))))
+            .children(rule.map(|rule| div().pb(px(8.)).child(ProgressRule::new(rule))))
             .into_any_element()
     }
 
@@ -651,14 +654,17 @@ impl SettingsView {
                 vec![row(
                     t!("set-font-size"),
                     Some(t!("set-font-size-desc")),
-                    div().flex().gap_2().children(look::FONT_SIZES.map(|px| {
-                        Chip::new(
-                            SharedString::from(format!("font-{px}")),
-                            t!("set-px", value = px as i64),
-                        )
-                        .selected(s.font_size == px)
-                        .on_click(self.edit(move |st| st.font_size = px))
-                    })),
+                    div()
+                        .flex()
+                        .gap(px(8.))
+                        .children(look::FONT_SIZES.map(|px| {
+                            Chip::new(
+                                SharedString::from(format!("font-{px}")),
+                                t!("set-px", value = px as i64),
+                            )
+                            .selected(s.font_size == px)
+                            .on_click(self.edit(move |st| st.font_size = px))
+                        })),
                     cx,
                 )],
                 cx,

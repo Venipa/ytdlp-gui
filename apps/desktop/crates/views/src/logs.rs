@@ -215,8 +215,10 @@ impl Render for LogsView {
                         uniform_list(
                             "log-lines",
                             entries.len(),
-                            cx.processor(move |_, range: Range<usize>, _, cx| {
+                            cx.processor(move |_, range: Range<usize>, window, cx| {
                                 let theme = *cx.theme();
+                                // a narrow window keeps the level word and drops its dot
+                                let narrow = window.viewport_size().width < px(900.);
                                 range
                                     .filter_map(|at| items.get(at).map(|l| (at, l)))
                                     .map(|(at, l)| {
@@ -239,6 +241,10 @@ impl Render for LogsView {
                                             .px(theme.metrics.gutter)
                                             .items_center()
                                             .cursor_pointer()
+                                            // warnings and errors carry a faint wash of their tone
+                                            .when(rank(&l.level) >= 2, |this| {
+                                                this.bg(tone.opacity(0.08))
+                                            })
                                             .hover(|style| style.bg(theme.table_hover))
                                             .on_click(move |_, _, cx| {
                                                 cx.write_to_clipboard(
@@ -256,15 +262,20 @@ impl Render for LogsView {
                                             )
                                             .child(
                                                 div()
-                                                    .w(px(56.))
+                                                    .w(px(if narrow { 40. } else { 56. }))
                                                     .flex_none()
                                                     .flex()
                                                     .items_center()
                                                     .gap(px(6.))
                                                     .text_color(tone)
-                                                    .child(
-                                                        div().size(px(6.)).rounded_full().bg(tone),
-                                                    )
+                                                    .when(!narrow, |this| {
+                                                        this.child(
+                                                            div()
+                                                                .size(px(6.))
+                                                                .rounded_full()
+                                                                .bg(tone),
+                                                        )
+                                                    })
                                                     .child(l.level.clone()),
                                             )
                                             .child(

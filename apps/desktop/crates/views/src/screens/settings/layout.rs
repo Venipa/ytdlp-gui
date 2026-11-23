@@ -69,6 +69,7 @@ pub fn section(title: Option<SharedString>, rows: Vec<AnyElement>, cx: &App) -> 
                 .children(rows.into_iter().enumerate().map(|(at, row)| {
                     div()
                         .px(px(12.))
+                        .hover(|style| style.bg(theme.table_hover))
                         .when(at > 0, |this| this.border_t_1().border_color(theme.border))
                         .child(row)
                 })),

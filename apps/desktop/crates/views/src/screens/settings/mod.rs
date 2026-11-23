@@ -302,7 +302,7 @@ impl SettingsView {
         div()
             .flex()
             .flex_wrap()
-            .gap_2()
+            .gap(px(8.))
             .children(choices.into_iter().map(|(id, key, selected, set)| {
                 Chip::new(
                     SharedString::from(format!("{row}-{id}")),
