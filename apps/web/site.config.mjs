@@ -4,3 +4,5 @@ export const repo = process.env.SITE_REPO || 'Venipa/ytdlp-gui';
 export const basePath = process.env.BASE_PATH ?? `/${repo.split('/')[1]}`;
 // The repo also holds the old Electron app's releases (v0.x); only tags from this major on are ytdlpd.
 export const minMajor = 1;
+// Absolute origin for canonical and Open Graph URLs (GitHub Pages user domain unless SITE_URL is set).
+export const siteUrl = process.env.SITE_URL || `https://${repo.split('/')[0].toLowerCase()}.github.io`;

@@ -1,5 +1,5 @@
 import { createMDX } from 'fumadocs-mdx/next';
-import { basePath, repo } from './site.config.mjs';
+import { basePath, repo, siteUrl } from './site.config.mjs';
 
 const withMDX = createMDX();
 
@@ -10,7 +10,7 @@ const config = {
   basePath,
   reactStrictMode: true,
   images: { unoptimized: true },
-  env: { NEXT_PUBLIC_BASE_PATH: basePath, NEXT_PUBLIC_SITE_REPO: repo },
+  env: { NEXT_PUBLIC_BASE_PATH: basePath, NEXT_PUBLIC_SITE_REPO: repo, NEXT_PUBLIC_SITE_URL: siteUrl },
 };
 
 export default withMDX(config);

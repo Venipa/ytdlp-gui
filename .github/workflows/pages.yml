@@ -24,6 +24,8 @@ env:
   SITE_REPO: ${{ github.repository }}
   # the site is served from a custom domain root (ytdlp.venipa.net), not /<repo>
   BASE_PATH: ""
+  # absolute origin for Open Graph image and links
+  SITE_URL: https://ytdlp.venipa.net
   NEXT_TELEMETRY_DISABLED: 1
 
 jobs:
