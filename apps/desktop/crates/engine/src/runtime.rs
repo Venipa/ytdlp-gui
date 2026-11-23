@@ -308,11 +308,29 @@ pub(crate) fn classify_pyerr(py: Python<'_>, e: &PyErr) -> EngineError {
         .ok()
         .and_then(|t| t.get_item(1).ok())
         .filter(|i| !i.is_none());
-    classify(
+    let mut err = classify(
         &ty,
         &msg,
         status(val.as_any()).or_else(|| inner.as_ref().and_then(status)),
-    )
+    );
+    if err.code == domain::ErrorCode::RateLimited {
+        // HTTPError.response.headers (yt-dlp), or .headers (urllib), possibly on the wrapped exception
+        let hdr = |o: &Bound<'_, PyAny>| -> Option<u64> {
+            let h = o
+                .getattr("response")
+                .and_then(|r| r.getattr("headers"))
+                .or_else(|_| o.getattr("headers"))
+                .ok()?;
+            let v: String = h
+                .call_method1("get", ("Retry-After",))
+                .ok()?
+                .extract()
+                .ok()?;
+            crate::classify::parse_retry_after(&v)
+        };
+        err.retry_after = hdr(val.as_any()).or_else(|| inner.as_ref().and_then(hdr));
+    }
+    err
 }
 
 /// Run `f` with the GIL. Panics only if [`init`] has not succeeded.
@@ -355,9 +373,14 @@ pub struct SelfTest {
 
 /// Start the interpreter and import yt-dlp and yt-dlp-ejs. Backs `ytdlpd --self-test [--site <dir>]`.
 pub fn self_test(site_updates: Option<PathBuf>) -> Result<SelfTest, String> {
+    if let Some(d) = &site_updates
+        && !d.is_dir()
+    {
+        return Err(format!("site dir {} does not exist", d.display()));
+    }
     let rt = init(InitOptions {
         home: None,
-        site_updates,
+        site_updates: site_updates.clone(),
         sink: log_sink,
     })
     .map_err(|e| e.to_string())?;
@@ -380,6 +403,14 @@ pub fn self_test(site_updates: Option<PathBuf>) -> Result<SelfTest, String> {
                 init_ms: rt.init_time.as_millis(),
             })
         };
-        run().map_err(|e| e.to_string())
+        let t = run().map_err(|e| e.to_string())?;
+        match &site_updates {
+            Some(d) if !std::path::Path::new(&t.yt_dlp_path).starts_with(d) => Err(format!(
+                "yt-dlp was not loaded from {} but from {}",
+                d.display(),
+                t.yt_dlp_path
+            )),
+            _ => Ok(t),
+        }
     })
 }

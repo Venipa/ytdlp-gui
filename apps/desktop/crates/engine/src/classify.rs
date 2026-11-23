@@ -149,6 +149,11 @@ pub fn classify(exc_type: &str, msg: &str, http_status: Option<u16>) -> EngineEr
     EngineError::new(code, msg)
 }
 
+/// `Retry-After` header as whole seconds. shortcut: HTTP-date form is ignored, add if a site sends it.
+pub fn parse_retry_after(v: &str) -> Option<u64> {
+    v.trim().parse().ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,6 +172,21 @@ mod tests {
             let got = classify(f[0], f[2], f[1].parse().ok());
             assert_eq!(got.code.as_str(), f[3], "row: {r}");
         }
+    }
+
+    #[test]
+    fn every_error_code_has_user_copy() {
+        let ftl = include_str!("../../../assets/i18n/en-US/errors.ftl");
+        for c in ErrorCode::ALL {
+            let key = format!("{} =", c.message_key());
+            assert!(ftl.lines().any(|l| l.starts_with(&key)), "missing {key}");
+        }
+    }
+
+    #[test]
+    fn retry_after_seconds() {
+        assert_eq!(parse_retry_after(" 30 "), Some(30));
+        assert_eq!(parse_retry_after("Wed, 21 Oct 2015 07:28:00 GMT"), None);
     }
 
     #[test]

@@ -4,9 +4,11 @@
 //! Worker process (`<exe> --engine-worker`): [`worker::run_worker`].
 pub mod backend;
 pub mod classify;
+pub mod cookies;
 pub mod host;
 pub mod ipc;
 pub mod partials;
+pub mod preview;
 pub mod probe;
 pub mod runtime;
 pub mod spec;
@@ -16,4 +18,5 @@ pub use backend::{EngineBackend, EngineConfig};
 pub use classify::classify;
 pub use host::{WorkerConfig, WorkerHandle, spawn_worker};
 pub use ipc::{Command, Event};
+pub use preview::preview_filename;
 pub use probe::probe;

@@ -133,3 +133,8 @@ Status: adopted or retired. "Orig" is the id used in the round 1 to 3 notes (D-0
 | D-085 | State | Settings file watcher signals through a channel from the notify thread (gpui test scheduler forbids foreign-thread wakeups, so hot reload is tested at the watcher level plus `reload()`); `settings_used` keeps an allowlist of keys not yet read | test constraint | no | adopted |
 
 | D-130 | UI | Owner layout picks 1A 2C 3B 4B 5A 6C 7A 8A 9ok (see plan.md "UI/UX layout"); 3B compact rows default, thumbnail ledger rows as "Show thumbnails" setting | owner preview round | yes | adopted |
+| D-111 | Engine | `extra_args` merged in the worker through `yt_dlp.parse_options` (diff against defaults, so unrelated defaults never override our opts); Settings text is split with shlex. ✎ |
+| D-112 | Engine | Pasted cookies are stored as `<data>/cookies/<hash>.txt`, owner-only (0600 / icacls grant to the current user only); mode `File` points at it. |
+| D-113 | Engine | `EngineError.retry_after: Option<u64>` (additive, `CONTRACT:`), read from `Retry-After` of a 429; `err-*` Fluent copy for every ErrorCode lives in `errors.ftl` (test fails if one is missing). |
+| D-114 | Engine | `--self-test --site <dir>` fails if the dir is missing or yt-dlp was not imported from it. |
+
