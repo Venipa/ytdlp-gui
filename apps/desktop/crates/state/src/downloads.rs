@@ -666,14 +666,16 @@ impl Downloads {
         if self.apply(id, event, cx).is_none() {
             return;
         }
-        let next = retry.then(|| next_attempt_at(&*self.clock, attempts, None, &mut self.rng));
+        let next = retry
+            .then(|| next_attempt_at(&*self.clock, attempts, error.retry_after, &mut self.rng));
         if let Some(row) = self.rows.iter_mut().find(|r| r.id == id) {
             row.error_code = Some(error.code.as_str().to_string());
             row.error_message = Some(error.message.clone());
             row.next_attempt_at = next;
         }
         if error.code == ErrorCode::RateLimited {
-            self.scheduler.penalize(&domain, now, &self.limits);
+            self.scheduler
+                .penalize(&domain, now, error.retry_after, &self.limits);
         }
         let (code, message) = (error.code, error.message.clone());
         self.store.write(move |db| async move {

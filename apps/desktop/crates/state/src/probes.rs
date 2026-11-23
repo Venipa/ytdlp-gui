@@ -117,7 +117,10 @@ impl Probes {
         }
         let state = match outcome {
             Some(Ok(result)) => ProbeState::Ready(Arc::new(result)),
-            Some(Err(error)) => ProbeState::Failed(error),
+            Some(Err(error)) => {
+                log::warn!("probes: {url}: {} {}", error.code, error.message);
+                ProbeState::Failed(error)
+            }
             None => {
                 self.abandoned += 1;
                 log::warn!("probes: abandoned a probe after {:?}: {url}", self.timeout);

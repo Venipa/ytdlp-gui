@@ -126,6 +126,7 @@ const RULES: &[(ErrorCode, &[&str])] = &[
             "remote end closed",
             "incompleteread",
             "urlopen error",
+            "http error 403",
             "http error 500",
             "http error 502",
             "http error 503",
@@ -140,7 +141,8 @@ pub fn classify(exc_type: &str, msg: &str, http_status: Option<u16>) -> EngineEr
     let code = match http_status {
         Some(429) => ErrorCode::RateLimited,
         Some(404 | 410) => ErrorCode::Unavailable,
-        Some(500..=599) => ErrorCode::Network,
+        // a 403 mid-download is usually an expired or throttled link that a new try renews
+        Some(403 | 500..=599) => ErrorCode::Network,
         _ => RULES
             .iter()
             .find(|(_, pats)| pats.iter().any(|p| hay.contains(p)))
@@ -194,5 +196,10 @@ mod tests {
         assert!(classify("DownloadError", "HTTP Error 429", None).retryable);
         assert!(!classify("DownloadError", "Private video", None).retryable);
         assert_eq!(classify("X", "weird", None).code, ErrorCode::Unknown);
+        assert!(classify("DownloadError", "HTTP Error 403: Forbidden", None).retryable);
+        assert_eq!(
+            classify("HTTPError", "x", Some(403)).code,
+            ErrorCode::Network
+        );
     }
 }

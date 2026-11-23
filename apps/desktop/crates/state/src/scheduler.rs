@@ -33,10 +33,17 @@ pub struct Scheduler {
 }
 
 impl Scheduler {
-    /// A 429 happened on `domain`: its slots drop for `limits.penalty_ms`.
-    pub fn penalize(&mut self, domain: &str, now_ms: i64, limits: &Limits) {
-        self.penalties
-            .insert(domain.to_string(), now_ms + limits.penalty_ms);
+    /// A 429 happened on `domain`: its slots drop for the server's `Retry-After` (seconds, at most
+    /// an hour) or else for `limits.penalty_ms`.
+    pub fn penalize(
+        &mut self,
+        domain: &str,
+        now_ms: i64,
+        retry_after_s: Option<u64>,
+        limits: &Limits,
+    ) {
+        let lasts = retry_after_s.map_or(limits.penalty_ms, |s| (s.min(3600) * 1000) as i64);
+        self.penalties.insert(domain.to_string(), now_ms + lasts);
     }
 
     /// True while `domain` is in the penalty box.

@@ -246,7 +246,7 @@ fn scheduler_limits_and_penalty_are_pure() {
         s.pick(&rows, 0, &limits),
         vec![DownloadId(2), DownloadId(4)]
     );
-    s.penalize("a.com", 0, &limits);
+    s.penalize("a.com", 0, None, &limits);
     assert_eq!(
         s.pick(&rows, 1000, &limits),
         vec![DownloadId(4)],
