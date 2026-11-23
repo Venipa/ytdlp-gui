@@ -3,7 +3,7 @@
 
 use gpui::prelude::*;
 use gpui::{AnyElement, App, FontWeight, SharedString, div, px};
-use ui::{ActiveTheme as _, Text};
+use ui::{ActiveTheme as _, SwitchRow, Text};
 
 /// The width of the column the pages are centred in.
 const COLUMN: f32 = 720.;
@@ -75,6 +75,26 @@ pub fn section(title: Option<SharedString>, rows: Vec<AnyElement>, cx: &App) -> 
                         .child(row)
                 })),
         )
+        .into_any_element()
+}
+
+/// A switch row that fills its cell edge to edge, so its hover and focus have no gap at the sides.
+pub fn full_bleed(row: SwitchRow) -> SwitchRow {
+    row.mx(px(-12.))
+        .px(px(12.))
+        .py(px(10.))
+        .min_h(px(52.))
+        .rounded(px(0.))
+}
+
+/// A switch row that shows `content` under it while it is on (proxy, speed limit), in the same
+/// cell: the content lines up with the label, with a gap above it and the row's padding below.
+pub fn collapsible(row: SwitchRow, content: Option<AnyElement>) -> AnyElement {
+    div()
+        .flex()
+        .flex_col()
+        .child(full_bleed(row))
+        .children(content.map(|content| div().pt(px(4.)).pb(px(14.)).child(content)))
         .into_any_element()
 }
 

@@ -7,6 +7,7 @@ mod layout;
 mod look;
 mod miniature;
 mod pages;
+mod rules;
 mod themes;
 
 pub use look::{apply_stored, apply_window};
@@ -62,6 +63,8 @@ pub struct SettingsView {
     cookie_note: Option<(SharedString, bool)>,
     /// The Cookies page: domains per set, the search field, the editor, a browser being read.
     cookie_page: cookies::CookiePage,
+    /// The Site rules editor, while a rule is open.
+    rule_editor: Option<rules::RuleEditor>,
     /// The proxy switch is on while the address is still empty.
     proxy_open: bool,
     /// The speed limit switch is on while the number is still empty.
@@ -161,6 +164,7 @@ impl SettingsView {
             popovers: Popovers::default(),
             cookie_note: None,
             cookie_page: cookies::CookiePage::new(cx),
+            rule_editor: None,
             proxy_open: false,
             rate_open: false,
             applied: look::look_of(&current, None),
@@ -348,16 +352,12 @@ impl SettingsView {
         on: bool,
         set: fn(&mut Settings, bool),
     ) -> AnyElement {
-        // the row fills its cell edge to edge, so its hover and focus have no gap at the sides
-        SwitchRow::new(id, i18n::lookup(key, None), on)
-            .detail(i18n::lookup(&format!("{key}-desc"), None))
-            .mx(px(-12.))
-            .px(px(12.))
-            .py(px(10.))
-            .min_h(px(52.))
-            .rounded(px(0.))
-            .on_click(self.edit(move |s| set(s, !on)))
-            .into_any_element()
+        layout::full_bleed(
+            SwitchRow::new(id, i18n::lookup(key, None), on)
+                .detail(i18n::lookup(&format!("{key}-desc"), None)),
+        )
+        .on_click(self.edit(move |s| set(s, !on)))
+        .into_any_element()
     }
 
     /// A single-choice row of chips.
@@ -609,6 +609,7 @@ pub(crate) fn page_icon(page: SettingsPage) -> &'static str {
         SettingsPage::Formats => "icons/film.svg",
         SettingsPage::Network => "icons/radio.svg",
         SettingsPage::Cookies => "icons/cookie.svg",
+        SettingsPage::Rules => "icons/funnel.svg",
         SettingsPage::Tools => "icons/settings.svg",
         SettingsPage::Appearance => "icons/palette.svg",
         SettingsPage::Updates => "icons/circle-arrow-down.svg",
@@ -650,6 +651,7 @@ impl Render for SettingsView {
             SettingsPage::Formats => self.page_formats(&s, cx),
             SettingsPage::Network => self.page_network(&s, cx),
             SettingsPage::Cookies => self.page_cookies(&s, window, cx),
+            SettingsPage::Rules => self.page_rules(&s, window, cx),
             SettingsPage::Tools => self.page_tools(cx),
             SettingsPage::Appearance => self.page_appearance(&s, cx),
             SettingsPage::Updates => self.page_updates(&s, cx),

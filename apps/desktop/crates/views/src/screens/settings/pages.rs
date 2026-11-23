@@ -10,11 +10,11 @@ use i18n::t;
 use router::{Destination, SettingsPage};
 use ui::{
     ActiveTheme as _, Button, Chip, MAX_TRANSPARENCY, MONO, MenuItem, Notice, Picker, ProgressRule,
-    Rule, Scrubber, Switch, SwitchRow, Text, WindowBlur, tabular,
+    Rule, Scrubber, SwitchRow, Text, WindowBlur, tabular,
 };
 
 use super::fields::{self, Field};
-use super::layout::{row, section, stacked};
+use super::layout::{collapsible, full_bleed, row, section, stacked};
 use super::{Edit, SPONSOR_CATEGORIES, SettingsView, look, tool_key};
 use crate::format;
 
@@ -302,54 +302,37 @@ impl SettingsView {
     pub(super) fn page_network(&self, s: &Settings, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let theme = *cx.theme();
         let proxy_on = self.proxy_open || s.proxy.is_some();
-        let mut connection = vec![
-            SwitchRow::new("proxy-on", t!("set-proxy-on"), proxy_on)
-                .detail(t!("set-proxy-on-desc"))
-                .mx(px(-12.))
-                .px(px(12.))
-                .py(px(10.))
-                .min_h(px(52.))
-                .rounded(px(0.))
-                .on_click(cx.listener(move |this, _, _, cx| this.set_proxy_open(!proxy_on, cx)))
-                .into_any_element(),
-        ];
-        if proxy_on {
-            let reads =
-                s.proxy
-                    .as_deref()
-                    .and_then(fields::proxy_parts)
-                    .map(|(scheme, host, port)| match port {
-                        Some(port) => {
-                            t!("set-proxy-reads", scheme = scheme, host = host, port = port)
-                        }
-                        None => t!("set-proxy-reads-host", scheme = scheme, host = host),
-                    });
-            connection.push(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(6.))
-                    .pb(px(12.))
-                    .child(self.input(Field::Proxy, 0., cx))
-                    .children(
-                        reads
-                            .filter(|_| self.field(Field::Proxy).error.is_none())
-                            .map(|line| {
-                                div()
-                                    .text_size(theme.text(Text::Small))
-                                    .text_color(theme.muted_foreground)
-                                    .child(line)
-                            }),
-                    )
-                    .into_any_element(),
-            );
-        }
-        let rate_on = self.rate_open || s.rate_limit.is_some();
-        let unit = fields::rate_parts(s).1;
-        let units =
+        let proxy = proxy_on.then(|| {
+            let reads = s
+                .proxy
+                .as_deref()
+                .and_then(fields::proxy_parts)
+                .filter(|_| self.field(Field::Proxy).error.is_none())
+                .map(|(scheme, host, port)| match port {
+                    Some(port) => t!("set-proxy-reads", scheme = scheme, host = host, port = port),
+                    None => t!("set-proxy-reads-host", scheme = scheme, host = host),
+                });
             div()
                 .flex()
-                .gap(px(4.))
+                .flex_col()
+                .gap(px(6.))
+                .child(self.input(Field::Proxy, 0., cx))
+                .children(reads.map(|line| {
+                    div()
+                        .text_size(theme.text(Text::Small))
+                        .text_color(theme.muted_foreground)
+                        .child(line)
+                }))
+                .into_any_element()
+        });
+        let rate_on = self.rate_open || s.rate_limit.is_some();
+        let unit = fields::rate_parts(s).1;
+        let rate = rate_on.then(|| {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .child(self.input(Field::Rate, 72., cx))
                 .children(
                     [("K", "set-rate-kb"), ("M", "set-rate-mb")].map(|(suffix, key)| {
                         Chip::new(
@@ -367,25 +350,25 @@ impl SettingsView {
                             st.rate_limit = Some(format!("{digits}{suffix}"));
                         }))
                     }),
-                );
-        let rate_control = div()
-            .flex()
-            .items_center()
-            .gap(px(8.))
-            .when(rate_on, |this| {
-                this.child(self.input(Field::Rate, 72., cx)).child(units)
-            })
-            .child(
-                Switch::new("rate-on", rate_on)
-                    .name(t!("set-rate-on"))
+                )
+                .into_any_element()
+        });
+        let connection = vec![
+            collapsible(
+                SwitchRow::new("proxy-on", t!("set-proxy-on"), proxy_on)
+                    .detail(t!("set-proxy-on-desc"))
+                    .on_click(
+                        cx.listener(move |this, _, _, cx| this.set_proxy_open(!proxy_on, cx)),
+                    ),
+                proxy,
+            ),
+            collapsible(
+                SwitchRow::new("rate-on", t!("set-rate-on"), rate_on)
+                    .detail(t!("set-rate-on-desc"))
                     .on_click(cx.listener(move |this, _, _, cx| this.set_rate_open(!rate_on, cx))),
-            );
-        connection.push(row(
-            t!("set-rate-on"),
-            Some(t!("set-rate-on-desc")),
-            rate_control,
-            cx,
-        ));
+                rate,
+            ),
+        ];
 
         let sets = &s.cookies.sets;
         let on = sets.iter().filter(|set| set.on).count();
@@ -625,13 +608,15 @@ impl SettingsView {
         )];
         if WindowBlur::supported(cx) {
             window.push(
-                SwitchRow::new("set-blur-window", t!("set-blur-window"), blur && !opaque)
-                    .detail(t!("set-blur-window-desc"))
-                    .disabled(opaque)
-                    .on_click(self.edit(move |st| {
-                        st.background = if blur { "translucent" } else { "blur" }.into()
-                    }))
-                    .into_any_element(),
+                full_bleed(
+                    SwitchRow::new("set-blur-window", t!("set-blur-window"), blur && !opaque)
+                        .detail(t!("set-blur-window-desc"))
+                        .disabled(opaque),
+                )
+                .on_click(self.edit(move |st| {
+                    st.background = if blur { "translucent" } else { "blur" }.into()
+                }))
+                .into_any_element(),
             );
         }
         window.push(

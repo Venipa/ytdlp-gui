@@ -35,6 +35,7 @@ async fn main() -> anyhow::Result<()> {
             ffmpeg_location: None,
             js_runtime: None,
             extra_args: vec![],
+            fix: None,
         };
         let mut d = NewDownload::from_spec(&spec)?;
         d.title = Some(format!("Seeded video number {i}"));

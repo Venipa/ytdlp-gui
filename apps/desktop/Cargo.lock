@@ -1537,6 +1537,7 @@ dependencies = [
  "anyhow",
  "dirs 7.0.0",
  "futures",
+ "regex",
  "serde",
  "serde_json",
  "url",

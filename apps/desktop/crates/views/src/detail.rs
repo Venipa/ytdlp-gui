@@ -85,13 +85,75 @@ impl Downloads {
             .into_any_element()
     }
 
-    /// The 360 px right panel for `s`; `overlay` lays it over the list for a narrow window.
-    pub(crate) fn detail_panel(
-        &self,
-        s: &DownloadSummary,
-        overlay: bool,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    /// The 360 px right panel for `s`, a sheet over the list pinned to the right edge.
+    /// What `Fixes` says about the finished file: a fix running, a fix that failed, or a file
+    /// that may not play everywhere, with the fix as a button.
+    fn fix_note(&self, id: domain::DownloadId, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let theme = *cx.theme();
+        let state = self.app.fixes.read(cx).state(id)?.clone();
+        let fixes = self.app.fixes.clone();
+        let (tone, text, action): (_, SharedString, Option<(SharedString, domain::Fix)>) =
+            match state {
+                state::FixState::Running(fix) => (
+                    theme.muted_foreground,
+                    t!("dl-fix-running", fix = crate::format::fix_name(fix)),
+                    None,
+                ),
+                state::FixState::Failed(fix, error) => (
+                    theme.danger,
+                    t!(
+                        "dl-fix-failed",
+                        fix = crate::format::fix_name(fix),
+                        error = error
+                    ),
+                    Some((t!("dl-fix-retry"), fix)),
+                ),
+                state::FixState::Unplayable(why) => (
+                    theme.progress_bar,
+                    t!("dl-fix-unplayable", parts = why.parts.join(", ")),
+                    Some((t!("dl-fix-make-compatible"), domain::Fix::Compatible)),
+                ),
+            };
+        let dismiss = fixes.clone();
+        Some(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .px(px(10.))
+                .py(px(8.))
+                .rounded(theme.radius)
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.secondary)
+                .child(div().size(px(6.)).flex_none().rounded_full().bg(tone))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_size(theme.text(Text::Small))
+                        .child(text),
+                )
+                .children(action.map(|(label, fix)| {
+                    Button::new("fix-action")
+                        .outline()
+                        .small()
+                        .label(label)
+                        .on_click(move |_, _, cx| fixes.update(cx, |f, cx| f.run(id, fix, cx)))
+                }))
+                .child(
+                    Button::new("fix-dismiss")
+                        .ghost()
+                        .small()
+                        .icon("icons/x.svg")
+                        .name(t!("dl-fix-dismiss"))
+                        .on_click(move |_, _, cx| dismiss.update(cx, |f, cx| f.dismiss(id, cx))),
+                )
+                .into_any_element(),
+        )
+    }
+
+    pub(crate) fn detail_panel(&self, s: &DownloadSummary, cx: &mut Context<Self>) -> AnyElement {
         let theme = *cx.theme();
         let pencil = theme.muted_foreground;
         let id = s.id;
@@ -281,6 +343,7 @@ impl Downloads {
                     ))
             });
 
+        let fix_note = self.fix_note(id, cx);
         let error = s.error_code.as_ref().map(|code| {
             div()
                 .flex()
@@ -386,13 +449,18 @@ impl Downloads {
                 .child(header)
                 .child(actions)
                 .children(error)
+                .children(fix_note)
                 .child(details)
                 .child(log),
         );
         let panel = Panel::new("detail-panel", Side::Right, px(PANEL))
             .limits(px(280.), px(WIDEST))
             .border_color(theme.border)
-            .bg(theme.background)
+            // over the list it is frosted glass when the blur setting is on, else solid
+            .map(|panel| match ui::blurring(cx) {
+                true => ui::glass(panel, cx),
+                false => panel.bg(theme.background),
+            })
             .child(div().size_full().child(body));
         // the panel opens by growing out of the window's edge; at rest the cap is the widest it
         // can be dragged to, so resizing is untouched
@@ -407,10 +475,12 @@ impl Downloads {
             .flex_none()
             .h_full()
             .overflow_hidden()
-            .when(overlay, |this| {
-                // laid over the list: pinned to the right edge with a shadow to lift it
-                this.absolute().top_0().right_0().bottom_0().shadow_lg()
-            })
+            // laid over the list: pinned to the right edge with a shadow to lift it
+            .absolute()
+            .top_0()
+            .right_0()
+            .bottom_0()
+            .shadow_lg()
             .child(panel)
             .with_animation(
                 "detail-slide",

@@ -213,6 +213,9 @@ pub struct JobSpec {
     /// `(runtime key: deno|node|bun|quickjs, absolute path)`.
     pub js_runtime: Option<(String, String)>,
     pub extra_args: Vec<String>,
+    /// The ffmpeg fix run on the finished file (site rule or default); older specs have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix: Option<crate::Fix>,
 }
 
 /// List row; never carries `options_json` or `info_json`. `title_lc`/`uploader_lc` are precomputed for filtering.

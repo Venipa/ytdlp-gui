@@ -694,6 +694,7 @@ mod tests {
             ffmpeg_location: None,
             js_runtime: None,
             extra_args: vec!["--a b".into()],
+            fix: None,
         }
     }
 

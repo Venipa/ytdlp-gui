@@ -144,6 +144,23 @@ impl Downloads {
         self
     }
 
+    /// A fix replaced the finished file of `id` (its name may have a new extension).
+    pub fn replace_file(
+        &mut self,
+        id: DownloadId,
+        path: String,
+        size: Option<i64>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(row) = self.rows.iter_mut().find(|r| r.id == id) {
+            row.file_path = Some(path.clone());
+            row.file_size = size.or(row.file_size);
+        }
+        self.store
+            .write(move |db| async move { db.set_final_path(id, &path, size).await });
+        cx.notify();
+    }
+
     /// Which set gave which cookie domains when `id` last started.
     pub fn cookies_used(&self, id: DownloadId) -> Option<&Used> {
         self.cookies_used.get(&id)

@@ -55,8 +55,14 @@ pub fn site_of(domain: &str) -> String {
     if n <= 2 || labels.iter().all(|l| l.chars().all(|c| c.is_ascii_digit())) {
         return domain;
     }
-    const GENERIC: [&str; 10] = ["co", "com", "net", "org", "gov", "ac", "edu", "ne", "or", "go"];
-    let take = if labels[n - 1].len() == 2 && GENERIC.contains(&labels[n - 2]) { 3 } else { 2 };
+    const GENERIC: [&str; 10] = [
+        "co", "com", "net", "org", "gov", "ac", "edu", "ne", "or", "go",
+    ];
+    let take = if labels[n - 1].len() == 2 && GENERIC.contains(&labels[n - 2]) {
+        3
+    } else {
+        2
+    };
     labels[n - take..].join(".")
 }
 

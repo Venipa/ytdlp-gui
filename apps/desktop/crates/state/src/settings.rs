@@ -166,6 +166,7 @@ impl AppSettings {
             ffmpeg_location: s.tool_paths.ffmpeg.clone(),
             js_runtime: s.tool_paths.deno.clone().map(|p| ("deno".to_string(), p)),
             extra_args: vec![],
+            fix: None,
         }
     }
 }

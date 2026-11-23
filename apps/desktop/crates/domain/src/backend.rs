@@ -18,6 +18,10 @@ pub struct ProbeOpts {
     pub flat_playlist: bool,
     pub cookies: Option<CookiesSettings>,
     pub proxy: Option<String>,
+    /// `(runtime key, path)`: YouTube needs a JavaScript runtime to unlock its formats; without
+    /// one a lookup sees only images and fails.
+    #[serde(default)]
+    pub js_runtime: Option<(String, String)>,
 }
 
 /// Worker events (mirror of the IPC lines in architecture section 4). Progress is latest-wins.

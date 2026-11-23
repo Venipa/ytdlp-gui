@@ -113,6 +113,7 @@ unic-langid = { version = "0.9", features = ["macros"] }
 unicode-bidi = "0.3"
 unicode-segmentation = "1.13"
 url = "2"
+regex = "1"
 widestring = "1.2"
 winresource = "0.1"
 x11rb = { version = "0.14", features = ["allow-unsafe-code"] }

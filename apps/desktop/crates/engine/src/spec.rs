@@ -48,6 +48,7 @@ pub fn simple_job(
         ffmpeg_location: None,
         js_runtime: None,
         extra_args: vec![],
+        fix: None,
     }
 }
 
@@ -139,6 +140,16 @@ pub fn to_opts(s: &JobSpec, env: &Env) -> Value {
             o.insert("merge_output_format".into(), json!("mp4/mkv"));
         }
     }
+    // "Compatible": prefer H.264 video and AAC audio over the codec-blind default, so most sites
+    // need no conversion; ahead of the resolution cap, which can mean a lower resolution
+    if s.fix == Some(domain::Fix::Compatible) && s.preset.kind() == domain::MediaKind::Video {
+        let mut sort = vec![json!("vcodec:h264"), json!("acodec:m4a")];
+        if let Some(Value::Array(rest)) = o.get("format_sort") {
+            sort.extend(rest.iter().cloned());
+        }
+        o.insert("format_sort".into(), Value::Array(sort));
+        o.insert("merge_output_format".into(), json!("mp4"));
+    }
     let tmpl = if s.outtmpl.is_empty() {
         if s.playlist_index.is_some() {
             PLAYLIST_OUTTMPL
@@ -211,11 +222,15 @@ pub fn to_opts(s: &JobSpec, env: &Env) -> Value {
 /// yt-dlp options for a metadata probe.
 pub fn probe_opts(p: &ProbeOpts, env: &Env) -> Value {
     let mut m = Map::new();
-    common(&mut m, env, None, None, p.proxy.as_deref());
+    common(&mut m, env, None, p.js_runtime.as_ref(), p.proxy.as_deref());
     if let Some(c) = &p.cookies {
         cookies(&mut m, c);
     }
     m.insert("skip_download".into(), json!(true));
+    // a lookup only reads the info: `best*` is the best format with video, audio or both, so it
+    // never fails the way `best` (a combined file, which YouTube Music lacks) or a video selector
+    // does; the download picks the real formats later
+    m.insert("format".into(), json!("best*"));
     m.insert("noplaylist".into(), json!(false));
     if p.flat_playlist {
         m.insert("extract_flat".into(), json!("in_playlist"));
@@ -414,6 +429,20 @@ mod tests {
     }
 
     #[test]
+    fn compatible_prefers_h264_and_aac() {
+        let mut s = base(Preset::Video(VideoQuality::P1080));
+        s.fix = Some(domain::Fix::Compatible);
+        let o = to_opts(&s, &Env::default());
+        assert_eq!(
+            o["format_sort"],
+            json!(["vcodec:h264", "acodec:m4a", "res:1080"])
+        );
+        assert_eq!(o["merge_output_format"], "mp4");
+        s.preset = Preset::Audio(AudioFormat::Mp3);
+        assert!(to_opts(&s, &Env::default()).get("format_sort").is_none());
+    }
+
+    #[test]
     fn probe_flat_and_proxy() {
         let o = probe_opts(
             &ProbeOpts {
@@ -425,6 +454,15 @@ mod tests {
         );
         assert_eq!(o["extract_flat"], "in_playlist");
         assert_eq!(o["skip_download"], true);
+        assert_eq!(o["format"], "best*");
         assert_eq!(o["proxy"], "http://p:1");
+        let o = probe_opts(
+            &ProbeOpts {
+                js_runtime: Some(("deno".into(), "/t/deno".into())),
+                ..Default::default()
+            },
+            &Env::default(),
+        );
+        assert_eq!(o["js_runtimes"], json!({"deno": {"path": "/t/deno"}}));
     }
 }

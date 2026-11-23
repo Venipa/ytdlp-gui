@@ -4,6 +4,7 @@
 pub mod cookies;
 mod downloads;
 pub mod fake;
+pub mod fixes;
 mod hooks;
 mod intake;
 mod logs;
@@ -19,8 +20,9 @@ pub mod updates;
 pub use cookies::CookieFiles;
 pub use downloads::{Downloads, DownloadsEvent, Live, UPDATE_REASON};
 pub use fake::{FakeBackend, FakeTools, Scene};
+pub use fixes::{FixState, Fixes};
 pub use hooks::{BrowserCookiesFn, Hooks, PreviewFn, VersionFn};
-pub use intake::{Intake, IntakeEvent};
+pub use intake::{Intake, IntakeEvent, sort_clipboard};
 pub use logs::{LogEntry, Logs};
 pub use probes::{ProbeState, Probes};
 pub use realtools::RealTools;
@@ -128,6 +130,7 @@ pub struct AppState {
     pub toasts: Entity<Toasts>,
     pub intake: Entity<Intake>,
     pub updates: Entity<Updates>,
+    pub fixes: Entity<Fixes>,
     pub cookies: CookieFiles,
     pub store: Store,
     /// `Some` for `--demo <scene>`.
@@ -164,6 +167,11 @@ impl AppState {
         spec.js_runtime = spec
             .js_runtime
             .or_else(|| found(domain::ToolKind::Deno).map(|p| ("deno".to_string(), p)));
+        let s = self.settings.read(cx).get();
+        spec.fix = match domain::rule_for(&s.site_rules, url) {
+            Some((_, rule)) => rule.fix,
+            None => s.default_fix,
+        };
         spec
     }
 
@@ -326,6 +334,17 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
         })
     };
 
+    let fixes = {
+        let (io, store, tools, settings, downloads) = (
+            io.clone(),
+            store.clone(),
+            tools.clone(),
+            settings.clone(),
+            downloads.clone(),
+        );
+        cx.new(|cx| Fixes::new(io, store, tools, settings, downloads, cx))
+    };
+
     let state = AppState {
         io,
         paths,
@@ -338,6 +357,7 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
         toasts,
         intake,
         updates,
+        fixes,
         store,
         scene,
     };

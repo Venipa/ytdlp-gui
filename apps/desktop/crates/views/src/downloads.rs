@@ -40,8 +40,6 @@ pub(crate) const FADE: Duration = Duration::from_millis(160);
 const FREE_EVERY: Duration = Duration::from_secs(5);
 /// How many lines the editor of several links shows before it scrolls.
 const EDITOR_LINES: f32 = 8.;
-/// The narrowest window that docks the detail panel beside the list; narrower ones lay it over.
-const DOCK_AT: f32 = 1100.;
 
 /// What the result card under the intake shows.
 #[derive(Clone)]
@@ -179,6 +177,7 @@ impl Downloads {
             cx.on_focus(&intake.focus_handle(cx), window, Self::editor_follows),
             cx.subscribe(&intake, |this, _, _: &ui::Pasted, cx| this.pasted(cx)),
             cx.observe(&app.downloads, |_, _, cx| cx.notify()),
+            cx.observe(&app.fixes, |_, _, cx| cx.notify()),
             cx.observe(&app.settings, |_, _, cx| cx.notify()),
             cx.observe(&app.tools, |_, _, cx| cx.notify()),
             cx.observe(&app.logs, |_, _, cx| cx.notify()),
@@ -424,6 +423,19 @@ impl Downloads {
             flat_playlist: true,
             cookies: Some(settings.cookies.clone()),
             proxy: settings.proxy.clone(),
+            // the deno set in settings, else the detected one, as downloads get it (AppState::job_spec)
+            js_runtime: settings
+                .tool_paths
+                .deno
+                .clone()
+                .or_else(|| {
+                    self.app
+                        .tools
+                        .read(cx)
+                        .get(domain::ToolKind::Deno)
+                        .and_then(|s| s.path.clone())
+                })
+                .map(|p| ("deno".to_string(), p)),
         }
     }
 
@@ -444,6 +456,12 @@ impl Downloads {
         self.remembered = Preset::from_str(&self.app.settings.read(cx).get().last_preset)
             .unwrap_or(Preset::DEFAULT);
         self.preset = self.remembered;
+        // one link a site rule gives a preset: the chip shows that preset (still changeable)
+        if let [url] = self.urls.as_slice()
+            && let Some(preset) = self.rule_preset(url, cx)
+        {
+            self.preset = preset;
+        }
         let opts = self.probe_opts(cx);
         for url in self.urls.clone() {
             self.app
@@ -534,6 +552,21 @@ impl Downloads {
             .any(|r| r.url == url)
     }
 
+    /// The preset the first matching site rule sets for `url`, if it sets one.
+    fn rule_preset(&self, url: &str, cx: &App) -> Option<Preset> {
+        let rules = &self.app.settings.read(cx).get().site_rules;
+        domain::rule_for(rules, url).and_then(|(_, rule)| rule.preset)
+    }
+
+    /// The preset `url` is added with: a preset the user picked wins; while the chip still shows
+    /// the remembered default, a site rule's preset applies.
+    fn preset_for(&self, url: &str, cx: &App) -> Preset {
+        match self.preset == self.remembered {
+            true => self.rule_preset(url, cx).unwrap_or(self.preset),
+            false => self.preset,
+        }
+    }
+
     /// Adds what the card shows with the chosen preset.
     pub(crate) fn download(&mut self, cx: &mut Context<Self>) {
         let preset = self.preset;
@@ -553,6 +586,7 @@ impl Downloads {
                     })
                     .collect();
                 for p in &ready {
+                    let preset = self.preset_for(&p.url, cx);
                     self.enqueue(&p.url, preset, "", None, Some(p), cx);
                 }
                 ready.len()
@@ -562,6 +596,7 @@ impl Downloads {
                 let entries = p.entries.clone().unwrap_or_default();
                 let mut count = 0;
                 let off = self.playlist_off.clone();
+                let preset = self.preset_for(&page, cx);
                 for entry in entries.iter().filter(|e| !off.contains(&e.index)) {
                     let stub = ProbeResult {
                         url: entry.url.clone(),
@@ -582,7 +617,10 @@ impl Downloads {
         if added == 0 {
             return;
         }
-        if preset != Preset::Custom {
+        // a preset a site rule chose is not remembered as the user's own
+        let from_rule =
+            matches!(self.urls.as_slice(), [url] if self.rule_preset(url, cx) == Some(preset));
+        if preset != Preset::Custom && !from_rule {
             self.app.settings.update(cx, |s, cx| {
                 s.update(|s| s.last_preset = preset.to_string(), cx)
             });
@@ -1320,14 +1358,8 @@ impl Render for Downloads {
             ring: keyboard && self.list_focus.is_focused(window),
             within: keyboard && self.list_focus.contains_focused(window, cx),
         };
-        // a wide window docks the detail panel beside the list, a narrow one lays it over the list
-        let width = window.viewport_size().width;
-        let docked = width >= px(DOCK_AT);
-        let list_width = match (self.selected.is_some(), docked) {
-            (true, true) => width - px(crate::detail::PANEL),
-            _ => width,
-        };
-        let cols = crate::rows::Columns::for_width(list_width);
+        // the detail panel is a sheet over the list, so the rows keep their full width
+        let cols = crate::rows::Columns::for_width(window.viewport_size().width);
         let lines = Rc::new(self.lines(cx));
         let filter_text = self.search.read(cx).text().to_owned();
         let thumbs = self.app.settings.read(cx).get().show_thumbnails;
@@ -1483,7 +1515,7 @@ impl Render for Downloads {
                                     .child(list),
                             ),
                     )
-                    .children(selected.map(|row| self.detail_panel(&row, !docked, cx)))
+                    .children(selected.map(|row| self.detail_panel(&row, cx)))
                     // toasts lie over the list, just above the status bar, out of the flow
                     .children(crate::toasts::layer(cx)),
             )

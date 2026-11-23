@@ -257,15 +257,20 @@ impl Downloads {
                         .bg(theme.table_active_border),
                 )
             })
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.selected = Some(id);
-                window.focus(&this.list_focus, cx);
-                cx.notify();
-            }))
+            .on_click(
+                cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
+                    // only a plain left click (or Enter) opens the sheet; right click is the menu
+                    if !event.standard_click() {
+                        return;
+                    }
+                    this.selected = Some(id);
+                    window.focus(&this.list_focus, cx);
+                    cx.notify();
+                }),
+            )
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |this, event: &MouseDownEvent, _, cx| {
-                    this.selected = Some(id);
                     this.menu = Some((event.position, id));
                     cx.notify();
                 }),

@@ -223,7 +223,11 @@ fn route_event(state: &state::AppState, event: platform::Event, cx: &mut App) {
     match event {
         platform::Event::AddUrls(urls) => state.intake.update(cx, |i, cx| i.add(&urls, cx)),
         platform::Event::ClipboardLinks(urls) => {
-            state.intake.update(cx, |i, cx| i.offer(&urls, cx))
+            let (add, ask) = state::sort_clipboard(state.settings.read(cx).get(), &urls);
+            state.intake.update(cx, |i, cx| {
+                i.add_new(&add, cx);
+                i.offer(&ask, cx)
+            })
         }
         platform::Event::Show => {}
         platform::Event::Quit => {

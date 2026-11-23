@@ -1,4 +1,4 @@
-use domain::split_urls;
+use domain::{ClipAction, Settings, rule_for, split_urls};
 use gpui::{Context, EventEmitter};
 
 /// Links that arrived from outside the intake box (command line, deep link, second launch, clipboard).
@@ -27,6 +27,31 @@ fn fresh(seen: &mut std::collections::HashSet<String>, urls: Vec<String>) -> Vec
         .collect()
 }
 
+/// Sorts clipboard links by the site rules: (to add at once, to offer). Ignored links and
+/// everything while the watch is off are dropped; links no rule claims follow `clipboard_auto_add`.
+pub fn sort_clipboard(s: &Settings, urls: &[String]) -> (Vec<String>, Vec<String>) {
+    let (mut add, mut ask) = (vec![], vec![]);
+    if !s.clipboard_watch {
+        return (add, ask);
+    }
+    let fallback = if s.clipboard_auto_add {
+        ClipAction::Add
+    } else {
+        ClipAction::Ask
+    };
+    for url in urls {
+        let action = rule_for(&s.site_rules, url)
+            .and_then(|(_, r)| r.clipboard)
+            .unwrap_or(fallback);
+        match action {
+            ClipAction::Add => add.push(url.clone()),
+            ClipAction::Ask => ask.push(url.clone()),
+            ClipAction::Ignore => {}
+        }
+    }
+    (add, ask)
+}
+
 impl EventEmitter<IntakeEvent> for Intake {}
 
 impl Intake {
@@ -37,6 +62,17 @@ impl Intake {
             return;
         }
         self.seen.extend(urls.iter().cloned());
+        self.pending.extend(urls.iter().cloned());
+        cx.emit(IntakeEvent::Add(urls));
+        cx.notify();
+    }
+
+    /// Clipboard links a site rule adds at once: like `add`, but a link seen this session is skipped.
+    pub fn add_new(&mut self, urls: &[String], cx: &mut Context<Self>) {
+        let urls = fresh(&mut self.seen, split_urls(&urls.join("\n")).urls);
+        if urls.is_empty() {
+            return;
+        }
         self.pending.extend(urls.iter().cloned());
         cx.emit(IntakeEvent::Add(urls));
         cx.notify();
@@ -73,6 +109,39 @@ impl Intake {
 #[cfg(test)]
 mod tests {
     use super::fresh;
+
+    #[test]
+    fn clipboard_links_follow_the_rules() {
+        use domain::{ClipAction, MatchKind, Settings, SiteRule};
+        let rule = |pattern: &str, action| SiteRule {
+            on: true,
+            kind: MatchKind::Domain,
+            pattern: pattern.into(),
+            clipboard: Some(action),
+            ..Default::default()
+        };
+        let mut s = Settings {
+            site_rules: vec![
+                rule("youtube.com", ClipAction::Add),
+                rule("x.com", ClipAction::Ignore),
+            ],
+            ..Default::default()
+        };
+        let urls: Vec<String> = [
+            "https://www.youtube.com/watch?v=1",
+            "https://x.com/a",
+            "https://vimeo.com/2",
+        ]
+        .map(String::from)
+        .into();
+        let (add, ask) = super::sort_clipboard(&s, &urls);
+        assert_eq!((add.len(), ask.len()), (1, 1));
+        assert!(add[0].contains("youtube") && ask[0].contains("vimeo"));
+        s.clipboard_auto_add = true;
+        assert_eq!(super::sort_clipboard(&s, &urls).0.len(), 2);
+        s.clipboard_watch = false;
+        assert_eq!(super::sort_clipboard(&s, &urls), (vec![], vec![]));
+    }
 
     #[test]
     fn a_link_is_offered_once() {

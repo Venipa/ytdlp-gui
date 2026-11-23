@@ -14,6 +14,7 @@ pub enum SettingsPage {
     Formats,
     Network,
     Cookies,
+    Rules,
     Tools,
     Appearance,
     Updates,
@@ -22,12 +23,13 @@ pub enum SettingsPage {
 
 impl SettingsPage {
     /// Every page, top to bottom.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::General,
         Self::Downloads,
         Self::Formats,
         Self::Network,
         Self::Cookies,
+        Self::Rules,
         Self::Tools,
         Self::Appearance,
         Self::Updates,
@@ -42,6 +44,7 @@ impl SettingsPage {
             Self::Formats => "formats",
             Self::Network => "network",
             Self::Cookies => "cookies",
+            Self::Rules => "rules",
             Self::Tools => "tools",
             Self::Appearance => "appearance",
             Self::Updates => "updates",
@@ -57,6 +60,7 @@ impl SettingsPage {
             Self::Formats => "set-page-formats",
             Self::Network => "set-page-network",
             Self::Cookies => "set-page-cookies",
+            Self::Rules => "set-page-rules",
             Self::Tools => "set-page-tools",
             Self::Appearance => "set-page-appearance",
             Self::Updates => "set-page-updates",

@@ -55,6 +55,21 @@ pub fn short_link(url: &str, max: usize) -> String {
     }
 }
 
+/// The name of a fix, as the rule editor and the detail panel show it.
+pub fn fix_name(fix: domain::Fix) -> String {
+    i18n::lookup(
+        match fix {
+            domain::Fix::Compatible => "fix-compatible",
+            domain::Fix::EditFriendly => "fix-edit-friendly",
+            domain::Fix::Repair => "fix-repair",
+            domain::Fix::Normalize => "fix-normalize",
+            domain::Fix::Smaller => "fix-smaller",
+        },
+        None,
+    )
+    .to_string()
+}
+
 /// `at_ms` in local time as `HH:MM`, plus its date when it is not today.
 pub fn when(at_ms: i64) -> (String, Option<String>) {
     let zone = jiff::tz::TimeZone::system();

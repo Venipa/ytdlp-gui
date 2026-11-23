@@ -4,8 +4,10 @@
 pub mod backend;
 pub mod cookies;
 pub mod filter;
+pub mod fixes;
 pub mod model;
 pub mod retry;
+pub mod rules;
 pub mod settings;
 pub mod state;
 pub mod urls;
@@ -14,6 +16,7 @@ pub use backend::*;
 pub use filter::*;
 pub use model::*;
 pub use retry::*;
+pub use rules::*;
 pub use settings::*;
 pub use state::*;
 pub use urls::*;

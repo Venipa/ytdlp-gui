@@ -541,6 +541,7 @@ fn demo_row(i: usize, status: DownloadStatus, created_at: i64) -> SeedRow {
         ffmpeg_location: None,
         js_runtime: None,
         extra_args: vec![],
+        fix: None,
     };
     let mut new = NewDownload::from_spec(&job).expect("spec serialises");
     let (a, b, c) = (

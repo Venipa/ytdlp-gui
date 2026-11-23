@@ -160,6 +160,13 @@ pub struct Settings {
     pub ytdlp_auto_check: bool,
     pub clipboard_watch: bool,
     pub clipboard_auto_add: bool,
+    /// Site rules, first match wins (Settings › Site rules). `clipboard_auto_add`, `last_preset` and
+    /// `default_fix` are the "Everything else" rule.
+    pub site_rules: Vec<crate::SiteRule>,
+    /// The fix run on downloads no rule matches.
+    pub default_fix: Option<crate::Fix>,
+    /// Video encoder for fixes that convert: `auto` (hardware when ffmpeg has it), `hardware`, `software`.
+    pub encoder: String,
     pub notifications: bool,
     pub close_to_tray: bool,
     pub start_minimized: bool,
@@ -207,6 +214,9 @@ impl Default for Settings {
             ytdlp_auto_check: true,
             clipboard_watch: true,
             clipboard_auto_add: false,
+            site_rules: vec![],
+            default_fix: None,
+            encoder: "auto".into(),
             notifications: true,
             close_to_tray: false,
             start_minimized: false,
