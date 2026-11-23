@@ -1,0 +1,104 @@
+# ytdlpd decisions
+
+Every pick is recorded here for the owner's review. UI picks made during the build are added at the end of this file with a screenshot path. A changed pick means a new row (the old one becomes `retired` with the reason), never a silent edit.
+
+## Review queue for the owner
+Decisions marked with the pencil flag, one line each: id, pick, main alternative. Scan this, change any, and say so; nothing here blocks the build.
+- D-004: sqlx 0.9.1 first, 0.8.6 fallback; alternative: rusqlite as in maple (owner asked for sqlx).
+- D-007: hybrid engine, embedded CPython in our own exe, probes in-process, one `--engine-worker` child per download; alternative: bundled python running `worker.py` only (also the fallback at gate G1), or in-process threads for downloads.
+- D-008: Python 3.14.10; alternative: 3.13 (older, safer wheels) or 3.15.2.
+- D-010: Python runtime bundled with the installer (+25 to 35 MB); alternative: download-only on first run (about 10 MB installer).
+- D-014: deno for the JavaScript runtime (detect deno, node, bun, quickjs first); alternative: ytdlp-ejs crate embedded QuickJS later.
+- D-015: ffmpeg gpl builds from BtbN; alternative: lgpl builds or gyan.dev.
+- D-016: macOS ffmpeg from martin-riedl.de; alternative: evermeet.cx (x64 only) or osxexperts.
+- D-026: default file name `%(title).180B [%(id)s].%(ext)s`; alternative: old `[%(source)s_%(id)s] %(title)s.%(ext)s`.
+- D-027: concurrency 3 global, 2 per domain; alternative: 2 and 2 as the old app.
+- D-034: Ledger direction, dark default, amber only for activity; alternative: paper-first light (retired D-065) or maple's neutral Inter look.
+- D-037: radius 2, ink-blue for selection and focus; alternative: radius 6 (maple default) or 4.
+- D-038: title-bar navigation (Downloads, Logs, Settings) plus a Settings side list; alternative: left sidebar as the old app.
+- D-041: full feature list in v1, built must-first; alternative: ship 1.0 at the must line (G3) and move depth to 1.1.
+- D-054: name `ytdlpd`, id `net.venipa.ytdlpd`, GPL-3.0-or-later; alternative: another name or license.
+- D-055: no self-updater in v1; alternative: port maple's updater earlier.
+
+## Questions for the owner (only what changes what gets built)
+1. Name and id: keep `ytdlpd` / `net.venipa.ytdlpd`? (changes bundle ids, data dirs, installer, deep-link scheme)
+2. License: GPL-3.0-or-later like maple, with ffmpeg gpl builds downloaded? (alternative: lgpl ffmpeg builds, fewer encoders)
+3. Installer size: bundle the Python runtime (+25 to 35 MB, works offline for yt-dlp) or download it on first run (about 10 MB installer, needs network at first start)?
+4. Verification: Windows only on the dev box; are you able to run a macOS and a Linux pass before a release candidate? (otherwise those OSes ship unverified)
+5. Chrome cookies on Windows are blocked by Chrome 127+ app-bound encryption: ok to recommend Firefox or a cookies file in the UI and not promise Chrome?
+
+## Decision log
+Status: adopted or retired. "Orig" is the id used in the round 1 to 3 notes (D-0xx draft, D-1xx dev, D-2xx reviewer, D-3xx QA, R-n lead rulings, Q-n open questions).
+
+| ID | Orig | Area | Decision | Alternatives | Why | Owner may change | Status |
+|---|---|---|---|---|---|---|---|
+| D-001 | D-001 | Repo | maple layout: bun root, `apps/desktop` own Cargo workspace, `packages/gpui` copy (sonorahq fork @17c64ae), toolchain 1.98.1 | git dependency on gpui | `ui` ports unchanged; same toolchain | no | adopted |
+| D-002 | D-002 | Crates | Crates per architecture.md: `ytdlpd, cli, views, state, domain, storage, engine, tools, ui, router, input, i18n, icons, embed`; engine, tools, storage, domain gpui-free | merge engine and tools | headless testing, lane isolation | no | adopted |
+| D-003 | D-003 | UI kit | Copy maple `ui` verbatim, prune music-only leaf modules in Phase 6; keep `Artwork` (coupled to card, picker, table, drag) | prune at copy time | copy first is fastest; ~23k lines, deps are only gpui, i18n, icons and OS crates | no | adopted |
+| D-004 | D-004, D-105, R5 | Data | sqlx 0.9.1 first (`runtime-tokio, sqlite, migrate, macros`, no default features), fallback 0.8.6 (cached locally); runtime-checked `query_as` + `FromRow`; embedded `migrate!`; WAL | rusqlite (maple); `query!` macros | owner asked sqlx; no `DATABASE_URL` needed to build; 0.9 feature names unverified | yes | adopted |
+| D-005 | D-005, Q-5 | Data | No FTS5; filter in memory on `DownloadSummary` with precomputed lowercase fields | FTS5 + triggers | 50k rows is about 10 MB and microseconds; revisit above 50k | no | adopted |
+| D-006 | D-006 | Settings | settings.json with hot reload (maple pattern); runtime state in `app_state` | settings table | hand-editable, maple parity | no | adopted |
+| D-007 | D-007, R1, D-101, D-218, D-219, Q-2, Q-3 | Engine | Hybrid: `engine` embeds CPython via PyO3 (no yt-dlp exe, no stdout parsing, typed hooks). Probes in-process on a warm interpreter with a timeout (stuck probe abandoned, not killed). Each download in a child of our own exe, `ytdlpd --engine-worker`, JSON-lines IPC, kill-tree cancel. `engine::Backend` trait from day 1. Fallback if PyO3 link or packaging fails on an OS: worker = bundled python running `worker.py`, same protocol. Decided at gate G1 (Windows spike, 3 days, exit: fixture download with progress and kill-tree cancel) | threads in one interpreter (draft); worker.py only (dev's pick); yt-dlp exe sidecar with `--progress-template` | owner asked for an embedded crate; process isolation gives clean cancel (threads cannot be killed, ffmpeg survives), crash isolation, no GIL contention; yt-dlp documents no thread-safety contract | yes | adopted |
+| D-008 | D-008, R4 | Engine | CPython 3.14.10 from python-build-standalone tag 20261110 (verified for all 6 triples with SHA256SUMS) | 3.13 (reviewer wanted it for the spike), 3.15.2, free-threaded | longer support; yt-dlp needs >= 3.10 (latest requires >= 3.11); bump to 3.15 after pycryptodomex wheels exist. Falls back to 3.13 if the spike shows 3.14 problems | yes | adopted |
+| D-009 | D-009 (draft change), Q-1 | Engine | PyO3 0.30.1, full libpython (not abi3) via `PYO3_CONFIG_FILE` (`runtime/pyo3.cfg`) | abi3 + generate-import-lib; auto-initialize | embedding links exactly one runtime; relative path in `.cargo/config.toml` works | no | adopted |
+| D-010 | D-010, D-108 | Packaging | Python runtime bundled beside the exe; `tools` can repair a missing or corrupt runtime by downloading | download-only on first run | works offline; simple loader on all OSes; +25 to 35 MB installer | yes | adopted |
+| D-011 | D-011, D-104 | Engine | Native deps baked at build (certifi, requests, urllib3, websockets, mutagen, brotli, pycryptodomex); only yt-dlp and yt-dlp-ejs update at runtime, as a pair (exact `Requires-Dist` pin from the wheel METADATA), in one versioned site dir | update everything from PyPI | native wheels are ABI bound and macOS library validation rejects unsigned downloaded `.so`; ejs script version must match yt-dlp major.minor | no | adopted |
+| D-012 | D-217, R7 | Engine | A yt-dlp + ejs pair is baked into the bundled runtime so the first run works offline; runtime update overlays newer | installer ships none (draft) | first run must not depend on PyPI | no | adopted |
+| D-013 | D-305, R6 | Engine | Wheel switch is verified in a throwaway process (`ytdlpd --self-test --site <dir>`) before the active pointer changes; keep previous; rollback on failure | in-process import check on next job | an in-process import cannot validate a new version (modules cached) | no | adopted |
+| D-014 | D-013, Q-4 | Tools | deno for the JS runtime (detect deno >= 2.3, node >= 22, bun, quickjs first); `js_runtimes` passed as a dict | ytdlp-ejs crate (embedded QuickJS) now | yt-dlp default and most reliable; ejs crate stays a v2 optimisation | yes | adopted |
+| D-015 | D-014, D-103 | Tools | ffmpeg + ffprobe: BtbN gpl static builds on win and linux x64/arm64; discover assets by regex over the `latest` release and take the highest n.m (n8.1 and n9.0 coexist); `lgpl` selectable | lgpl default; gyan.dev; hardcoded branch name (the draft's `n8.0` was stale) | app is GPL; all four platforms exist; checksums in the release | yes | adopted |
+| D-016 | D-015, Q-4 | Tools | macOS ffmpeg and ffprobe from martin-riedl.de redirect URLs; checksum fetched from the resolved URL | evermeet.cx (x64 only, PGP sig only), osxexperts | both archs, signed and notarised, `.sha256` published | yes | adopted |
+| D-017 | D-016 | Tools | Resolution order: settings path, PATH, well-known dirs, managed install; every candidate version-probed | always managed | respects user installs; fixes macOS Finder PATH gaps | no | adopted |
+| D-018 | D-017, D-304, R6 | Security | Every download verified against its source checksum, fail closed (no unverified fallback, one silent retry at most); zip-slip and oversize-unpack guards | none | integrity; BtbN `latest` can be mid-republish | no | adopted |
+| D-019 | D-018, D-107 | State | Progress: worker emits at most 4 per second; host keeps latest-wins atomics; 250 ms tick only while jobs run; DB writes on phase change and at most every 5 s | one event per hook call | fixes the old re-render storm | no | adopted |
+| D-020 | D-019 (amended), D-020, D-102 | Engine | Cancel and pause kill the process tree (Windows Job Object with KILL_ON_JOB_CLOSE, unix process group, Linux PDEATHSIG, macOS stdin EOF); cancel deletes known partials from `files` events, pause keeps them; resume uses `continuedl=true` | raise from hooks; async-exception injection | instant, also during extraction and ffmpeg merges; no "stopping after the current step" copy | no | adopted |
+| D-021 | D-021 | State | Retry on the same row; after a crash active rows become `paused` ("interrupted") | new row; cancelled | old bugs | no | adopted |
+| D-022 | D-301 | State | Pure `domain::transition(status, event)` with the 8 x 11 table in architecture.md, tested over all pairs | implicit transitions | testability | no | adopted |
+| D-023 | D-302 | Engine | Pure `classify()` with golden table `errors.tsv` (>= 30 real messages); codes include `disk_full`, `permission`, `unsupported_url`, `format_unavailable`, `age_restricted`, `ssl`, `cookies_locked`; unknown is not retryable | text matching ad hoc | brittle otherwise | no | adopted |
+| D-024 | D-303 | State | `backoff = min(60, 15 * 2^(n-1))` s, +-20% jitter, max 5 attempts, `Retry-After` overrides, injected `Clock`; only `network` and `rate_limited` retry | fixed 15 s to 60 s without cap | testable, no hammering | no | adopted |
+| D-025 | D-022 | Engine | Presets via `format_sort res:N` + `bv*+ba/b`; every audio preset really converts | height filter strings | graceful fallback; old app only converted mp3 | no | adopted |
+| D-026 | D-023 | Product | Default template `%(title).180B [%(id)s].%(ext)s` | `[%(source)s_%(id)s] %(title)s.%(ext)s` | readable, unique, byte-limited | yes | adopted |
+| D-027 | D-024, D-306 | State | Concurrency 3 global and 2 per domain; a 429 puts the domain in a penalty box (1 slot for 5 minutes) | 2 and 2 | modern lines; per-domain avoids 429s | yes | adopted |
+| D-028 | D-028 | State | Clipboard: read on window activation; never writes; prompt by default, auto-add opt-in | always auto-add; 1 s background poll | old bugs; polling costs CPU and is untestable | no | adopted |
+| D-029 | D-107 | Engine | IPC schema as architecture.md section 4, plus a `files` event for cleanup | stdout text | typed, testable | no | adopted |
+| D-030 | D-106 | Windows | Exe manifest `longPathAware`, GUI subsystem in release, every child `CREATE_NO_WINDOW`, worker flags `-I -X utf8 -u -B` in the fallback | console windows flashing | long paths and no console flashes | no | adopted |
+| D-031 | D-307, Q-9 | Security | Cookie files copied to `data/cookies/` with restricted ACL, never in settings.json or logs; log scrubbing of Cookie, Authorization and token-like query values; UI recommends Firefox or a cookies file for cookies-from-browser (Chrome 127+ app-bound encryption) | store in settings; promise Chrome | old app's insecure settings | no | adopted |
+| D-032 | D-209, D-210 | Data | Schema additions: `output_dir`, `format_label`, `next_attempt_at`, `file_missing`, `status_reason`, playlist `extractor` and `remote_id`; `info_json` keeps formats; status as TEXT with CHECK mapped to a Rust enum | separate formats table | rows survive settings changes; backoff survives restart | no | adopted |
+| D-033 | reviewer, R5 | Data | Forward-only migrations; `0001` editable pre-1.0; copy DB to `ytdlpd.db.bak-<ver>` once per version bump before migrating | no backup | safety | no | adopted |
+| D-034 | D-025 (replaced), D-211 (part), R3 | Design | Direction Ledger: dark default, light first-class; one bold element = numbered ledger rows whose ruled line is the progress; amber only for activity; ink-blue for selection, focus, links; primary button is inverse paper | Catalogue with amber primary and mono figures (draft); paper-first light; maple neutral Inter dark | grounded in the subject, avoids the "near-black + amber + mono" tell, owner uses dark | yes | adopted |
+| D-035 | D-212, R3 | Design | IBM Plex Sans with tabular figures for all numbers; Plex Mono only for call numbers, ids and format codes, logs, paths, intake text | mono for all data | removes the mono-data tell, keeps columns aligned | no | adopted |
+| D-036 | D-213 | Design | Unit test computes WCAG contrast from the tokens (4.5:1 text, 3:1 non-text) | eyeballing | catches theme edits | no | adopted |
+| D-037 | D-215, Q-8 | Design | Radius 2 via `ThemeOverrides.radius` (fallback 4 for buttons); selection and focus in ink-blue | radius 6 (draft, maple default); amber focus | ledger and paper feel, not bubbly; amber would mean activity | yes | adopted |
+| D-038 | D-026, D-214 | Design | Title-bar navigation (Downloads, Logs, Settings); Settings uses a new `ui::SideNav` because `Tabs` is horizontal only | left sidebar (old app, maple) | three destinations; gives the list the width | yes | adopted |
+| D-039 | D-027 | Design | No new Theme fields; ink-blue lives in `table_active_border`; completed is quiet, failed is danger | add `success` token | maple JSON themes keep working | no | adopted |
+| D-040 | D-216 | UX | Multi-URL paste opens a batch card (shared preset, per-URL status, invalid lines skipped, duplicates flagged); drag and drop of links and `.txt`/`.url` files; probe failures inline with one action | one card per URL; no drop support | covers real paste behaviour | no | adopted |
+| D-041 | D-201, R2 | Scope | Full v1 feature list is built (owner wants a fully working app); reviewer's must/nice split only orders the phases (must in Phases 2 to 4, depth in 5 and 6) | ship 1.0 at the must line, depth in 1.1 | owner's request | yes | adopted |
+| D-042 | D-202, R6 | Process | Phase 0 split: 0a skeleton (lead + Lane A), 0b contract, themes and spikes (all lanes in parallel) | single-lane Phase 0 | other lanes would idle | no | adopted |
+| D-043 | D-203, R6 | Process | Headless `domain` contract crate authored by C, reviewed by A, frozen at tag `contract-1`; `state::fake::FakeBackend`; bin Cargo feature `real-engine` (default on) so `--no-default-features` builds without Python | "state API with fakes" | A and C cannot block each other; lanes build without a Python runtime | no | adopted |
+| D-044 | D-204 | Process | Four lanes: A UI, B engine, C data + state + domain, D tools + platform + bin + CI + docs structure | other splits | disjoint ownership | no | adopted |
+| D-045 | D-205 | Process | Gates G0 to G5 as in plan.md | none | engine spike and contract gate UI work | no | adopted |
+| D-046 | D-206 | Process | Shared-file owners as in plan.md (Cargo.toml D; Destination A; state API and domain C; main.rs D; ftl per lane; Cargo.lock regenerated by the merger) | free for all | no rebase fights | no | adopted |
+| D-047 | D-207, R9 | Process | Git worktrees `lane/<x>`, daily rebase on `main`, CI-gated merges, `CONTRACT:` commit prefix, Conventional Commits; git init in Phase 0a; lead verifies before `done` | shared checkout | isolation and traceability | no | adopted |
+| D-048 | D-208, brief | Process | Handoff at ~300k to `F:\tmp\ytdlpd-rs\handoff\<lane>.md` (state, open items, owned files, next steps, pitfalls, last sha, plan items flipped); never above 350k | none | brief | no | adopted |
+| D-049 | D-308 | Process | Flags: `--data-dir`, `--window-size`, `--demo <scene>` (debug), `--self-test`, `--frame-stats` (debug), `--engine-worker`; `scripts/screenshot.ps1` | none | deterministic screenshots and tests | no | adopted |
+| D-050 | D-309 | Process | `YTDLPD_TOOLS_MIRROR` base-URL override for `tools` tests | live network in tests | deterministic | no | adopted |
+| D-051 | D-310 | QA | Fixtures committed <= 300 KB with generator scripts; large fixtures generated at test time under `F:\tmp` | commit large media | repo size | no | adopted |
+| D-052 | D-311 | QA | CI: maple's ci.yml adapted, plus a Windows nextest job | clippy-only on Windows | Windows is primary and Python embedding is OS specific | no | adopted |
+| D-053 | D-220, D-221, D-222 | Docs | `docs/{plan,product,design,architecture,qa,decisions}.md`; root README and CHANGELOG, `apps/desktop/CLAUDE.md`, `THIRD-PARTY.md` (Phase 7); plan.md in maple format with gates and lane tables; doc edit in the same commit as behaviour | docs as a lane | keeps docs true | no | adopted |
+| D-054 | D-029, R10 | Identity | Name `ytdlpd`, id `net.venipa.ytdlpd`, GPL-3.0-or-later, dirs `ytdlpd` and `ytdlpd.dev` | other names or licenses | brief; same license as maple | yes | adopted |
+| D-055 | D-030 | Scope | Self-updater deferred (port maple `updates/` later) | in v1 | scope | yes | adopted |
+| D-056 | D-031 | Platform | Notifications via notify-rust; Windows AUMID set by the installer shortcut | gpui native | cross-platform today | no | adopted |
+| D-057 | D-032 | Platform | Deep link `ytdlpd://add?url=`; registered by installer (registry, plist, `.desktop`) and on first run in portable mode; only http(s) URLs accepted | none | brief | no | adopted |
+| D-058 | R8 | Process | No blocking UI preview round: every UI pick is recorded here with a screenshot path and the lead builds a screenshot review page for the owner at the end | preview round per UI change | owner said to pick recommended options and record | no | adopted |
+| D-059 | R2, R9 | Process | Windows is verified every phase; macOS and Linux get code paths and CI builds; owner-run passes before release candidates | verify all three | lead can only run Windows | no | adopted |
+| D-060 | R10 | Process | The owner question list stays at 5 or fewer; everything else is a recorded default | many questions | brief | no | adopted |
+| D-061 | D-012 (draft) | Engine | Thread per job in one interpreter | - | retired by R1: no clean cancel (async exception never fires while blocked in socket or `Popen.wait`; ffmpeg keeps running), shared module globals, GIL contention | - | retired |
+| D-062 | D-019 (part) | Engine | Cancel by raising from hooks plus `PyThreadState_SetAsyncExc` | - | retired by R1: replaced by kill-tree (D-020) | - | retired |
+| D-063 | D-009 (abi3 version) | Engine | abi3 linking | - | retired: full libpython via PYO3_CONFIG_FILE (D-009) | - | retired |
+| D-064 | D-025 (draft look) | Design | "Catalogue": amber primary, 17px mono intake hero, mono for figures | - | retired by D-034: the generic dark-amber-mono tell (reviewer) | - | retired |
+| D-065 | D-211 (paper-first) | Design | Light theme as the lead look, dark as derivation | - | retired by R3: owner's default theme is dark; light stays first-class | - | retired |
+| D-066 | D-101 (option B as default) | Engine | worker.py in bundled python as the only engine | - | demoted to the G1 fallback by R1 (owner asked for an embedded crate) | - | retired |
+| D-067 | draft 4.5, 4.6, Q-10 | Docs | Draft claims: 30 MB runtime, `n8.0` ffmpeg asset name, "no deno win arm64 asset", installer ships no wheel | - | retired: corrected by dev verification (sizes, regex discovery, `deno-aarch64-pc-windows-msvc.zip` exists) and D-012 | - | retired |
+
+## UI picks recorded during the build
+(Empty. Lanes append rows here: id, screen, pick, alternative, screenshot path under `F:\tmp\ytdlpd-rs\shots\`.)
