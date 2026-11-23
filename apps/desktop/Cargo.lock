@@ -8148,6 +8148,7 @@ dependencies = [
  "log",
  "notify-rust",
  "router",
+ "serde_json",
  "state",
  "storage",
  "tray-icon",

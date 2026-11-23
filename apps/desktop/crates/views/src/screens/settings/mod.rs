@@ -2,6 +2,9 @@
 //! `state::AppSettings` (settings.json), so edits in the UI and edits of the file show in both.
 
 mod fields;
+mod look;
+
+pub use look::{apply_stored, apply_window};
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -13,15 +16,14 @@ use fields::{Field, Invalid, is_cookies_text};
 use gpui::prelude::*;
 use gpui::{
     AnyElement, App, ClickEvent, Context, Entity, FontWeight, PathPromptOptions, SharedString,
-    Window, div, px,
+    Task, Window, div, px,
 };
 use i18n::t;
 use router::{Destination, Navigation, NavigationEvent, SettingsPage};
-use state::{AppSettings, AppState, Tools};
+use state::{AppSettings, AppState, Hooks, Tools};
 use ui::{
     ActiveTheme as _, Button, Chip, Input, Look, MONO, MenuItem, Notice, Picker, Popovers,
-    ProgressRule, Rounding, Rule, SideNav, SideNavItem, SwitchRow, Text, Theme, ThemeKind,
-    ThemeOverrides, tabular,
+    ProgressRule, Rule, SideNav, SideNavItem, SwitchRow, Text, WindowBlur, tabular,
 };
 
 use crate::format;
@@ -63,8 +65,14 @@ pub struct SettingsView {
     /// The outcome of the last cookie action, `true` when it failed.
     cookie_note: Option<(SharedString, bool)>,
     /// The theme and font size the window shows now, so only a change repaints.
-    applied: (String, u32),
+    applied: Look,
     language: String,
+    /// The look the window was last given, so a frame re-applies only after a change.
+    window_look: Option<Look>,
+    /// The sample file name for the current template, or why it failed.
+    preview: Option<Result<String, String>>,
+    preview_task: Option<Task<()>>,
+    preview_inputs: (String, String),
 }
 
 impl SettingsView {
@@ -86,10 +94,7 @@ impl SettingsView {
         let fields = Field::ALL
             .into_iter()
             .map(|field| {
-                let numeric = matches!(
-                    field,
-                    Field::Global | Field::PerDomain | Field::Retries | Field::FontSize
-                );
+                let numeric = matches!(field, Field::Global | Field::PerDomain | Field::Retries);
                 let hint = match field {
                     Field::Proxy => "set-proxy-hint",
                     Field::Rate => "set-rate-hint",
@@ -115,15 +120,21 @@ impl SettingsView {
                 }
             })
             .collect();
-        Self {
+        let mut this = Self {
             state,
             navigation,
             fields,
             popovers: Popovers::default(),
             cookie_note: None,
-            applied: (current.theme.clone(), current.font_size as u32),
+            applied: look::look_of(&current, None),
             language: current.language,
-        }
+            window_look: None,
+            preview: None,
+            preview_task: None,
+            preview_inputs: (current.outtmpl.clone(), current.output_dir.clone()),
+        };
+        this.refresh_preview(cx);
+        this
     }
 
     fn settings(&self) -> Entity<AppSettings> {
@@ -159,6 +170,10 @@ impl SettingsView {
     /// The settings changed (own edit or the file): refresh fields that moved, theme, language.
     fn settings_changed(&mut self, cx: &mut Context<Self>) {
         let current = self.settings().read(cx).get().clone();
+        if self.preview_inputs != (current.outtmpl.clone(), current.output_dir.clone()) {
+            self.preview_inputs = (current.outtmpl.clone(), current.output_dir.clone());
+            self.refresh_preview(cx);
+        }
         for state in &mut self.fields {
             let shown = state.field.show(&current);
             if shown != state.shown {
@@ -172,21 +187,10 @@ impl SettingsView {
                 state.shown = shown;
             }
         }
-        let look = (current.theme.clone(), current.font_size as u32);
+        let look = look::look_of(&current, None);
         if look != self.applied {
             self.applied = look;
-            let look = Look {
-                kind: ThemeKind::from_id(&current.theme),
-                rounding: Rounding::Subtle,
-                font: current.font_size,
-                transparent: false,
-                transparency: 1.,
-                blur: false,
-                blur_window: false,
-                tint: None,
-                tint_secondary: None,
-            };
-            Theme::set(look, &ThemeOverrides::default(), cx);
+            look::apply_look(look, cx);
         }
         if current.language != self.language {
             self.language = current.language.clone();
@@ -249,10 +253,10 @@ impl SettingsView {
     }
 
     /// A single-choice row of chips.
-    fn chips<const N: usize>(
+    fn chips(
         &self,
         row: &'static str,
-        choices: [(&'static str, &'static str, bool, Edit); N],
+        choices: impl IntoIterator<Item = (&'static str, &'static str, bool, Edit)>,
     ) -> AnyElement {
         div()
             .flex()
@@ -396,11 +400,23 @@ impl SettingsView {
             self.cookie_note = Some((t!("set-cookies-bad"), true));
             return cx.notify();
         }
-        let dir = self.state.paths.data.join("cookies");
-        let file = dir.join("cookies.txt");
-        let written = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&file, text));
-        match written {
-            Ok(()) => {
+        let data = &self.state.paths.data;
+        // the engine stores the file owner-only; without it (no-engine build) a plain copy
+        let stored = match cx
+            .try_global::<Hooks>()
+            .and_then(|h| h.store_cookies.clone())
+        {
+            Some(store) => store(data, text),
+            None => {
+                let file = data.join("cookies").join("cookies.txt");
+                std::fs::create_dir_all(data.join("cookies"))
+                    .and_then(|_| std::fs::write(&file, text))
+                    .map(|_| file)
+                    .map_err(|e| e.to_string())
+            }
+        };
+        match stored {
+            Ok(file) => {
                 let path = file.to_string_lossy().into_owned();
                 self.settings().update(cx, |s, cx| {
                     s.update(
@@ -419,6 +435,40 @@ impl SettingsView {
             }
         }
         cx.notify();
+    }
+
+    /// Recomputes the file name preview off the UI thread; the newest request wins.
+    fn refresh_preview(&mut self, cx: &mut Context<Self>) {
+        let Some(preview) = cx.try_global::<Hooks>().and_then(|h| h.preview.clone()) else {
+            return;
+        };
+        let settings = self.settings();
+        let (spec, dir) = {
+            let s = settings.read(cx);
+            let spec = s.job_spec(
+                "https://example.com/watch?v=dQw4w9WgXcQ",
+                Preset::DEFAULT,
+                "",
+                None,
+            );
+            (spec, s.get().output_dir.clone())
+        };
+        let io = self.state.io.clone();
+        self.preview_task = Some(cx.spawn(async move |this, cx| {
+            let result = io
+                .spawn_blocking(move || preview(&spec))
+                .await
+                .unwrap_or_else(|e| Err(e.to_string()));
+            this.update(cx, |this, cx| {
+                this.preview = Some(result.map(|path| {
+                    let path = std::path::Path::new(&path);
+                    let shown = path.strip_prefix(&dir).unwrap_or(path);
+                    shown.to_string_lossy().into_owned()
+                }));
+                cx.notify();
+            })
+            .ok();
+        }));
     }
 
     fn clear_cookies(&mut self, cx: &mut Context<Self>) {
@@ -514,13 +564,20 @@ impl SettingsView {
                 self.input(Field::Template, 420., cx),
                 cx,
             ),
-            // shortcut: no live preview until engine::preview_filename lands, see plan.md Phase 4
             self.row(
                 t!("set-preview"),
                 div()
+                    .font_family(MONO)
                     .text_size(theme.text(Text::Small))
-                    .text_color(theme.muted_foreground)
-                    .child(t!("set-preview-pending")),
+                    .text_color(match &self.preview {
+                        Some(Err(_)) => theme.danger,
+                        _ => theme.muted_foreground,
+                    })
+                    .child(match &self.preview {
+                        Some(Ok(name)) => SharedString::from(name.clone()),
+                        Some(Err(_)) => t!("set-preview-failed"),
+                        None => t!("set-preview-pending"),
+                    }),
                 cx,
             ),
             self.row(
@@ -905,6 +962,21 @@ impl SettingsView {
     }
 
     fn page_appearance(&self, s: &Settings, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let bg = |id: &'static str, key| {
+            (
+                id,
+                key,
+                s.background == id,
+                Rc::new(move |st: &mut Settings| st.background = id.to_owned()) as Edit,
+            )
+        };
+        let mut backgrounds = vec![
+            bg("solid", "set-bg-solid"),
+            bg("translucent", "set-bg-translucent"),
+        ];
+        if WindowBlur::supported(cx) {
+            backgrounds.push(bg("blur", "set-bg-blur"));
+        }
         let choice = |id: &'static str, key| {
             (
                 id,
@@ -930,7 +1002,19 @@ impl SettingsView {
                 s.compact_mode = v;
                 s.show_thumbnails = !v;
             }),
-            self.row(t!("set-font-size"), self.stepper(Field::FontSize, cx), cx),
+            self.row(t!("set-background"), self.chips("bg", backgrounds), cx),
+            self.row(
+                t!("set-font-size"),
+                div().flex().gap_2().children(look::FONT_SIZES.map(|px| {
+                    Chip::new(
+                        SharedString::from(format!("font-{px}")),
+                        t!("set-px", value = px as i64),
+                    )
+                    .selected(s.font_size == px)
+                    .on_click(self.edit(move |st| st.font_size = px))
+                })),
+                cx,
+            ),
         ]
     }
 
@@ -986,7 +1070,11 @@ fn tool_key(kind: ToolKind) -> &'static str {
 }
 
 impl Render for SettingsView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.window_look != Some(self.applied) {
+            self.window_look = Some(self.applied);
+            look::apply_window(window, cx);
+        }
         let theme = *cx.theme();
         let page = match self.navigation.read(cx).current() {
             Destination::Settings(page) => page,

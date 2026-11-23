@@ -138,3 +138,7 @@ Status: adopted or retired. "Orig" is the id used in the round 1 to 3 notes (D-0
 | D-113 | Engine | `EngineError.retry_after: Option<u64>` (additive, `CONTRACT:`), read from `Retry-After` of a 429; `err-*` Fluent copy for every ErrorCode lives in `errors.ftl` (test fails if one is missing). |
 | D-114 | Engine | `--self-test --site <dir>` fails if the dir is missing or yt-dlp was not imported from it. |
 
+| D-140 | UI | Settings is one `SettingsView` entity over `AppSettings`; text fields validate on typing (proxy URL, rate 500K/2M, template non-empty, numbers, language codes) and write back only when valid; file edits refresh fields | lane A3 | yes | adopted |
+| D-141 | UI | `state::Hooks` global carries engine services (filename preview, owner-only cookie store) so `views` never links `engine` | lane A3 | yes | adopted |
+| D-142 | UI | Cookies paste field is not a text input (Input is single-line and collapses line breaks, which breaks Netscape text): "Paste from clipboard" and "Import cookies file" instead | lane A3 | yes | adopted |
+| D-143 | UI | Appearance: `background` solid/translucent/blur mapped to `Look{transparent,blur_window}`, text size chips 11/12/13/14/16 (default 12), compact mode and `show_thumbnails` mirror each other | lane A3 / owner 7A 8C | yes | adopted |

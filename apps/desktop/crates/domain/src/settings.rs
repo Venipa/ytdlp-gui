@@ -81,6 +81,8 @@ pub struct WindowState {
 pub struct Settings {
     pub theme: String,
     pub language: String,
+    /// `solid`, `translucent` or `blur`.
+    pub background: String,
     pub compact_mode: bool,
     /// Whether download rows show a thumbnail (ledger rows) instead of the compact style.
     pub show_thumbnails: bool,
@@ -119,9 +121,10 @@ impl Default for Settings {
         Self {
             theme: "dark".into(),
             language: "en-US".into(),
+            background: "solid".into(),
             compact_mode: false,
             show_thumbnails: false,
-            font_size: 13.0,
+            font_size: 12.0,
             output_dir: dirs::video_dir()
                 .or_else(dirs::home_dir)
                 .unwrap_or_default()
