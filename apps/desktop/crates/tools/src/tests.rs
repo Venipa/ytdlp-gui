@@ -408,8 +408,14 @@ fn pair_ffmpeg_puts_each_binary_next_to_the_other() {
     let ff = place(Tool::Ffmpeg, b"FF");
     let fp = place(Tool::Ffprobe, b"PROBE");
     pair_ffmpeg(&d);
-    assert_eq!(std::fs::read(ff.join(Tool::Ffprobe.exe_name())).unwrap(), b"PROBE");
-    assert_eq!(std::fs::read(fp.join(Tool::Ffmpeg.exe_name())).unwrap(), b"FF");
+    assert_eq!(
+        std::fs::read(ff.join(Tool::Ffprobe.exe_name())).unwrap(),
+        b"PROBE"
+    );
+    assert_eq!(
+        std::fs::read(fp.join(Tool::Ffmpeg.exe_name())).unwrap(),
+        b"FF"
+    );
     pair_ffmpeg(&d); // idempotent
 }
 

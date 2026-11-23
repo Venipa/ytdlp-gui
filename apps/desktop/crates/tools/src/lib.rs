@@ -207,8 +207,14 @@ pub fn pair_ffmpeg(dirs: &Dirs) {
             continue;
         }
         let _ = std::fs::remove_file(&dest);
-        if let Err(error) = std::fs::hard_link(src, &dest).or_else(|_| std::fs::copy(src, &dest).map(drop)) {
-            log::warn!("tools: cannot place {} next to {}: {error}", src.display(), other.display());
+        if let Err(error) =
+            std::fs::hard_link(src, &dest).or_else(|_| std::fs::copy(src, &dest).map(drop))
+        {
+            log::warn!(
+                "tools: cannot place {} next to {}: {error}",
+                src.display(),
+                other.display()
+            );
         }
     }
 }
