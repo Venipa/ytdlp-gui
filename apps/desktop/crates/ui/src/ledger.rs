@@ -13,7 +13,6 @@ use crate::input::Input;
 use crate::metrics::Text;
 use crate::theme::ActiveTheme as _;
 use crate::time::tabular;
-use crate::tooltip::Tipped as _;
 
 /// The family of call numbers, ids, format codes, logs and the intake text.
 pub const MONO: &str = "IBM Plex Mono";
@@ -34,12 +33,8 @@ const CHIP_GAP: Pixels = px(6.);
 /// The search field's width range: it gives way to the chips beside it in a narrow window.
 const SEARCH_MIN: f32 = 140.;
 const SEARCH_MAX: f32 = 280.;
-/// The side list's width, and its width when it shows icons only.
-const NAV_WIDTH: f32 = 184.;
-const NAV_NARROW: f32 = 48.;
 
 type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
-type SelectHandler = std::rc::Rc<dyn Fn(usize, &mut Window, &mut App)>;
 
 /// The four-digit job id that starts every ledger line.
 #[derive(IntoElement)]
@@ -352,26 +347,25 @@ impl RenderOnce for Chip {
             .cursor_pointer()
             .whitespace_nowrap()
             .text_size(theme.text(Text::Label))
-            .border_color(match selected {
-                true => theme.table_active_border,
-                false => theme.border,
-            })
+            // the chosen chip takes the sidebar's filled pill; the others are bare, muted text
+            .border_color(gpui::transparent_black())
             .bg(match selected {
-                true => theme.table_active,
+                true => theme.secondary_active,
                 false => gpui::transparent_black(),
             })
+            .text_color(match selected {
+                true => theme.foreground,
+                false => theme.muted_foreground,
+            })
             .when(!selected, |this| {
-                this.hover(|style| style.bg(theme.secondary_hover))
-                    .active(|style| style.bg(theme.secondary_active))
+                this.hover(|style| style.bg(theme.table_hover).text_color(theme.foreground))
+                    .active(|style| style.bg(theme.secondary_hover))
             })
             .child(self.label)
             .when_some(self.count, |this, count| {
                 this.child(
                     div()
-                        .text_color(match selected {
-                            true => theme.table_active_border,
-                            false => theme.foreground.opacity(0.72),
-                        })
+                        .text_color(theme.muted_foreground)
                         .font_features(tabular())
                         .child(grouped(count)),
                 )
@@ -396,127 +390,39 @@ pub fn grouped(count: usize) -> String {
     out
 }
 
-/// One entry of a [`SideNav`].
-pub struct SideNavItem {
-    /// Already translated label.
-    pub label: SharedString,
-}
-
-/// A vertical list of pages with the open one lit.
-#[derive(IntoElement)]
-pub struct SideNav {
-    items: Vec<SideNavItem>,
-    icons: Vec<&'static str>,
-    selected: usize,
-    narrow: bool,
-    on_select: SelectHandler,
-}
-
-impl SideNav {
-    /// A nav over `items` with `selected` lit; `on_select` receives the clicked index.
-    pub fn new(
-        items: Vec<SideNavItem>,
-        selected: usize,
-        on_select: impl Fn(usize, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        Self {
-            items,
-            icons: Vec::new(),
-            selected,
-            narrow: false,
-            on_select: std::rc::Rc::new(on_select),
-        }
-    }
-
-    /// Icon paths for the items, in order; items past the list have none.
-    pub fn icons(mut self, icons: impl IntoIterator<Item = &'static str>) -> Self {
-        self.icons = icons.into_iter().collect();
-        self
-    }
-
-    /// Shows the icons only, each naming its page in a tooltip, for a narrow window.
-    pub fn narrow(mut self, narrow: bool) -> Self {
-        self.narrow = narrow;
-        self
-    }
-}
-
-impl RenderOnce for SideNav {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let theme = *cx.theme();
-        let narrow = self.narrow;
-        div()
-            .flex()
-            .flex_col()
-            .flex_none()
-            .w(px(if narrow { NAV_NARROW } else { NAV_WIDTH }))
-            .gap(px(2.))
-            .p(theme.metrics.pad)
-            .border_r_1()
-            .border_color(theme.sidebar_border)
-            .children(self.items.into_iter().enumerate().map(|(index, item)| {
-                let on = index == self.selected;
-                let select = self.on_select.clone();
-                let icon = self.icons.get(index).copied();
-                let id: ElementId = ("side-nav", index).into();
-                crate::focus::focusable(div().id(id.clone()), &id, window, cx)
-                    .role(Role::Tab)
-                    .aria_label(item.label.clone())
-                    .aria_selected(on)
-                    .relative()
-                    .h(theme.metrics.control + px(4.))
-                    .flex()
-                    .flex_none()
-                    .items_center()
-                    .gap(px(10.))
-                    .px(theme.metrics.pad)
-                    .rounded(theme.radius)
-                    .cursor_pointer()
-                    .text_size(theme.text(Text::Body))
-                    .when(on, |this| {
-                        this.bg(theme.sidebar_accent)
-                            .text_color(theme.foreground)
-                            // the open page carries an ink edge, the same mark the title bar uses
-                            .child(
-                                div()
-                                    .absolute()
-                                    .left_0()
-                                    .top(px(8.))
-                                    .bottom(px(8.))
-                                    .w(px(2.))
-                                    .rounded_full()
-                                    .bg(theme.table_active_border),
-                            )
-                    })
-                    .when(!on, |this| {
-                        this.text_color(theme.muted_foreground).hover(|style| {
-                            style.bg(theme.secondary_hover).text_color(theme.foreground)
-                        })
-                    })
-                    .when(narrow, |this| {
-                        this.justify_center()
-                            .tip_label(item.label.clone(), crate::Perch::Trailing)
-                    })
-                    .on_click(move |_, window, cx| select(index, window, cx))
-                    .when_some(icon, |this, path| {
-                        this.child(
-                            gpui::svg()
-                                .path(icons::path(path))
-                                .size(px(16.))
-                                .flex_none()
-                                .text_color(match on {
-                                    true => theme.table_active_border,
-                                    false => theme.muted_foreground,
-                                }),
-                        )
-                    })
-                    .when(!narrow, |this| {
-                        this.child(div().truncate().child(item.label))
-                    })
-                    .map(|this| {
-                        crate::motion::pressing(this, &id, crate::motion::PRESS_SCALE, window, cx)
-                    })
-            }))
+/// A row of the app's sidebar: `icon` and `label`, muted until hovered or `on`. The open page
+/// takes the quiet filled pill (`secondary_active` under foreground text, no accent), a hovered
+/// row the lighter `table_hover`; focus draws the usual ring and a press scales it. On the
+/// `rail` the row shows its icon only and names itself in a tooltip beside it, `tip` being that
+/// tooltip's Fluent key. The caller adds a count with `.detail()` and the click.
+pub fn nav_item(
+    id: impl Into<ElementId>,
+    label: SharedString,
+    icon: &'static str,
+    tip: &'static str,
+    on: bool,
+    rail: bool,
+    cx: &App,
+) -> crate::Button {
+    let theme = cx.theme();
+    let row = crate::Button::new(id)
+        .ghost()
+        .icon(icon)
+        .tint(match on {
+            true => theme.foreground,
+            false => theme.muted_foreground,
+        })
+        .selected(on)
+        .lit(on, theme.secondary_active)
+        .w_full()
+        .h(theme.metrics.control + px(4.));
+    match rail {
+        true => row.name(label).tooltip_trailing(tip),
+        false => row
+            .label(label)
+            .px(theme.metrics.pad)
+            .gap(px(10.))
+            .justify_start(),
     }
 }
 

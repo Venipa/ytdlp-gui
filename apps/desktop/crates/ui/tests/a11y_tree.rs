@@ -28,8 +28,7 @@
 //! handles of a `RangeScrubber`, the window control and rail arrow buttons, and
 //! the sort state and focused row of a `Table`. `InfoCard`, `Fact`, `Notice`,
 //! `Vacancy` and `Kbd` return an `AnyElement` once `spoken` gives them an id,
-//! so they are manual passes too. `SideNav` is the same: its Tab nodes (labelled, selected) sit
-//! below a plain container, and `Chip`, `ProgressRule`, `Thumbnail` and `TokenInput` are covered
+//! so they are manual passes too. `Chip`, `ProgressRule`, `Thumbnail` and `TokenInput` are covered
 //! by `ledger_parts_speak_when_asked`.
 
 use std::{cell::RefCell, rc::Rc};
@@ -1014,4 +1013,77 @@ async fn unnamed_rule_stays_out_of_the_tree(cx: &mut TestAppContext) {
         snapshot("rule", &rule)
     });
     assert!(rendered(&lines, "rule")[0].contains("NO NODE"));
+}
+
+#[gpui::test]
+async fn sidebar_items_name_themselves_and_mark_the_open_page(cx: &mut TestAppContext) {
+    let lines = open_probe(cx, |window, cx| {
+        let open = ui::nav_item(
+            "nav-downloads",
+            "Downloads".into(),
+            "icons/download.svg",
+            "nav-downloads-tip",
+            true,
+            false,
+            cx,
+        )
+        .detail("253")
+        .render(window, cx)
+        .into_element();
+        let closed = ui::nav_item(
+            "nav-logs",
+            "Logs".into(),
+            "icons/list.svg",
+            "nav-logs-tip",
+            false,
+            false,
+            cx,
+        )
+        .render(window, cx)
+        .into_element();
+        let rail = ui::nav_item(
+            "nav-logs",
+            "Logs".into(),
+            "icons/list.svg",
+            "nav-logs-tip",
+            false,
+            true,
+            cx,
+        )
+        .render(window, cx)
+        .into_element();
+        [
+            snapshot("open", &open),
+            snapshot("closed", &closed),
+            snapshot("rail", &rail),
+        ]
+        .join(
+            "
+",
+        )
+    });
+    let lines: Vec<String> = rendered(&lines, "sidebar")
+        .join(
+            "
+",
+        )
+        .lines()
+        .map(String::from)
+        .collect();
+    let open = &lines[0];
+    assert!(
+        open.contains("role=Button")
+            && open.contains("name=Some(\"Downloads\")")
+            && open.contains("description=Some(\"253\")")
+            && open.contains("selected=Some(true)"),
+        "the open page's entry does not say its name, count and that it is open: {lines:?}"
+    );
+    let text = lines.join(
+        "
+",
+    );
+    assert!(
+        text.matches("name=Some(\"Logs\")").count() == 2,
+        "a closed or rail entry lost its name: {lines:?}"
+    );
 }
