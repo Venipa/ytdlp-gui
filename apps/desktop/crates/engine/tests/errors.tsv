@@ -1,0 +1,40 @@
+# exc_type	http_status	message	expected_code  (seeds from known yt-dlp wording; QA adds real captures)
+DownloadError		ERROR: [youtube] abc: Private video. Sign in if you've been granted access to this video	private
+DownloadError		ERROR: [youtube] abc: Video unavailable. This video is private	private
+DownloadError		ERROR: [youtube] abc: The uploader has not made this video available in your country	geo
+DownloadError		ERROR: [youtube] abc: This video is not available in your country	geo
+ExtractorError		ERROR: [generic] This video is geo restricted. You might want to use a VPN or a proxy server	geo
+DownloadError		ERROR: [youtube] abc: Sign in to confirm you're not a bot. Use --cookies-from-browser or --cookies for the authentication.	login
+DownloadError		ERROR: [instagram] abc: Login required	login
+DownloadError		ERROR: [twitter] abc: NSFW tweet requires authentication. Use --cookies-from-browser	login
+DownloadError		ERROR: [youtube] abc: Sign in to confirm your age. This video may be inappropriate for some users.	age_restricted
+DownloadError		ERROR: [youtube] abc: Sign in to confirm your age	age_restricted
+DownloadError		ERROR: [youtube] abc: Video unavailable	unavailable
+DownloadError		ERROR: [youtube] abc: This video is no longer available because the uploader has closed their account	unavailable
+DownloadError		ERROR: [vimeo] 1: This video does not exist	unavailable
+DownloadError	404	ERROR: Unable to download webpage: HTTP Error 404: Not Found	unavailable
+DownloadError	410	ERROR: unable to download video data: HTTP Error 410: Gone	unavailable
+DownloadError		ERROR: Unsupported URL: https://example.com/nothing	unsupported_url
+DownloadError		ERROR: [youtube] abc: Requested format is not available. Use --list-formats for a list of available formats	format_unavailable
+DownloadError	429	ERROR: unable to download video data: HTTP Error 429: Too Many Requests	rate_limited
+DownloadError		ERROR: [youtube] abc: Unable to download API page: HTTP Error 429: Too Many Requests	rate_limited
+DownloadError		ERROR: Unable to download webpage: <urlopen error [Errno 11001] getaddrinfo failed>	network
+DownloadError		ERROR: Unable to download webpage: <urlopen error [Errno -3] Temporary failure in name resolution>	network
+DownloadError		ERROR: unable to download video data: The read operation timed out	network
+DownloadError		ERROR: unable to download video data: [WinError 10054] An existing connection was forcibly closed by the remote host; Connection reset by peer	network
+DownloadError	503	ERROR: unable to download video data: HTTP Error 503: Service Unavailable	network
+DownloadError	502	ERROR: Unable to download webpage: HTTP Error 502: Bad Gateway	network
+IncompleteRead		IncompleteRead(1024 bytes read, 2048 more expected)	network
+DownloadError		ERROR: Unable to download webpage: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1000)>	ssl
+DownloadError		ERROR: [generic] Unable to download webpage: [SSL: WRONG_VERSION_NUMBER] wrong version number	ssl
+DownloadError		ERROR: Postprocessing: ffprobe and ffmpeg not found. Please install or provide the path using --ffmpeg-location	ffmpeg
+DownloadError		ERROR: ffmpeg not found. Please install or provide the path using --ffmpeg-location	ffmpeg
+DownloadError		WARNING: [youtube] abc: No supported JavaScript runtime could be found. Only deno is enabled by default	js_runtime_missing
+OSError		[Errno 28] No space left on device	disk_full
+OSError		[WinError 112] There is not enough space on the disk	disk_full
+PermissionError		[Errno 13] Permission denied: 'C:\Windows\x.mp4.part'	permission
+PermissionError		[WinError 5] Access is denied	permission
+DownloadError		ERROR: Could not copy Chrome cookie database. See https://github.com/yt-dlp/yt-dlp/issues/7271 for more info	cookies_locked
+OperationalError		database is locked	cookies_locked
+DownloadError	403	ERROR: unable to download video data: HTTP Error 403: Forbidden	unknown
+RuntimeError		something nobody has seen before	unknown

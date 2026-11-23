@@ -1,0 +1,28 @@
+{
+  "pbs": {
+    "tag": "20261110",
+    "python": "3.14.10",
+    "assets": {
+      "x86_64-pc-windows-msvc": {
+        "name": "cpython-3.14.10+20261110-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+        "sha256": "32b6cf90a03e2bc15fda8d2ab7ff78c4870f138887d612932650ce764efaab8f"
+      }
+    }
+  },
+  "deps": {
+    "brotli": "1.2.1",
+    "certifi": "2026.11.20",
+    "charset-normalizer": "3.5.2",
+    "idna": "3.20",
+    "mutagen": "1.48.1",
+    "pycryptodomex": "3.24.2",
+    "requests": "2.34.2",
+    "urllib3": "2.8.0",
+    "websockets": "17.4",
+    "yt-dlp": "2026.10.26",
+    "yt-dlp-ejs": "0.8.0"
+  },
+  "size_mb": {
+    "x86_64-pc-windows-msvc": 80.5
+  }
+}
