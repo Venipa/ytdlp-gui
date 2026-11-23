@@ -614,14 +614,11 @@ impl RenderOnce for Button {
             palette.active = None;
         }
         if disabled {
-            // disabled reads from the fill, not from fading the label: pencil stays above 4.5:1
-            // on the flat drawer an outline button takes, and above 3:1 on the edge fill
+            // disabled reads from the shape, not from fading the label: a filled button keeps an
+            // edge fill, an outline one goes hollow, so neither passes for the solid enabled
+            // look; pencil stays above 4.5:1 on the ground and above 3:1 on the edge fill
             palette.foreground = theme.muted_foreground;
-            palette.background = match (palette.background, palette.border) {
-                (Some(_), _) => Some(theme.muted),
-                (None, Some(_)) => Some(theme.secondary),
-                (None, None) => None,
-            };
+            palette.background = palette.background.map(|_| theme.muted);
             palette.border = palette.border.map(|_| theme.border);
             palette.hover = None;
             palette.active = None;

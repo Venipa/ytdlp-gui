@@ -118,6 +118,7 @@ pub use layout::{ALWAYS, MIN_CONTENT, ROOMY, Room, SNUG, VAST, WIDE};
 pub use lazy::Lazy;
 pub use ledger::{
     CallNumber, Chip, MONO, ProgressRule, Rule, SideNav, SideNavItem, Thumbnail, TokenInput,
+    grouped,
 };
 pub use level_meter::LevelMeter;
 pub use linger::{Linger, lingers};
