@@ -4,10 +4,11 @@
 use gpui::accesskit::Role;
 use gpui::prelude::*;
 use gpui::{
-    App, ClickEvent, ElementId, Entity, ObjectFit, Pixels, SharedString, Window, canvas, div, fill,
-    img, point, px, size,
+    App, ClickEvent, ElementId, Entity, Pixels, SharedString, Window, canvas, div, fill,
+    point, px, size,
 };
 
+use crate::artwork::Artwork;
 use crate::input::Input;
 use crate::metrics::Text;
 use crate::theme::ActiveTheme as _;
@@ -143,46 +144,80 @@ impl RenderOnce for ProgressRule {
     }
 }
 
-/// A 16:9 picture: the image at `path` or `url` when there is one, else an empty drawer.
+/// A 16:9 cover: the image at `path` or `url` when there is one, else an icon on a drawer.
+/// Decoding, the skeleton while it loads and the cache are the artwork loader's.
 #[derive(IntoElement)]
 pub struct Thumbnail {
     source: Option<SharedString>,
     width: Pixels,
+    audio: bool,
+    pill: Option<SharedString>,
 }
 
 impl Thumbnail {
-    /// A thumbnail `width` wide, 16:9.
+    /// A thumbnail `width` wide, 16:9. A source that is not a link is a file path.
     pub fn new(source: Option<SharedString>, width: Pixels) -> Self {
-        Self { source, width }
+        let source = source.map(|s| match s.starts_with("http") || s.starts_with("file://") {
+            true => s,
+            false => format!("file://{s}").into(),
+        });
+        Self {
+            source,
+            width,
+            audio: false,
+            pill: None,
+        }
+    }
+
+    /// Shows a note icon instead of a film strip when there is no image.
+    pub fn audio(mut self, audio: bool) -> Self {
+        self.audio = audio;
+        self
+    }
+
+    /// A small label over the bottom right corner, as the duration.
+    pub fn pill(mut self, pill: impl Into<SharedString>) -> Self {
+        self.pill = Some(pill.into());
+        self
     }
 }
 
 impl RenderOnce for Thumbnail {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = *cx.theme();
-        let frame = div()
+        let height = self.width * 9. / 16.;
+        let art = Artwork::new(self.source)
+            .size(self.width)
+            .wide(height)
+            .corner_radius(px(2.))
+            .fallback(match self.audio {
+                true => "icons/music.svg",
+                false => "icons/film.svg",
+            });
+        div()
+            .relative()
             .flex_none()
             .w(self.width)
-            .h(self.width * 9. / 16.)
-            .rounded(theme.radius)
+            .h(height)
+            .rounded(px(2.))
             .overflow_hidden()
             .bg(theme.secondary)
-            .border_1()
-            .border_color(theme.border);
-        match self.source {
-            Some(source) => frame.child(
-                img(source)
-                    .size_full()
-                    .object_fit(ObjectFit::Cover)
-                    .with_loading(|| {
-                        crate::skeleton::Skeleton::new()
-                            .size_full()
-                            .into_any_element()
-                    })
-                    .with_fallback(|| gpui::Empty.into_any_element()),
-            ),
-            None => frame,
-        }
+            .child(art)
+            .when_some(self.pill, |this, pill| {
+                this.child(
+                    div()
+                        .absolute()
+                        .right_1()
+                        .bottom_1()
+                        .px_1()
+                        .rounded(px(2.))
+                        .bg(gpui::black().opacity(0.7))
+                        .text_color(gpui::white())
+                        .text_size(theme.text(Text::Tiny))
+                        .font_features(tabular())
+                        .child(pill),
+                )
+            })
     }
 }
 
@@ -231,21 +266,20 @@ impl Chip {
 }
 
 impl RenderOnce for Chip {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = *cx.theme();
         let selected = self.selected;
         let name = match self.count {
             Some(count) => format!("{} {count}", self.label),
             None => self.label.to_string(),
         };
-        div()
-            .id(self.id)
+        crate::focus::focusable(div().id(self.id.clone()), &self.id, window, cx)
             .role(Role::Button)
             .aria_label(name)
             .flex()
             .items_center()
             .gap_1()
-            .h(px(24.))
+            .h(theme.metrics.control_small)
             .px_2()
             .rounded(theme.radius)
             .border_1()
@@ -283,6 +317,7 @@ pub struct SideNavItem {
 #[derive(IntoElement)]
 pub struct SideNav {
     items: Vec<SideNavItem>,
+    icons: Vec<&'static str>,
     selected: usize,
     on_select: SelectHandler,
 }
@@ -296,14 +331,21 @@ impl SideNav {
     ) -> Self {
         Self {
             items,
+            icons: Vec::new(),
             selected,
             on_select: std::rc::Rc::new(on_select),
         }
     }
+
+    /// Icon paths for the items, in order; items past the list have none.
+    pub fn icons(mut self, icons: impl IntoIterator<Item = &'static str>) -> Self {
+        self.icons = icons.into_iter().collect();
+        self
+    }
 }
 
 impl RenderOnce for SideNav {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = *cx.theme();
         div()
             .flex()
@@ -317,13 +359,16 @@ impl RenderOnce for SideNav {
             .children(self.items.into_iter().enumerate().map(|(index, item)| {
                 let on = index == self.selected;
                 let select = self.on_select.clone();
-                div()
-                    .id(("side-nav", index))
+                let icon = self.icons.get(index).copied();
+                let id: ElementId = ("side-nav", index).into();
+                crate::focus::focusable(div().id(id.clone()), &id, window, cx)
                     .role(Role::Tab)
                     .aria_label(item.label.clone())
+                    .aria_selected(on)
                     .h(px(32.))
                     .flex()
                     .items_center()
+                    .gap_2()
                     .px_2()
                     .rounded(theme.radius)
                     .cursor_pointer()
@@ -334,6 +379,18 @@ impl RenderOnce for SideNav {
                     })
                     .when(!on, |this| this.hover(|style| style.bg(theme.table_hover)))
                     .on_click(move |_, window, cx| select(index, window, cx))
+                    .when_some(icon, |this, path| {
+                        this.child(
+                            gpui::svg()
+                                .path(icons::path(path))
+                                .size(px(16.))
+                                .flex_none()
+                                .text_color(match on {
+                                    true => theme.table_active_border,
+                                    false => theme.muted_foreground,
+                                }),
+                        )
+                    })
                     .child(item.label)
             }))
     }
