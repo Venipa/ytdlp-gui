@@ -452,83 +452,80 @@ struct Transition {
 impl Global for Transition {}
 
 impl Theme {
+    /// The Ledger dark theme: umber ground, paper text, amber for activity only, ink-blue for
+    /// selection (docs/design.md, Tokens).
     pub fn dark() -> Self {
-        Self {
-            background: rgb(0x0a0a0a).into(),
-            foreground: rgb(0xfafafa).into(),
-            border: rgba(0x50505066).into(),
-            muted: rgb(0x262626).into(),
-            overlay: rgba(0x0000008c).into(),
-            overlay_foreground: rgb(0xfafafa).into(),
-            muted_foreground: rgb(0x909090).into(),
-            secondary: rgb(0x171717).into(),
-            secondary_hover: rgba(0x36363666).into(),
-            secondary_active: rgba(0x4d4d4d66).into(),
-            primary: rgb(0xfafafa).into(),
-            primary_foreground: rgb(0x171717).into(),
-            primary_hover: rgba(0xe5e5e5b3).into(),
-            danger: rgb(0x7f1d1d).into(),
-            danger_foreground: rgb(0xfef2f2).into(),
-            danger_hover: rgba(0x8b2020b3).into(),
-            popover: rgb(0x141414).into(),
-            popover_foreground: rgb(0xfafafa).into(),
-            progress_bar: rgb(0xf5f5f5).into(),
-            selection: rgb(0x1d4ed8).into(),
-            sidebar: rgb(0x0a0a0a).into(),
-            sidebar_accent: rgba(0x50505066).into(),
-            sidebar_border: rgb(0x262626).into(),
-            title_bar_border: rgb(0x262626).into(),
-            table_head: rgba(0x171717cc).into(),
-            table_head_foreground: rgb(0x8a8a8a).into(),
-            table_row_border: rgba(0x262626b3).into(),
-            table_hover: rgba(0x50505033).into(),
-            table_active: rgba(0x1e40af33).into(),
-            table_active_border: rgb(0x1d4ed8).into(),
-            radius: px(6.),
-            font_size: px(12.),
-            metrics: Metrics::default(),
-            transparent: false,
-            blur: false,
-            blur_window: false,
-            tint: None,
-            tint_secondary: None,
-        }
+        Self::ledger(Palette {
+            ground: 0x15130f,
+            drawer: 0x1e1b16,
+            edge: 0x2a2620,
+            paper: 0xece5d8,
+            pencil: 0x9c9384,
+            primary_foreground: 0x15130f,
+            amber: 0xe9a23b,
+            ink: 0x8fb0d6,
+            danger: 0xe0584a,
+            danger_foreground: 0x1a0b09,
+            overlay: 0x000000,
+            hover: [0.07, 0.11, 0.05],
+        })
     }
 
+    /// The Ledger light theme ("card stock").
     pub fn light() -> Self {
+        Self::ledger(Palette {
+            ground: 0xf2ede3,
+            drawer: 0xe8e1d4,
+            edge: 0xdcd3c3,
+            paper: 0x1d1a15,
+            pencil: 0x6b6253,
+            primary_foreground: 0xf2ede3,
+            amber: 0xa86400,
+            ink: 0x2f4a6b,
+            danger: 0xb3261e,
+            danger_foreground: 0xffffff,
+            overlay: 0x000000,
+            hover: [0.07, 0.11, 0.05],
+        })
+    }
+
+    fn ledger(p: Palette) -> Self {
+        let c = |hex: u32| -> Hsla { rgb(hex).into() };
+        let paper = c(p.paper);
+        let ink = c(p.ink);
         Self {
-            background: rgb(0xfafafa).into(),
-            foreground: rgb(0x171717).into(),
-            border: rgba(0x9b9b9b66).into(),
-            muted: rgb(0xe5e5e5).into(),
-            overlay: rgba(0x0000008c).into(),
-            overlay_foreground: rgb(0xfafafa).into(),
-            muted_foreground: rgb(0x606060).into(),
-            secondary: rgb(0xf5f5f5).into(),
-            secondary_hover: rgba(0xd5d5d566).into(),
-            secondary_active: rgba(0xb7b7b766).into(),
-            primary: rgb(0x171717).into(),
-            primary_foreground: rgb(0xfafafa).into(),
-            primary_hover: rgba(0x262626b3).into(),
-            danger: rgb(0xb91c1c).into(),
-            danger_foreground: rgb(0xfef2f2).into(),
-            danger_hover: rgba(0x991b1bb3).into(),
-            popover: rgb(0xffffff).into(),
-            popover_foreground: rgb(0x171717).into(),
-            progress_bar: rgb(0x262626).into(),
-            selection: rgb(0x2563eb).into(),
-            sidebar: rgb(0xf5f5f5).into(),
-            sidebar_accent: rgba(0xcdcdcd66).into(),
-            sidebar_border: rgb(0xd4d4d4).into(),
-            title_bar_border: rgb(0xd4d4d4).into(),
-            table_head: rgba(0xf5f5f5e6).into(),
-            table_head_foreground: rgb(0x666666).into(),
-            table_row_border: rgba(0xd4d4d4b3).into(),
-            table_hover: rgba(0xcdcdcd33).into(),
-            table_active: rgba(0x2563eb1f).into(),
-            table_active_border: rgb(0x2563eb).into(),
-            radius: px(6.),
-            font_size: px(12.),
+            background: c(p.ground),
+            foreground: paper,
+            border: paper.opacity(0.14),
+            muted: c(p.edge),
+            overlay: c(p.overlay).opacity(0.55),
+            overlay_foreground: paper,
+            muted_foreground: c(p.pencil),
+            secondary: c(p.drawer),
+            secondary_hover: paper.opacity(p.hover[0]),
+            secondary_active: paper.opacity(p.hover[1]),
+            primary: paper,
+            primary_foreground: c(p.primary_foreground),
+            primary_hover: paper.opacity(0.85),
+            danger: c(p.danger),
+            danger_foreground: c(p.danger_foreground),
+            danger_hover: c(p.danger).opacity(0.85),
+            popover: c(p.drawer),
+            popover_foreground: paper,
+            progress_bar: c(p.amber),
+            selection: ink.opacity(0.30),
+            sidebar: c(p.ground),
+            sidebar_accent: ink.opacity(0.12),
+            sidebar_border: c(p.edge),
+            title_bar_border: c(p.edge),
+            table_head: c(p.drawer),
+            table_head_foreground: c(p.pencil),
+            table_row_border: c(p.edge),
+            table_hover: paper.opacity(p.hover[2]),
+            table_active: ink.opacity(0.12),
+            table_active_border: ink,
+            radius: px(2.),
+            font_size: px(13.),
             metrics: Metrics::default(),
             transparent: false,
             blur: false,
@@ -1156,5 +1153,65 @@ mod tests {
 
         assert_eq!(theme.background, rgb(0x101010).into());
         assert_eq!(theme.tint, Some(TINT));
+    }
+}
+
+/// The hex roles of one Ledger theme.
+struct Palette {
+    ground: u32,
+    drawer: u32,
+    edge: u32,
+    paper: u32,
+    pencil: u32,
+    primary_foreground: u32,
+    amber: u32,
+    ink: u32,
+    danger: u32,
+    danger_foreground: u32,
+    overlay: u32,
+    /// Paper alpha of the hover, press and row-hover fills.
+    hover: [f32; 3],
+}
+
+#[cfg(test)]
+mod ledger_tests {
+    use super::*;
+
+    fn luminance(color: Hsla) -> f32 {
+        let c = color.to_rgb();
+        let lin = |v: f32| match v <= 0.03928 {
+            true => v / 12.92,
+            false => ((v + 0.055) / 1.055).powf(2.4),
+        };
+        0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b)
+    }
+
+    fn ratio(a: Hsla, b: Hsla) -> f32 {
+        let (a, b) = (luminance(a), luminance(b));
+        (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }
+
+    #[test]
+    fn ledger_text_pairs_reach_4_5_and_rules_3() {
+        for (name, t) in [("dark", Theme::dark()), ("light", Theme::light())] {
+            for ground in [t.background, t.secondary] {
+                for fg in [t.foreground, t.muted_foreground, t.table_active_border] {
+                    let r = ratio(fg, ground);
+                    assert!(r >= 4.5, "{name}: text {r:.2} on ground");
+                }
+                // Amber and danger are used for fills, rules and short medium text.
+                for fg in [t.progress_bar, t.danger] {
+                    let r = ratio(fg, ground);
+                    assert!(r >= 3., "{name}: signal {r:.2} on ground");
+                }
+            }
+            let r = ratio(t.primary_foreground, t.primary);
+            assert!(r >= 4.5, "{name}: primary {r:.2}");
+        }
+    }
+
+    #[test]
+    fn ledger_radius_is_two() {
+        assert_eq!(Theme::dark().radius, px(2.));
     }
 }

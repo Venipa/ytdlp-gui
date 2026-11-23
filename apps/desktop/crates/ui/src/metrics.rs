@@ -46,9 +46,9 @@ impl Rounding {
     pub fn radius(self) -> Pixels {
         match self {
             Self::Square => px(0.),
-            Self::Subtle => px(6.),
-            Self::Rounded => px(10.),
-            Self::Round => px(20.),
+            Self::Subtle => px(2.),
+            Self::Rounded => px(6.),
+            Self::Round => px(12.),
         }
     }
 }

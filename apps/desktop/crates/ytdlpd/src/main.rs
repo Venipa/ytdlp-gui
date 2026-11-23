@@ -34,6 +34,12 @@ struct Args {
     launch: cli::args::Launch,
     #[command(subcommand)]
     command: Option<cli::args::Command>,
+    /// Debug: open on a named screen state, such as `card`, `logs` or `settings-network`.
+    #[arg(long, value_name = "NAME")]
+    screen: Option<String>,
+    /// Theme: `dark` (default) or `light`.
+    #[arg(long, default_value = "dark")]
+    theme: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -92,9 +98,13 @@ fn main() -> ExitCode {
             i18n::set(i18n::resolve(i18n::AUTO));
             ui::motion::apply(Default::default(), Default::default(), cx);
             let look = Look {
-                kind: ThemeKind::Dark,
-                rounding: Rounding::Rounded,
-                font: 14.,
+                kind: if args.theme == "light" {
+                    ThemeKind::Light
+                } else {
+                    ThemeKind::Dark
+                },
+                rounding: Rounding::Subtle,
+                font: 13.,
                 transparent: false,
                 transparency: 1.,
                 blur: false,
@@ -116,15 +126,16 @@ fn main() -> ExitCode {
             router::init(Destination::Downloads, cx);
             let size = args.window_size.map(|size| size.0).unwrap_or(FIRST_SIZE);
             let frame_stats = args.launch.frame_stats;
+            let scene = args.screen.clone();
             // Lane C routes `on_event` into state; for now links are only logged.
             let hooks = platform::Hooks {
-                open_window: Box::new(move |cx| open_window(size, frame_stats, cx)),
+                open_window: Box::new(move |cx| open_window(scene.clone(), size, frame_stats, cx)),
                 on_event: Box::new(|event, _cx| log::info!("ytdlpd: platform event {event:?}")),
             };
             // release builds with the real data dir register the ytdlpd:// scheme
             let register = !cfg!(debug_assertions) && args.data_dir.is_none();
             if platform.install(hooks, register, cx) {
-                open_window(size, frame_stats, cx);
+                open_window(args.screen, size, frame_stats, cx);
             }
             cx.activate(true);
             log::info!("ytdlpd: ready");
@@ -132,7 +143,7 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn open_window(first: Size<Pixels>, frame_stats: bool, cx: &mut App) {
+fn open_window(scene: Option<String>, first: Size<Pixels>, frame_stats: bool, cx: &mut App) {
     cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, first, cx))),
@@ -155,7 +166,7 @@ fn open_window(first: Size<Pixels>, frame_stats: bool, cx: &mut App) {
             if frame_stats {
                 platform::stats::start(window);
             }
-            cx.new(|cx| Root::new(window, cx))
+            cx.new(|cx| Root::new(scene.as_deref(), window, cx))
         },
     )
     .expect("cannot open the window");
