@@ -1,4 +1,5 @@
-"""Generates the placeholder app icon (D-107): assets/windows/ytdlpd.ico and assets/tray/icon-64.rgba.
+"""Generates the placeholder app icon (D-107): assets/windows/ytdlpd.ico, assets/macos/ytdlpd.icns
+and assets/tray/icon-64.rgba.
 
 Rounded indigo square with a white download arrow. Standard library only:
     python scripts/gen-placeholder-icon.py
@@ -33,14 +34,17 @@ def inside(x, y):
     return "bg"
 
 
-def render(n):
+def render(n, pad=0.0):
+    """pad: transparent margin per side, as a fraction of n (macOS icons sit inside a 824/1024 grid)."""
     px = bytearray()
     for j in range(n):
         for i in range(n):
             a = r = g = b = 0
             for sj in range(SS):
                 for si in range(SS):
-                    k = inside((i + (si + 0.5) / SS) / n, (j + (sj + 0.5) / SS) / n)
+                    u = ((i + (si + 0.5) / SS) / n - pad) / (1 - 2 * pad)
+                    v = ((j + (sj + 0.5) / SS) / n - pad) / (1 - 2 * pad)
+                    k = inside(u, v) if 0 <= u <= 1 and 0 <= v <= 1 else None
                     if k is None:
                         continue
                     c = FG if k == "fg" else BG
@@ -53,6 +57,15 @@ def render(n):
             else:
                 px += b"\0\0\0\0"
     return bytes(px)
+
+
+def icns():
+    # PNG-backed types: ic11 16@2x, ic12 32@2x, ic07 128, ic13 128@2x, ic09 512
+    body = b""
+    for t, n in ((b"ic11", 32), (b"ic12", 64), (b"ic07", 128), (b"ic13", 256), (b"ic08", 256), (b"ic09", 512)):
+        d = png(n, render(n, pad=100 / 1024))
+        body += t + struct.pack(">I", 8 + len(d)) + d
+    return b"icns" + struct.pack(">I", 8 + len(body)) + body
 
 
 def png(n, rgba):
@@ -78,6 +91,8 @@ def ico(sizes):
 
 (ROOT / "assets/windows").mkdir(parents=True, exist_ok=True)
 (ROOT / "assets/tray").mkdir(parents=True, exist_ok=True)
+(ROOT / "assets/macos").mkdir(parents=True, exist_ok=True)
+(ROOT / "assets/macos/ytdlpd.icns").write_bytes(icns())
 (ROOT / "assets/windows/ytdlpd.ico").write_bytes(ico([16, 32, 48, 256]))
 (ROOT / "assets/tray/icon-64.rgba").write_bytes(render(64))
 (ROOT / "assets/tray/icon-64.png").write_bytes(png(64, render(64)))
