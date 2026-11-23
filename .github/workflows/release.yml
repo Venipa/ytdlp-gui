@@ -22,7 +22,6 @@ jobs:
       matrix:
         include:
           - { name: windows-x64, os: windows-latest, script: pwsh scripts/package-windows.ps1 -Arch x64, glob: "dist/*-setup.exe" }
-          - { name: windows-arm64, os: windows-11-arm, script: pwsh scripts/package-windows.ps1 -Arch arm64, glob: "dist/*-setup.exe" }
           - { name: macos-arm64, os: macos-15, script: bash scripts/package-macos.sh, glob: "dist/*.dmg" }
           - { name: macos-x64, os: macos-15-intel, script: bash scripts/package-macos.sh, glob: "dist/*.dmg" }
           - { name: linux-x64, os: ubuntu-22.04, script: bash scripts/package-linux.sh, glob: "dist/*.AppImage" }
