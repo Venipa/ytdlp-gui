@@ -1,0 +1,73 @@
+---
+title: Building from source
+description: Build and run ytdlpd yourself on Windows, macOS or Linux, and make a local installer.
+---
+
+ytdlpd is a Rust workspace (GPUI for the window) with an embedded CPython runtime for yt-dlp. bun drives the scripts.
+
+## Prerequisites
+
+- All systems: [rustup](https://rustup.rs) (the toolchain pinned in `apps/desktop/rust-toolchain.toml` installs itself), [bun](https://bun.sh), git, tar, and a network connection for the setup step.
+- Windows 10 or 11: Visual Studio Build Tools (MSVC, "Desktop development with C++") and the Windows 11 SDK.
+- macOS 13 or later: Xcode Command Line Tools (`xcode-select --install`). Full Xcode only if the Metal shader step asks for it.
+- Linux x64 or arm64 (Ubuntu and Debian package names):
+
+```sh
+sudo apt install build-essential pkg-config cmake libfontconfig1-dev libfreetype-dev \
+  libx11-dev libxcb1-dev libxcursor-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev \
+  libwayland-dev libvulkan-dev libdbus-1-dev
+```
+
+plus a Vulkan driver.
+
+## Build and run
+
+Clone the <Repo>repository</Repo>, then from its folder:
+
+```sh
+bun install
+bun run setup    # once: downloads the pinned CPython runtime and yt-dlp into apps/desktop/runtime
+bun run dev      # debug build and run; the first GPUI build takes 10 to 20 minutes
+```
+
+Other commands:
+
+```sh
+bun run check                          # cargo check --workspace
+cd apps/desktop && cargo test --workspace
+cargo run -p ytdlpd -- --self-test     # starts the embedded Python and prints versions
+cargo run -p ytdlpd -- --demo mixed    # demo data, no real downloads
+```
+
+`bun run setup` writes `runtime/pyo3.cfg`, which the build reads to find Python. Run it again after `runtime.lock.json` changes (`bun run setup -- --force` rebuilds it).
+
+## Local release builds
+
+From the repository root; the installer lands in `apps/desktop/dist/`.
+
+- **Windows x64**: `bun run release:win` builds the release exe, stages it with the Python runtime, runs `--self-test` on the staged copy and writes `ytdlpd-<version>-windows-x64-setup.exe`. Needs Inno Setup 6 (`winget install JRSoftware.InnoSetup`).
+- **macOS arm64** (on an Apple silicon Mac): `bun run release:mac` builds `ytdlpd.app` and `ytdlpd-<version>-macos-arm64.dmg`, ad-hoc signed, and runs `--self-test`. Set `CODESIGN_IDENTITY` and `NOTARY_PROFILE` for a signed, notarised build.
+- **Linux**: `bash apps/desktop/scripts/package-linux.sh` builds an AppImage for the host architecture.
+
+Pushing a `v*` tag builds all installers in GitHub Actions and publishes them with a `SHA256SUMS.txt`.
+
+## Common build problems
+
+- `PYO3_CONFIG_FILE` or "no such file runtime/pyo3.cfg": run `bun run setup`. In a git worktree `runtime/` is not shared, so run setup there too.
+- "python runtime not found" or `--self-test` fails: `bun run setup -- --force`. `YTDLPD_PYTHON_HOME=<dir>` overrides the location.
+- Windows `python314.dll` not found when starting an exe by hand: copy it from `runtime/x86_64-pc-windows-msvc/python/` next to the exe.
+- macOS "image not found libpython3.14.dylib": run setup again, then `cargo clean -p ytdlpd -p engine`.
+- Without Python at all (fake backend, no real downloads): `cargo run -p ytdlpd --no-default-features`.
+- Linux `libxkbcommon` or `vulkan` link errors: install the packages above.
+
+## This website
+
+The site lives in `apps/web` (Fumadocs on Next.js, static export).
+
+```sh
+bun run web:dev      # local preview
+bun run web:stats    # refresh data/stats.json from GitHub (GITHUB_TOKEN optional)
+bun run web:build    # static site in apps/web/out
+```
+
+`BASE_PATH` sets the URL prefix (default `/` plus the repository name, empty for a site at the domain root); `SITE_REPO` (`owner/name`) sets the repository for links, downloads and stats, both in `apps/web/site.config.mjs`.

@@ -1,0 +1,51 @@
+name: pages
+
+on:
+  release:
+    types: [published]
+  schedule:
+    - cron: "17 4 * * *" # daily, refreshes stars and download counts
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: ["apps/web/**", ".github/workflows/pages.yml"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # The repo this runs in names the site: links, downloads, stats and the /<name> base path (apps/web/site.config.mjs).
+  SITE_REPO: ${{ github.repository }}
+  NEXT_TELEMETRY_DISABLED: 1
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: fetch stats
+        run: bun run web:stats
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: bun run web:build
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: apps/web/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

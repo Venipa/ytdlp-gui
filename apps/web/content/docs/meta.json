@@ -1,0 +1,12 @@
+{
+  "title": "Docs",
+  "pages": [
+    "index",
+    "downloading",
+    "settings",
+    "tools",
+    "troubleshooting",
+    "building-from-source",
+    "privacy-and-licences"
+  ]
+}

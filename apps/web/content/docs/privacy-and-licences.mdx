@@ -1,0 +1,48 @@
+---
+title: Privacy and licences
+description: What ytdlpd connects to, what it stores, and the licences of what it ships.
+---
+
+## Privacy
+
+ytdlpd has no account, no telemetry and no analytics. It connects only to:
+
+- the sites whose links you give it, through yt-dlp;
+- GitHub (BtbN FFmpeg builds, deno releases) and ffmpeg.martin-riedl.de (macOS ffmpeg) when it downloads a missing tool;
+- PyPI when you check for a yt-dlp update.
+
+Your settings, the downloads database, the tools and the logs stay on your computer (see [where things live](/docs/troubleshooting#where-things-live)). Cookies you import or paste are stored there too, and are sent only to the sites they belong to, by yt-dlp. **Clear cookies** in Settings, Network removes them.
+
+The clipboard is read only when **Watch the clipboard for links** is on, and never cleared.
+
+This website is static. It makes no requests to GitHub from your browser; the download list and figures are fetched when the site is built.
+
+## Licence
+
+ytdlpd is free software under the GNU General Public License, version 3 or later (GPL-3.0-or-later). The source is on <Repo>GitHub</Repo>.
+
+## Third-party components
+
+Shipped inside the app:
+
+| Component | Licence |
+| --- | --- |
+| yt-dlp | Unlicense (public domain) |
+| yt-dlp-ejs | Unlicense; bundles meriyah (ISC) and astring (MIT) |
+| CPython 3.14 (python-build-standalone) | PSF-2.0, with the licences of its bundled libraries |
+| certifi | MPL-2.0 |
+| requests | Apache-2.0 |
+| urllib3, charset-normalizer, brotli | MIT |
+| idna, websockets | BSD-3-Clause |
+| mutagen | GPL-2.0-or-later |
+| pycryptodomex | BSD-2-Clause and public domain |
+| IBM Plex Sans and Mono | SIL OFL-1.1 |
+| Lucide icons | ISC |
+| GPUI (from the Zed project) | Apache-2.0 |
+
+Downloaded on your computer at first run, not redistributed by ytdlpd, and run as separate processes:
+
+- **FFmpeg**: GPL-3.0 or GPL-2.0-or-later depending on the build. See [ffmpeg.org/legal.html](https://ffmpeg.org/legal.html).
+- **Deno**: MIT.
+
+The Rust crates the app is built from (about 800) are listed with their licences in <Repo path="/blob/master/THIRD-PARTY.md">THIRD-PARTY.md</Repo>. The app shows the same notices under Settings, About.

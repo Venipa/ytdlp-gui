@@ -3,9 +3,9 @@ name: ci
 on:
   push:
     branches: [master]
-    paths-ignore: ["**/*.md"]
+    paths-ignore: ["**/*.md", "apps/web/**", ".github/workflows/pages.yml"]
   pull_request:
-    paths-ignore: ["**/*.md"]
+    paths-ignore: ["**/*.md", "apps/web/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 concurrency:
