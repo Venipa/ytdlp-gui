@@ -18,6 +18,11 @@ use crate::format;
 
 /// How much of the paper a paused row's title keeps.
 const PAUSED: f32 = 0.78;
+/// How much of its tone a paused row's glyph keeps.
+const GLYPH: f32 = 0.8;
+/// The widths of the speed and time-left columns.
+const SPEED: f32 = 72.;
+const ETA: f32 = 44.;
 
 /// The row height of the list (headers included, the list is uniform).
 fn height(thumbs: bool) -> gpui::Pixels {
@@ -97,6 +102,7 @@ fn rule(s: &DownloadSummary) -> Rule {
         DownloadStatus::Completed => Rule::Solid,
         DownloadStatus::Probing => Rule::Pulse,
         DownloadStatus::Failed => Rule::Failed,
+        DownloadStatus::Paused if s.progress > 0. => Rule::Held(s.progress as f32),
         _ => Rule::Dotted,
     }
 }
@@ -164,17 +170,19 @@ impl Downloads {
                             .font_weight(FontWeight::MEDIUM)
                             .child(i18n::lookup(key, None)),
                     )
-                    .child(div().font_features(tabular()).child(count.to_string())),
+                    .child(div().font_features(tabular()).child(ui::grouped(count))),
             )
             .when(cols.format, |this| {
                 this.child(caption("dl-col-format", 88., false))
             })
             .child(caption("dl-col-size", 72., true))
-            .when(cols.speed, |this| {
-                this.child(match speed {
-                    true => caption("dl-col-speed", 112., true),
-                    false => div().w(px(112.)).flex_none(),
-                })
+            .when(cols.speed, |this| match speed {
+                true => this
+                    .child(caption("dl-col-speed", SPEED, true))
+                    .child(caption("dl-col-eta", ETA, true)),
+                false => this
+                    .child(div().w(px(SPEED)).flex_none())
+                    .child(div().w(px(ETA)).flex_none()),
             })
             .child(caption("dl-col-status", cols.status, true))
             .into_any_element()
@@ -235,24 +243,23 @@ impl Downloads {
             )
     }
 
-    fn numbers(&self, s: &DownloadSummary, cx: &mut Context<Self>) -> (String, String) {
+    fn numbers(&self, s: &DownloadSummary, cx: &mut Context<Self>) -> (String, String, String) {
         let size = s
             .file_size
             .or(s.bytes_total)
             .map(format::bytes)
             .unwrap_or_else(|| "-".into());
         let live = self.app.downloads.read(cx).live(s.id).copied();
-        let third = match (live.and_then(|l| l.speed), s.status) {
-            (Some(speed), DownloadStatus::Downloading) => {
-                let eta = live
-                    .and_then(|l| l.eta)
-                    .map(|e| format!(" · {}", format::duration(e)))
-                    .unwrap_or_default();
-                format!("{}{eta}", format::speed(speed))
-            }
-            _ => String::new(),
+        let (speed, eta) = match (live.and_then(|l| l.speed), s.status) {
+            (Some(speed), DownloadStatus::Downloading) => (
+                format::speed(speed),
+                live.and_then(|l| l.eta)
+                    .map(format::duration)
+                    .unwrap_or_default(),
+            ),
+            _ => (String::new(), String::new()),
         };
-        (size, third)
+        (size, speed, eta)
     }
 
     /// The icon buttons that appear over a hovered row, for what its state allows. They cover
@@ -307,6 +314,15 @@ impl Downloads {
                 cx,
             ));
         }
+        if has_file && s.status == DownloadStatus::Completed {
+            buttons.push(button(
+                "a-open",
+                "icons/external-link.svg",
+                "dl-open",
+                |t, id, cx| t.open_file(id, cx),
+                cx,
+            ));
+        }
         if has_file {
             buttons.push(button(
                 "a-folder",
@@ -351,7 +367,7 @@ impl Downloads {
         let id = s.id;
         let selected = self.selected == Some(id);
         let (status, tone) = status_text(s, &theme);
-        let (size, third) = self.numbers(s, cx);
+        let (size, speed, eta) = self.numbers(s, cx);
         let active = matches!(
             s.status,
             DownloadStatus::Downloading | DownloadStatus::Processing
@@ -369,7 +385,7 @@ impl Downloads {
         // of paused, done and failed rows separates without reading
         let paused = s.status == DownloadStatus::Paused;
         let glyph = match s.status {
-            DownloadStatus::Paused => Some("icons/pause.svg"),
+            DownloadStatus::Paused => Some("icons/circle-pause.svg"),
             DownloadStatus::Completed if !s.file_missing => Some("icons/check.svg"),
             DownloadStatus::Failed => Some("icons/circle-alert.svg"),
             _ => None,
@@ -441,16 +457,17 @@ impl Downloads {
                             .child(size),
                     )
                     .when(cols.speed, |this| {
-                        this.child(
+                        let cell = |width: f32, text: String| {
                             div()
-                                .w(px(112.))
+                                .w(px(width))
                                 .flex_none()
                                 .truncate()
                                 .text_right()
                                 .font_features(tabular())
                                 .text_color(muted)
-                                .child(third),
-                        )
+                                .child(text)
+                        };
+                        this.child(cell(SPEED, speed)).child(cell(ETA, eta))
                     })
                     .child(
                         div()
@@ -472,7 +489,11 @@ impl Downloads {
                                             .path(icons::path(path))
                                             .size(px(12.))
                                             .flex_none()
-                                            .text_color(tone)
+                                            .text_color(match paused {
+                                                // a step under the words, still over 3:1
+                                                true => tone.opacity(GLYPH),
+                                                false => tone,
+                                            })
                                     }))
                                     .child(div().min_w_0().truncate().child(status)),
                             )

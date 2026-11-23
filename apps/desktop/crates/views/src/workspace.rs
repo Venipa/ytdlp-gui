@@ -438,15 +438,10 @@ impl Render for Workspace {
                     ),
             )
             .child(div().flex_1().min_h_0().child(self.page(current, cx)))
-            // Downloads places the stack in its own flow, above the status bar
+            // the toast tray takes its own room under the page, so it never covers a line;
+            // Downloads places it in its own flow, above the status bar
             .when(current != Destination::Downloads, |this| {
-                this.child(
-                    div()
-                        .absolute()
-                        .bottom(px(8.))
-                        .right_0()
-                        .child(self.toasts.clone()),
-                )
+                this.child(div().flex_none().child(self.toasts.clone()))
             })
     }
 }

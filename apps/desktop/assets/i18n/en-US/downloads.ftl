@@ -139,3 +139,9 @@ dl-copied = Copied
 dl-col-format = Format
 dl-col-speed = Speed
 dl-col-status = Status
+
+# UI refine round 3
+dl-copied-link = Link copied
+dl-copied-title = Title copied
+dl-col-eta = ETA
+dl-empty-keys = or press

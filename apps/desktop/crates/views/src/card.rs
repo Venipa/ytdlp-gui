@@ -34,8 +34,9 @@ const AUDIO: [AudioFormat; 4] = [
     AudioFormat::M4a,
     AudioFormat::Opus,
 ];
-/// The width of the result card's thumbnail.
+/// The width of the result card's thumbnail, and its width in a narrow list.
 const CARD_THUMB: f32 = 160.;
+const CARD_THUMB_NARROW: f32 = 96.;
 /// The width of the Video and Audio labels before the chips.
 const LABEL: f32 = 52.;
 /// The tallest a one-link card gets, which its unfold opens to.
@@ -167,7 +168,9 @@ impl Downloads {
     }
 
     /// The card, when there is something to show.
-    pub(crate) fn card_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+    /// The card; a `narrow` list gets a smaller cover and the title and meta on one line, so
+    /// the card gives a list row back.
+    pub(crate) fn card_view(&self, narrow: bool, cx: &mut Context<Self>) -> Option<AnyElement> {
         let theme = *cx.theme();
         let shell = || {
             div()
@@ -196,7 +199,11 @@ impl Downloads {
             self.card(cx),
             Card::Probing | Card::Result(_) | Card::Failed(_) | Card::NotLink
         );
-        let thumb_h = CARD_THUMB * 9. / 16.;
+        let thumb_w = match narrow {
+            true => CARD_THUMB_NARROW,
+            false => CARD_THUMB,
+        };
+        let thumb_h = thumb_w * 9. / 16.;
         let card = match self.card(cx) {
             Card::None => return None,
             Card::Probing => shell()
@@ -204,7 +211,7 @@ impl Downloads {
                     div()
                         .flex()
                         .gap(px(12.))
-                        .child(Skeleton::new().w(px(CARD_THUMB)).h(px(thumb_h)))
+                        .child(Skeleton::new().w(px(thumb_w)).h(px(thumb_h)))
                         .child(
                             div()
                                 .flex()
@@ -306,7 +313,7 @@ impl Downloads {
                             .child({
                                 let thumb = Thumbnail::new(
                                     probe.thumbnail_url.clone().map(SharedString::from),
-                                    px(CARD_THUMB),
+                                    px(thumb_w),
                                 );
                                 match probe.duration_s {
                                     Some(d) => thumb.pill(format::duration(d)),
@@ -322,18 +329,26 @@ impl Downloads {
                                     .gap(px(4.))
                                     .child(
                                         div()
-                                            .truncate()
+                                            .flex()
+                                            .when(narrow, |this| this.items_baseline().gap(px(8.)))
+                                            .when(!narrow, |this| this.flex_col().gap(px(4.)))
                                             .pr(px(32.))
-                                            .text_size(theme.text(Text::Heading))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .child(probe.title.clone().unwrap_or_default()),
-                                    )
-                                    .child(
-                                        div()
-                                            .truncate()
-                                            .text_size(theme.text(Text::Small))
-                                            .text_color(muted)
-                                            .child(meta),
+                                            .child(
+                                                div()
+                                                    .min_w_0()
+                                                    .truncate()
+                                                    .text_size(theme.text(Text::Heading))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .child(probe.title.clone().unwrap_or_default()),
+                                            )
+                                            .child(
+                                                div()
+                                                    .min_w_0()
+                                                    .truncate()
+                                                    .text_size(theme.text(Text::Small))
+                                                    .text_color(muted)
+                                                    .child(meta),
+                                            ),
                                     )
                                     .child(div().mt(px(8.)).child(self.preset_rows(
                                         div(),
