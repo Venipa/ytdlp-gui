@@ -97,10 +97,12 @@ pub fn map_event(ev: Event) -> Vec<JobEvent> {
             code,
             message,
             retryable,
+            retry_after,
         } => vec![JobEvent::Failed(EngineError {
             code,
             message,
             retryable,
+            retry_after,
         })],
     }
 }

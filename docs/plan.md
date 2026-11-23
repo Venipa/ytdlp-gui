@@ -131,9 +131,9 @@ Exit checklist: all named regression tests in qa.md for queue pass (`cancel_queu
 | Item | Status | Ref |
 |---|---|---|
 | Settings pages (General, Downloads, Formats, Network, Tools, Appearance, About) on `SideNav` | open | `views/.../settings/*` |
-| Output folder + template with live preview (equals yt-dlp `prepare_filename` on the fixture) | open | - |
-| Subtitles (langs, embed or file), embed thumbnail, metadata, chapters | open | - |
-| Proxy, rate limit, retries, cookies: file import, paste text field, "Paste from clipboard" (stored in `data/cookies/`, restricted ACL); Firefox recommended | open | - |
+| Output folder + template with live preview (equals yt-dlp `prepare_filename` on the fixture) | in progress | engine side review: `engine::preview_filename`, `tests/options.rs`; UI open |
+| Subtitles (langs, embed or file), embed thumbnail, metadata, chapters | in progress | engine opts golden tests (`spec.rs`) review; UI open |
+| Proxy, rate limit, retries, cookies: file import, paste text field, "Paste from clipboard" (stored in `data/cookies/`, restricted ACL); Firefox recommended | in progress | engine side review: `engine::cookies`, `engine::spec::split_extra_args`, `tests/options.rs` (ratelimit, retries, proxy, cookies, extra_args); UI open |
 | Tools page: versions, source, Check for update (yt-dlp + ejs pair), Re-download, Choose file | open | - |
 | Logs view: level chips, job picker, Copy all | open | - |
 | Tools-missing banner on Downloads; presets needing ffmpeg disabled with a reason | open | - |

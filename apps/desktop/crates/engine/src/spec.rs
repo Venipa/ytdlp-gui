@@ -9,6 +9,8 @@ pub const DEFAULT_OUTTMPL: &str = "%(title).180B [%(id)s].%(ext)s";
 /// Default playlist output template.
 pub const PLAYLIST_OUTTMPL: &str =
     "%(playlist_title).80B/%(playlist_index)03d %(title).160B [%(id)s].%(ext)s";
+/// Out-of-band opts key carrying CLI-style extra arguments to the worker.
+pub const EXTRA_ARGS_KEY: &str = "_extra_args";
 /// SponsorBlock categories used when the spec lists none.
 const DEFAULT_SPONSOR: [&str; 1] = ["sponsor"];
 
@@ -64,6 +66,11 @@ pub fn parse_rate(s: &str) -> Option<u64> {
         .ok()
         .filter(|n| *n > 0.0)
         .map(|n| (n * mult as f64) as u64)
+}
+
+/// Shell-style split of the Settings "extra arguments" text (quotes honoured). `None` on an unbalanced quote.
+pub fn split_extra_args(s: &str) -> Option<Vec<String>> {
+    shlex::split(s)
 }
 
 fn common(
@@ -194,7 +201,10 @@ pub fn to_opts(s: &JobSpec, env: &Env) -> Value {
     if let Some(r) = s.retries {
         o.insert("retries".into(), json!(r));
     }
-    // shortcut: `extra_args` is stored by domain but not applied, needs yt_dlp.parse_options in the worker (Phase 4).
+    // the worker pops this key and merges it through `yt_dlp.parse_options` (worker.rs)
+    if !s.extra_args.is_empty() {
+        o.insert(EXTRA_ARGS_KEY.into(), json!(s.extra_args));
+    }
     Value::Object(o)
 }
 
@@ -334,6 +344,62 @@ mod tests {
         let o = to_opts(&s, &Env::default());
         assert_eq!(o["postprocessors"][1]["remove_sponsor_segments"], json!([]));
         assert_eq!(o["cookiefile"], "C:/c.txt");
+    }
+
+    #[test]
+    fn extra_args_split_and_carried() {
+        let a = split_extra_args(
+            r#"--sleep-interval 2 --user-agent "My Agent/1.0" --add-header 'X-A:b c'"#,
+        )
+        .unwrap();
+        assert_eq!(
+            a,
+            [
+                "--sleep-interval",
+                "2",
+                "--user-agent",
+                "My Agent/1.0",
+                "--add-header",
+                "X-A:b c"
+            ]
+        );
+        assert_eq!(split_extra_args("--x \"open"), None);
+        let mut s = base(Preset::DEFAULT);
+        assert!(to_opts(&s, &Env::default()).get(EXTRA_ARGS_KEY).is_none());
+        s.extra_args = a.clone();
+        assert_eq!(to_opts(&s, &Env::default())[EXTRA_ARGS_KEY], json!(a));
+    }
+
+    #[test]
+    fn subtitles_file_only_proxy_retries_explicit_template() {
+        let mut s = base(Preset::DEFAULT);
+        s.subtitles = SubtitleSettings {
+            enabled: true,
+            langs: vec!["en".into(), "de".into()],
+            embed: false,
+        };
+        s.proxy = Some("socks5://h:1".into());
+        s.retries = Some(7);
+        s.outtmpl = "%(id)s.%(ext)s".into();
+        s.playlist_index = Some(2);
+        let o = to_opts(&s, &Env::default());
+        assert_eq!(o["writesubtitles"], true);
+        assert_eq!(o["subtitleslangs"], json!(["en", "de"]));
+        assert!(
+            o.get("postprocessors").is_none(),
+            "file only: nothing embedded"
+        );
+        assert_eq!(
+            (o["proxy"].as_str(), o["retries"].as_u64()),
+            (Some("socks5://h:1"), Some(7))
+        );
+        assert_eq!(o["outtmpl"], "%(id)s.%(ext)s");
+        assert_eq!(
+            (o["playlist_items"].as_str(), o["noplaylist"].as_bool()),
+            (Some("2"), Some(false))
+        );
+        s.subtitles.enabled = false;
+        assert!(to_opts(&s, &Env::default()).get("writesubtitles").is_none());
     }
 
     #[test]

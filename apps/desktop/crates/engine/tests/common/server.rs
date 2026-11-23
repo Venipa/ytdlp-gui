@@ -16,7 +16,12 @@ pub type Log = Arc<Mutex<Vec<(String, Option<u64>)>>>;
 pub struct Server {
     pub addr: SocketAddr,
     pub log: Log,
+    /// `Cookie:` and `User-Agent:` header lines (as sent) of every request.
+    pub cookies: Arc<Mutex<Vec<String>>>,
 }
+
+/// Failures already served per `/flaky.mp4?id=` (`fail=N`: the first N GETs are cut off halfway).
+static FLAKY: Mutex<Vec<(String, u64)>> = Mutex::new(Vec::new());
 
 impl Server {
     pub fn url(&self, path: &str) -> String {
@@ -36,16 +41,17 @@ pub fn start(root: PathBuf, port: u16) -> Server {
     let l = TcpListener::bind(("127.0.0.1", port)).expect("bind");
     let addr = l.local_addr().unwrap();
     let log: Log = Default::default();
-    let lg = log.clone();
+    let cookies: Arc<Mutex<Vec<String>>> = Default::default();
+    let (lg, ck) = (log.clone(), cookies.clone());
     std::thread::spawn(move || {
         for s in l.incoming().flatten() {
-            let (root, lg) = (root.clone(), lg.clone());
+            let (root, lg, ck) = (root.clone(), lg.clone(), ck.clone());
             std::thread::spawn(move || {
-                let _ = handle(s, &root, &lg);
+                let _ = handle(s, &root, &lg, &ck);
             });
         }
     });
-    Server { addr, log }
+    Server { addr, log, cookies }
 }
 
 fn ctype(p: &str) -> &'static str {
@@ -63,7 +69,7 @@ fn query(q: &str, k: &str) -> Option<u64> {
         .find_map(|kv| kv.strip_prefix(&format!("{k}="))?.parse().ok())
 }
 
-fn handle(mut s: TcpStream, root: &Path, lg: &Log) -> std::io::Result<()> {
+fn handle(mut s: TcpStream, root: &Path, lg: &Log, ck: &Mutex<Vec<String>>) -> std::io::Result<()> {
     let mut r = BufReader::new(s.try_clone()?);
     let mut line = String::new();
     r.read_line(&mut line)?;
@@ -78,6 +84,11 @@ fn handle(mut s: TcpStream, root: &Path, lg: &Log) -> std::io::Result<()> {
         if r.read_line(&mut h)? == 0 || h.trim().is_empty() {
             break;
         }
+        if h.to_ascii_lowercase().starts_with("cookie:")
+            || h.to_ascii_lowercase().starts_with("user-agent:")
+        {
+            ck.lock().unwrap().push(h.trim().to_string());
+        }
         if let Some(v) = h.to_lowercase().strip_prefix("range: bytes=") {
             let (a, b) = v.trim().split_once('-').unwrap_or(("0", ""));
             range = a.parse().ok().map(|a| (a, b.parse().ok()));
@@ -87,10 +98,20 @@ fn handle(mut s: TcpStream, root: &Path, lg: &Log) -> std::io::Result<()> {
     lg.lock()
         .unwrap()
         .push((path.to_string(), range.map(|r| r.0)));
+    if path == "/limited.mp4" {
+        return s.write_all(
+            b"HTTP/1.1 429 Too Many Requests
+Retry-After: 7
+Content-Length: 0
+Connection: close
+
+",
+        );
+    }
     let slow = query(q, "slow").unwrap_or(0);
     let data: Vec<u8>;
     let zeros: Option<u64>;
-    if path == "/big.mp4" {
+    if path == "/big.mp4" || path == "/flaky.mp4" {
         zeros = Some(query(q, "size").unwrap_or(40 << 20));
         data = vec![];
     } else {
@@ -126,10 +147,28 @@ fn handle(mut s: TcpStream, root: &Path, lg: &Log) -> std::io::Result<()> {
     if method == "HEAD" {
         return Ok(());
     }
+    // flaky: cut the body off halfway for the first `fail` GETs of this `id`
+    let mut cut = len;
+    if path == "/flaky.mp4" && method == "GET" {
+        let id = format!(
+            "{}{}",
+            s.local_addr()?,
+            q.split('&').find(|p| p.starts_with("id=")).unwrap_or("")
+        );
+        let mut f = FLAKY.lock().unwrap();
+        let i = f.iter().position(|(k, _)| *k == id).unwrap_or_else(|| {
+            f.push((id, 0));
+            f.len() - 1
+        });
+        if f[i].1 < query(q, "fail").unwrap_or(0) {
+            f[i].1 += 1;
+            cut = len / 2;
+        }
+    }
     let mut sent = 0u64;
     let zero = [0u8; 8192];
-    while sent < len {
-        let n = (len - sent).min(8192) as usize;
+    while sent < cut {
+        let n = (cut - sent).min(8192) as usize;
         if zeros.is_some() {
             s.write_all(&zero[..n])?;
         } else {
