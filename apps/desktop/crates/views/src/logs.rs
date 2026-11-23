@@ -6,8 +6,8 @@ use std::rc::Rc;
 use domain::DownloadId;
 use gpui::prelude::*;
 use gpui::{
-    ClipboardItem, Context, Entity, ScrollStrategy, ScrollWheelEvent, Subscription,
-    UniformListScrollHandle, Window, div, px, uniform_list,
+    ClipboardItem, Context, Entity, ListHorizontalSizingBehavior, ScrollStrategy, ScrollWheelEvent,
+    Subscription, UniformListScrollHandle, Window, div, px, uniform_list,
 };
 use i18n::t;
 use state::{AppState, LogEntry};
@@ -210,6 +210,12 @@ impl Render for LogsView {
             .into_any_element(),
             false => {
                 let items = entries.clone();
+                // the longest message sets every row's width, so the list scrolls sideways
+                let widest = entries
+                    .iter()
+                    .enumerate()
+                    .max_by_key(|(_, l)| l.message.len())
+                    .map(|(at, _)| at);
                 Scroller::listing("logs-scroll", &self.bar)
                     .child(
                         uniform_list(
@@ -235,6 +241,7 @@ impl Render for LogsView {
                                         );
                                         div()
                                             .id(("log-line", at))
+                                            .min_w_full()
                                             .flex()
                                             .gap(px(12.))
                                             .h(px(24.))
@@ -290,12 +297,19 @@ impl Render for LogsView {
                                                     ),
                                             )
                                             .child(
-                                                div().flex_1().truncate().child(l.message.clone()),
+                                                div()
+                                                    .flex_none()
+                                                    .whitespace_nowrap()
+                                                    .child(l.message.clone()),
                                             )
                                     })
                                     .collect::<Vec<_>>()
                             }),
                         )
+                        .with_horizontal_sizing_behavior(
+                            ListHorizontalSizingBehavior::Unconstrained,
+                        )
+                        .with_width_from_item(widest)
                         .track_scroll(&self.scroll)
                         .size_full(),
                     )
