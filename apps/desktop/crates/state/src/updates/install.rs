@@ -134,7 +134,7 @@ fn detect() -> Install {
     Install::Managed
 }
 
-#[cfg(unix)]
+#[cfg(any(windows, unix))]
 fn writable(folder: &Path) -> bool {
     let probe = folder.join(format!(".ytdlpd-write-{}", std::process::id()));
     let ok = std::fs::File::create(&probe).is_ok();
@@ -148,20 +148,29 @@ fn ps_quote(path: &Path) -> String {
     format!("'{}'", path.to_string_lossy().replace('\'', "''"))
 }
 
-/// A hidden PowerShell waits for this process, runs the installer silently for this user into
-/// the same folder, then starts ytdlpd again (the old copy too when the installer failed, so a
+/// The installer's switches. A folder this user cannot write (an all-users install in Program
+/// Files) needs `/ALLUSERS`, where Setup asks for admin rights; otherwise Setup keeps the mode of
+/// the earlier install (its `UsePreviousPrivileges` default).
+#[cfg(windows)]
+fn setup_args(dir: &Path, writable: bool) -> String {
+    let mode = if writable { "" } else { "'/ALLUSERS'," };
+    let dir = dir.to_string_lossy().replace('\'', "''");
+    format!("'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',{mode}'/DIR=\"{dir}\"'")
+}
+
+/// A hidden PowerShell waits for this process, runs the installer silently into the same folder, then starts ytdlpd again (the old copy too when the installer failed, so a
 /// relaunch never leaves nothing running).
 #[cfg(windows)]
 fn setup(installer: &Path, exe: &Path, relaunch: bool) -> Result<()> {
     use std::os::windows::process::CommandExt as _;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     let dir = exe.parent().context("the exe has no folder")?;
-    let dir_arg = format!("/DIR=\"{}\"", dir.display()).replace('\'', "''");
     let mut script = format!(
         "Wait-Process -Id {pid} -ErrorAction SilentlyContinue; \
-         $p = Start-Process -FilePath {installer} -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER','{dir_arg}' -Wait -PassThru; ",
+         Start-Process -FilePath {installer} -ArgumentList {args} -Wait; ",
         pid = std::process::id(),
         installer = ps_quote(installer),
+        args = setup_args(dir, writable(dir)),
     );
     if relaunch {
         script.push_str(&format!("Start-Process -FilePath {}", ps_quote(exe)));
@@ -250,4 +259,28 @@ fn stage_image(download: &Path, staged: &Path) -> Result<PathBuf> {
     std::fs::set_permissions(staged, std::fs::Permissions::from_mode(0o755))
         .context("cannot make the new AppImage executable")?;
     Ok(staged.to_path_buf())
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn setup_elevates_only_for_a_folder_it_cannot_write() {
+        assert_eq!(
+            setup_args(Path::new(r"C:\Program Files\ytdlpd"), false),
+            r#"'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/ALLUSERS','/DIR="C:\Program Files\ytdlpd"'"#
+        );
+        assert_eq!(
+            setup_args(Path::new(r"D:\it's\ytdlpd"), true),
+            r#"'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/DIR="D:\it''s\ytdlpd"'"#
+        );
+    }
+
+    #[test]
+    fn writable_tells_folders_apart() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(writable(dir.path()));
+        assert!(!writable(&dir.path().join("missing")));
+    }
 }
