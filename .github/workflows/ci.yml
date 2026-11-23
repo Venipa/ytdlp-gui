@@ -42,6 +42,9 @@ jobs:
         with:
           workspaces: apps/desktop
           key: lint
+      - uses: oven-sh/setup-bun@v2
+      # python-build-standalone runtime + pyo3.cfg (the `real-engine` feature links libpython)
+      - run: bun scripts/setup.ts
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
@@ -56,6 +59,9 @@ jobs:
         with:
           workspaces: apps/desktop
           key: test-windows
+      - uses: oven-sh/setup-bun@v2
+      # python-build-standalone runtime + pyo3.cfg (the `real-engine` feature links libpython)
+      - run: bun scripts/setup.ts
       # cargo-nextest is not installed locally yet, so plain cargo test is the common denominator.
       - run: cargo test --workspace --locked
 
@@ -70,4 +76,7 @@ jobs:
         with:
           workspaces: apps/desktop
           key: clippy-macos
+      - uses: oven-sh/setup-bun@v2
+      # python-build-standalone runtime + pyo3.cfg (the `real-engine` feature links libpython)
+      - run: bun scripts/setup.ts
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
