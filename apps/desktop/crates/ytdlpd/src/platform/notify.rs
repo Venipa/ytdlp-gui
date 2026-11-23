@@ -15,6 +15,14 @@ impl Notifier for Desktop {
         let (title, body) = (title.to_owned(), body.to_owned());
         // `show` can block on the platform service, so keep it off the UI thread
         std::thread::spawn(move || {
+            // Unset, mac-notification-sys asks AppleScript for an app named "use_default", which
+            // macOS answers with a "Where is use_default?" file picker. Only the first call counts.
+            #[cfg(target_os = "macos")]
+            let _ = notify_rust::set_application(if cfg!(debug_assertions) {
+                "com.apple.Terminal" // a dev binary is not a registered bundle
+            } else {
+                "dev.ytdlpd.app" // CFBundleIdentifier in scripts/package-macos.sh
+            });
             if let Err(e) = notify_rust::Notification::new()
                 .appname("ytdlpd")
                 .summary(&title)
