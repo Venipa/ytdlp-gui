@@ -480,7 +480,7 @@ impl Theme {
             paper: 0x1d1a15,
             pencil: 0x6b6253,
             primary_foreground: 0xf2ede3,
-            amber: 0x945600,
+            amber: 0x8a4f00,
             ink: 0x2f4a6b,
             danger: 0xb3261e,
             danger_foreground: 0xffffff,

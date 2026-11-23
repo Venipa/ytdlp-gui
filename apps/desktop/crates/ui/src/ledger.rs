@@ -33,6 +33,8 @@ const FILL: f32 = 3.;
 const TRACK: f32 = 0.24;
 /// How strong the dots of a track are, as an alpha of pencil: a quiet ruled line under the text.
 const DOTS: f32 = 0.35;
+/// How strong the kept part of a paused rule is: a step over the dots, far under amber.
+const HELD: f32 = 0.5;
 /// A chip's side padding and the gap between its label and count.
 const CHIP_INSET: Pixels = px(10.);
 const CHIP_GAP: Pixels = px(6.);
@@ -90,6 +92,8 @@ impl RenderOnce for CallNumber {
 pub enum Rule {
     /// Waiting, paused, cancelled: a dotted track.
     Dotted,
+    /// Paused part way: a pencil hairline up to the fraction kept, 0 to 1, dotted after it.
+    Held(f32),
     /// Active: the dotted track with an amber fill up to the fraction, 0 to 1.
     Fill(f32),
     /// Done: a quiet solid rule.
@@ -127,7 +131,7 @@ impl RenderOnce for ProgressRule {
         let rule = self.rule;
         let spoken = self.spoken;
         let fraction = match rule {
-            Rule::Fill(done) => Some(f64::from(done.clamp(0., 1.))),
+            Rule::Fill(done) | Rule::Held(done) => Some(f64::from(done.clamp(0., 1.))),
             Rule::Solid => Some(1.),
             _ => None,
         };
@@ -162,9 +166,17 @@ impl RenderOnce for ProgressRule {
                             theme.progress_bar,
                         ));
                     }
-                    Rule::Dotted | Rule::Pulse => {
+                    Rule::Dotted | Rule::Pulse | Rule::Held(_) => {
                         let mut x = bounds.origin.x;
                         let end = bounds.origin.x + bounds.size.width;
+                        if let Rule::Held(kept) = rule {
+                            let width = bounds.size.width * kept.clamp(0., 1.);
+                            window.paint_quad(fill(
+                                at(x, width, px(DOT)),
+                                theme.muted_foreground.opacity(HELD),
+                            ));
+                            x += width + px(DOT_PITCH);
+                        }
                         while x < end {
                             window.paint_quad(fill(
                                 at(x, px(DOT), px(DOT)),
@@ -398,11 +410,26 @@ impl RenderOnce for Chip {
                             false => theme.foreground.opacity(0.72),
                         })
                         .font_features(tabular())
-                        .child(count.to_string()),
+                        .child(grouped(count)),
                 )
             })
             .when_some(self.on_click, |this, handler| this.on_click(handler))
     }
+}
+
+/// A count with its thousands grouped, 10000 as "10,000".
+// shortcut: the comma is en-US's, the only locale shipped; take the separator from Fluent when a
+// second locale lands.
+pub fn grouped(count: usize) -> String {
+    let digits = count.to_string();
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    for (at, digit) in digits.chars().enumerate() {
+        if at > 0 && (digits.len() - at).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(digit);
+    }
+    out
 }
 
 /// One entry of a [`SideNav`].
@@ -593,5 +620,19 @@ impl RenderOnce for TokenInput {
                     .max_w(px(SEARCH_MAX))
                     .child(self.input),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::grouped;
+
+    #[test]
+    fn counts_group_by_thousands() {
+        assert_eq!(grouped(0), "0");
+        assert_eq!(grouped(999), "999");
+        assert_eq!(grouped(1000), "1,000");
+        assert_eq!(grouped(10000), "10,000");
+        assert_eq!(grouped(1234567), "1,234,567");
     }
 }
