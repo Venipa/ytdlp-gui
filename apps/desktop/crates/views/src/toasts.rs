@@ -1,6 +1,7 @@
-//! The toast stack at the bottom right: on Downloads it sits in the page's flow above the
-//! status bar, so it never covers a row; other pages lay it over their bottom right corner. Any
-//! view pushes a toast with `toast(..)`; each one leaves by itself after a few seconds.
+//! The toast tray: a band of its own at the bottom of the page, in the page's flow (above the
+//! status bar on Downloads, under the page elsewhere), so a toast never covers a row. Any view
+//! pushes a toast with `toast(..)`; each one leaves by itself after a few seconds, which a
+//! hairline along its bottom edge counts down.
 
 use std::rc::Rc;
 use std::time::Duration;
@@ -8,6 +9,7 @@ use std::time::Duration;
 use gpui::prelude::*;
 use gpui::{
     Animation, AnimationExt as _, App, Context, Entity, Global, SharedString, Window, div, px,
+    relative,
 };
 use ui::{ActiveTheme as _, Toast, motion};
 
@@ -19,6 +21,8 @@ const LIFETIME_ACTION: Duration = Duration::from_secs(8);
 /// pushes the oldest out.
 const MAX: usize = 2;
 const TICK: Duration = Duration::from_millis(100);
+/// The narrowest window whose tray holds two cards side by side.
+const TWO_FIT: f32 = 860.;
 /// How long a leaving toast fades.
 const LEAVE: Duration = Duration::from_millis(120);
 
@@ -37,6 +41,8 @@ struct Item {
     kind: Kind,
     message: SharedString,
     action: Option<(SharedString, Act)>,
+    /// How long it stays in all, and how much of that is left.
+    life: Duration,
     left: Duration,
     leaving: bool,
 }
@@ -116,6 +122,8 @@ impl ToastLayer {
                             for id in due {
                                 layer.dismiss(id, cx);
                             }
+                            // the countdown hairlines move
+                            cx.notify();
                         }
                         let live = !layer.items.is_empty();
                         layer.ticking = live;
@@ -160,6 +168,7 @@ pub fn toast(
             kind,
             message,
             action,
+            life: left,
             left,
             leaving: false,
         });
@@ -172,21 +181,33 @@ pub fn toast(
 }
 
 impl Render for ToastLayer {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layer = cx.entity();
-        let gutter = cx.theme().metrics.gutter;
+        let theme = *cx.theme();
+        // a narrow window has room for one card on the tray's line: the newest shows, the older
+        // one keeps counting down out of sight
+        let room = match window.viewport_size().width < px(TWO_FIT) {
+            true => 1,
+            false => MAX,
+        };
+        let shown = self.items.len().saturating_sub(room);
         div()
             .id("toast-stack")
             .flex()
-            .flex_col()
-            .items_end()
+            .flex_wrap()
+            .justify_end()
             .gap(px(8.))
-            .when(!self.items.is_empty(), |this| this.px(gutter).pb(px(8.)))
+            .when(!self.items.is_empty(), |this| {
+                this.px(theme.metrics.gutter)
+                    .py(px(8.))
+                    .border_t_1()
+                    .border_color(theme.border)
+            })
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                 this.hovered = *hovered;
                 cx.notify();
             }))
-            .children(self.items.iter().map(|item| {
+            .children(self.items.iter().skip(shown).map(|item| {
                 let id = item.id;
                 let icon = match item.kind {
                     Kind::Info => "icons/info.svg",
@@ -208,11 +229,27 @@ impl Render for ToastLayer {
                     });
                 }
                 let fade = item.leaving;
-                div().w(px(400.)).max_w_full().child(card).with_animation(
-                    ("toast-fade", id as usize * 2 + usize::from(fade)),
-                    Animation::new(if fade { LEAVE } else { motion::dim_span() }),
-                    move |el, delta| el.opacity(if fade { 1. - delta } else { delta }),
-                )
+                let kept = item.left.as_secs_f32() / item.life.as_secs_f32().max(0.001);
+                // the card sits in a tray of its own, so it casts no shadow over the page
+                div()
+                    .relative()
+                    .w(px(400.))
+                    .max_w_full()
+                    .child(card.shadow_none())
+                    .child(
+                        div()
+                            .absolute()
+                            .left(px(1.))
+                            .bottom(px(1.))
+                            .h(px(2.))
+                            .w(relative(kept.clamp(0., 1.)))
+                            .bg(theme.muted_foreground.opacity(0.5)),
+                    )
+                    .with_animation(
+                        ("toast-fade", id as usize * 2 + usize::from(fade)),
+                        Animation::new(if fade { LEAVE } else { motion::dim_span() }),
+                        move |el, delta| el.opacity(if fade { 1. - delta } else { delta }),
+                    )
             }))
     }
 }

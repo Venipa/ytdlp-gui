@@ -65,3 +65,15 @@ nav-settings-tip = Settings (Ctrl+3)
 
 stepper-less = Less
 stepper-more = More
+
+# key caps the shortcut hints draw (ui Kbd)
+key-ctrl = Ctrl
+key-super = Win
+key-alt = Alt
+key-shift = Shift
+key-escape = Esc
+key-enter = Enter
+key-space = Space
+key-tab = Tab
+key-backspace = Backspace
+key-delete = Del

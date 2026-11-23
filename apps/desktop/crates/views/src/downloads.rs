@@ -22,8 +22,8 @@ use gpui::{
 use i18n::t;
 use state::{AppState, DownloadsEvent, IntakeEvent, ProbeState};
 use ui::{
-    ActiveTheme as _, Button, Chip, FORM_CONTEXT, Input, MONO, Scrollbar, Scroller, Submit, Text,
-    TokenInput, Vacancy,
+    ActiveTheme as _, Button, Chip, FORM_CONTEXT, Input, Kbd, MONO, Scrollbar, Scroller, Submit,
+    Text, TokenInput, Vacancy,
 };
 
 use crate::format;
@@ -152,6 +152,7 @@ impl Downloads {
             Input::new(t!("dl-search-hint"), cx)
                 .name("dl-search-name")
                 .icon("icons/search.svg")
+                .shortcut("/")
                 .clearable()
         });
         let subs = vec![
@@ -578,12 +579,14 @@ impl Downloads {
     pub(crate) fn copy_title(&self, id: DownloadId, cx: &mut App) {
         if let Some(title) = self.summary(id, cx).and_then(|s| s.title) {
             cx.write_to_clipboard(ClipboardItem::new_string(title));
+            toast(cx, Kind::Success, t!("dl-copied-title"), None);
         }
     }
 
     pub(crate) fn copy_link(&self, id: DownloadId, cx: &mut App) {
         if let Some(s) = self.summary(id, cx) {
             cx.write_to_clipboard(ClipboardItem::new_string(s.url));
+            toast(cx, Kind::Success, t!("dl-copied-link"), None);
         }
     }
 
@@ -1058,8 +1061,12 @@ impl Downloads {
             })
             .when(!own, |this| {
                 this.child(
+                    // solid once there is a link to take, hollow and pencil until then
                     Button::new("intake-download")
-                        .outline()
+                        .map(|button| match valid {
+                            true => button.primary(),
+                            false => button.outline(),
+                        })
                         .large()
                         .icon("icons/download.svg")
                         .label(t!("dl-download"))
@@ -1164,20 +1171,44 @@ impl Render for Downloads {
         let thumbs = self.app.settings.read(cx).get().show_thumbnails;
         let list = match (lines.is_empty(), total == 0) {
             (true, _) if !loaded => div().into_any_element(),
-            (true, true) => Vacancy::new(t!("dl-empty"))
-                .icon("icons/download.svg")
-                .detail(t!("dl-empty-detail"))
-                .action(
-                    Button::new("empty-paste")
-                        .primary()
-                        .icon("icons/clipboard-paste.svg")
-                        .label(t!("dl-empty-paste"))
-                        .on_click(
-                            cx.listener(|this, _, window, cx| this.key(Key::Paste, window, cx)),
+            // the empty list is the drop target, so it is drawn as one: a dashed bounded zone
+            (true, true) => div()
+                .size_full()
+                .p(theme.metrics.gutter)
+                .child(
+                    div()
+                        .size_full()
+                        .rounded(theme.radius)
+                        .border_1()
+                        .border_dashed()
+                        .border_color(theme.muted_foreground.opacity(0.4))
+                        .child(
+                            Vacancy::new(t!("dl-empty"))
+                                .icon("icons/download.svg")
+                                .detail(t!("dl-empty-detail"))
+                                .action(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(8.))
+                                        .text_size(theme.text(Text::Small))
+                                        .text_color(theme.muted_foreground)
+                                        .child(
+                                            Button::new("empty-paste")
+                                                .primary()
+                                                .icon("icons/clipboard-paste.svg")
+                                                .label(t!("dl-empty-paste"))
+                                                .on_click(cx.listener(|this, _, window, cx| {
+                                                    this.key(Key::Paste, window, cx)
+                                                })),
+                                        )
+                                        .child(t!("dl-empty-keys"))
+                                        .child(Kbd::new("secondary-v")),
+                                )
+                                .spoken("downloads-empty")
+                                .size_full(),
                         ),
                 )
-                .spoken("downloads-empty")
-                .size_full()
                 .into_any_element(),
             (true, false) => Vacancy::new(t!("dl-filtered-empty", filter = filter_text.as_str()))
                 .icon("icons/search.svg")
@@ -1225,7 +1256,8 @@ impl Render for Downloads {
             .track_focus(&self.list_focus)
             .child(list);
         let selected = self.selected.and_then(|id| self.summary(id, cx));
-        let card = self.card_view(cx);
+        // the card gives a list row back where the list drops its format column
+        let card = self.card_view(!cols.format, cx);
         let banner = self.tools_banner(cx);
         let menu = self.row_menu(cx);
         let confirm = self.confirm_view(cx);

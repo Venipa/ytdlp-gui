@@ -73,7 +73,7 @@ impl Downloads {
                                 ));
                                 crate::toasts::toast(
                                     cx,
-                                    crate::toasts::Kind::Info,
+                                    crate::toasts::Kind::Success,
                                     t!("dl-copied"),
                                     None,
                                 );
