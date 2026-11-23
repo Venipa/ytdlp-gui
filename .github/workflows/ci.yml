@@ -15,6 +15,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # line tables keep backtraces readable but skip full debug info: much faster links, smaller cache
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 defaults:
   run:
@@ -42,6 +44,8 @@ jobs:
         with:
           workspaces: apps/desktop
           key: lint
+          # only master runs refresh the cache; PRs reuse it
+          save-if: ${{ github.ref == 'refs/heads/master' }}
       - uses: oven-sh/setup-bun@v2
       # python-build-standalone runtime + pyo3.cfg (the `real-engine` feature links libpython)
       - run: bun scripts/setup.ts
@@ -51,6 +55,9 @@ jobs:
   test-windows:
     name: tests (windows)
     runs-on: windows-latest
+    env:
+      # rust-lld links the many gpui-sized test binaries much faster than MSVC link.exe
+      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld.exe
     steps:
       - uses: actions/checkout@v7
       - name: rust toolchain
@@ -59,11 +66,15 @@ jobs:
         with:
           workspaces: apps/desktop
           key: test-windows
+          # only master runs refresh the cache; PRs reuse it
+          save-if: ${{ github.ref == 'refs/heads/master' }}
       - uses: oven-sh/setup-bun@v2
       # python-build-standalone runtime + pyo3.cfg (the `real-engine` feature links libpython)
       - run: bun scripts/setup.ts
-      # cargo-nextest is not installed locally yet, so plain cargo test is the common denominator.
-      - run: cargo test --workspace --locked
+      # the engine tests re-exec the `fetch` example as their worker: build just that one normally
+      - run: cargo build -p engine --example fetch --locked
+      # libs, bins and tests only: the other examples are checked by clippy on the other jobs, not linked here
+      - run: cargo test --workspace --locked --lib --bins --tests
 
   clippy-macos:
     name: clippy (macos)
@@ -76,6 +87,8 @@ jobs:
         with:
           workspaces: apps/desktop
           key: clippy-macos
+          # only master runs refresh the cache; PRs reuse it
+          save-if: ${{ github.ref == 'refs/heads/master' }}
       - uses: oven-sh/setup-bun@v2
       # python-build-standalone runtime + pyo3.cfg (the `real-engine` feature links libpython)
       - run: bun scripts/setup.ts
