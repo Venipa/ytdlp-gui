@@ -1,0 +1,58 @@
+common-search = Search
+common-save = Save
+common-play = Play
+common-dismiss = Dismiss
+common-clear = Clear
+common-cut = Cut
+common-copy = Copy
+common-paste = Paste
+option-variants = Variants of { $name }
+table-sorted-ascending = Sorted ascending
+table-sorted-descending = Sorted descending
+range-from = From
+range-to = To
+rail-back = Scroll back
+rail-forward = Scroll forward
+unit-percent = { $value }%
+unit-db = { $value } dB
+unit-hz = { $value } Hz
+unit-khz = { $value } kHz
+unit-fps = { $value } FPS
+runtime-seconds = { $seconds }s
+runtime-minutes = { $minutes }m { $seconds }s
+runtime-hours = { $hours }h { $minutes }m
+
+nav-home = Home
+nav-back = Back
+library-liked-songs = Favorites
+app-close-window = Close Window
+app-minimize = Minimize
+window-maximize = Maximize
+window-restore = Restore
+
+column-index = #
+view-list = List
+view-cards = Grid
+
+kind-song = Song
+kind-artist = Artist
+kind-album = Album
+kind-playlist = Playlist
+
+nav-return-top = Back to top
+
+spinner-loading = Loading
+
+
+# Title-bar navigation and the three empty pages (Phase 0a)
+nav-downloads = Downloads
+nav-logs = Logs
+nav-settings = Settings
+page-downloads-empty = No downloads yet
+page-logs-empty = No log lines yet.
+page-settings-empty = Settings
+count-downloads =
+    { $count ->
+        [one] { $count } download
+       *[other] { $count } downloads
+    }

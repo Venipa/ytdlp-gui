@@ -1,0 +1,784 @@
+use std::rc::Rc;
+use std::sync::Arc;
+
+use gpui::prelude::*;
+use gpui::{
+    AnyElement, App, ClickEvent, Div, ElementId, FontWeight, Hsla, Interactivity, MouseButton,
+    MouseDownEvent, Pixels, SharedString, Stateful, StyleRefinement, Window, div, px, relative,
+    svg,
+};
+
+use crate::Badge;
+use crate::artwork::cover_palette;
+use crate::artwork::{Artwork, Avatar};
+use crate::button::Button;
+use crate::glass::{GLASS_BLUR, blurring};
+use crate::label::Tails as _;
+use crate::metrics::{LEADING, Text, concentric, snapped};
+use crate::motion::{PRESS_SCALE, PRESS_SCALE_CARD, glow_fill, glowing, pressing, solid_fill};
+use crate::skeleton::Skeleton;
+use crate::theme::ActiveTheme as _;
+use crate::tooltip::{Perch, Tipped as _};
+
+const BAR_TITLE: (Pixels, Pixels) = (px(140.), px(11.));
+const BAR_META: (Pixels, Pixels) = (px(90.), px(9.));
+const PLAY_RATIO: f32 = 0.24;
+const PLAY_MIN: Pixels = px(20.);
+const PLAY_MAX: Pixels = px(40.);
+const PLAY_INSET: Pixels = px(8.);
+/// How much of the accent colour the play button keeps over the artwork it blurs.
+const PLAY_FILL: f32 = 0.55;
+const SCRIM_RATIO: f32 = 0.45;
+const SCRIM_MIN: Pixels = px(14.);
+const TIGHT: Pixels = px(2.);
+
+pub const CARD_GROUP: &str = "card";
+
+type Press = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
+type Summon = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App) + 'static>;
+type DragStart = Rc<dyn Fn(&MouseDownEvent, &mut Window, &mut App) + 'static>;
+type Warm = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
+
+#[derive(IntoElement)]
+pub struct Card {
+    id: ElementId,
+    base: Stateful<Div>,
+    title: SharedString,
+    eyebrow: Option<SharedString>,
+    /// What a screen reader reads after the title, standing in for the meta line it cannot reach.
+    description: Option<SharedString>,
+    size: Option<Text>,
+    weight: Option<FontWeight>,
+    meta: Option<AnyElement>,
+    bare: bool,
+    trailing: Option<AnyElement>,
+    cover: Option<String>,
+    fallback: Option<SharedString>,
+    accent: bool,
+    art: Option<Pixels>,
+    art_radius: Option<Pixels>,
+    circle: bool,
+    tint: Option<Hsla>,
+    explicit: bool,
+    /// A badge after the title and the words it is read as, as `(icon, label)`.
+    mark: Option<(SharedString, SharedString)>,
+    fill: bool,
+    hovered: Option<StyleRefinement>,
+    /// Whether the card is lit, and the fill it is lit with.
+    lit: Option<(bool, Hsla)>,
+    press: Option<Press>,
+    loading: bool,
+    tile: Option<Pixels>,
+    play: Option<Press>,
+    warm: Option<Warm>,
+    hint: bool,
+    underline: bool,
+    playing: bool,
+    chosen: bool,
+    tucked: bool,
+    glance: bool,
+    action: Option<AnyElement>,
+    /// Whether the hover action takes no room until the card is hovered.
+    collapsed: bool,
+    drag_start: Option<DragStart>,
+    menu: Option<Summon>,
+}
+
+impl Card {
+    #[track_caller]
+    pub fn new(id: impl Into<ElementId>, title: impl Into<SharedString>) -> Self {
+        let id = id.into();
+        Self {
+            base: div().id(id.clone()),
+            id,
+            title: title.into(),
+            eyebrow: None,
+            description: None,
+            size: None,
+            weight: None,
+            meta: None,
+            bare: false,
+            trailing: None,
+            cover: None,
+            fallback: None,
+            accent: false,
+            art: None,
+            art_radius: None,
+            circle: false,
+            tint: None,
+            explicit: false,
+            mark: None,
+            fill: true,
+            hovered: None,
+            lit: None,
+            press: None,
+            loading: false,
+            tile: None,
+            play: None,
+            warm: None,
+            hint: false,
+            underline: false,
+            playing: false,
+            chosen: false,
+            tucked: false,
+            glance: false,
+            action: None,
+            collapsed: false,
+            drag_start: None,
+            menu: None,
+        }
+    }
+
+    pub fn skeleton(id: impl Into<ElementId>) -> Self {
+        Self::new(id, "").loading()
+    }
+
+    pub fn drag_start(
+        mut self,
+        handler: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.drag_start = Some(Rc::new(handler));
+        self
+    }
+
+    pub fn tile(mut self, width: Pixels) -> Self {
+        self.tile = Some(width);
+        self
+    }
+
+    pub fn tile_height(art: Pixels, window: &Window, cx: &App) -> Pixels {
+        let theme = *cx.theme();
+        let rem = window.rem_size();
+        let line = |step: Text| px((theme.text(step) / px(1.) * LEADING).round());
+
+        snapped(
+            art + rem * 0.5 + line(Text::Body) + TIGHT + line(Text::Small),
+            window,
+        )
+    }
+
+    pub fn play(
+        mut self,
+        playing: bool,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.play = Some(Box::new(handler));
+        self.playing = playing;
+        self
+    }
+
+    /// Runs `handler` when the pointer comes to rest on the play button, so the caller can
+    /// fetch ahead what a press would start.
+    pub fn warm(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.warm = Some(Rc::new(handler));
+        self
+    }
+
+    pub fn hint(mut self) -> Self {
+        self.hint = true;
+        self
+    }
+
+    pub fn underline(mut self) -> Self {
+        self.underline = true;
+        self
+    }
+
+    pub fn action(mut self, action: impl IntoElement) -> Self {
+        self.action = Some(action.into_any_element());
+        self
+    }
+
+    /// Shows an action on hover like `action`, but it takes no room until then, so the trailing
+    /// content only moves aside while the card is hovered.
+    pub fn collapsed_action(mut self, action: impl IntoElement) -> Self {
+        self.action = Some(action.into_any_element());
+        self.collapsed = true;
+        self
+    }
+
+    pub fn cover(mut self, cover: Option<String>) -> Self {
+        self.cover = cover;
+        self
+    }
+
+    pub fn fallback(mut self, icon: impl Into<SharedString>) -> Self {
+        self.fallback = Some(icon.into());
+        self
+    }
+
+    pub fn accent(mut self) -> Self {
+        self.accent = true;
+        self
+    }
+
+    pub fn art(mut self, art: Pixels) -> Self {
+        self.art = Some(art);
+        self
+    }
+
+    pub fn art_radius(mut self, radius: Pixels) -> Self {
+        self.art_radius = Some(radius);
+        self
+    }
+
+    pub fn circle(mut self) -> Self {
+        self.circle = true;
+        self
+    }
+
+    pub fn eyebrow(mut self, eyebrow: impl Into<SharedString>) -> Self {
+        self.eyebrow = Some(eyebrow.into());
+        self
+    }
+
+    /// What a screen reader reads after the title, such as the artist and year the meta line
+    /// shows. The meta line is an element no reader can reach, and the eyebrow stands in when
+    /// this is not set.
+    pub fn description(mut self, description: impl Into<SharedString>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    pub fn size(mut self, size: Text) -> Self {
+        self.size = Some(size);
+        self
+    }
+
+    pub fn weight(mut self, weight: FontWeight) -> Self {
+        self.weight = Some(weight);
+        self
+    }
+
+    pub fn tint(mut self, tint: Hsla) -> Self {
+        self.tint = Some(tint);
+        self
+    }
+
+    pub fn meta(mut self, meta: impl IntoElement) -> Self {
+        self.meta = Some(meta.into_any_element());
+        self
+    }
+
+    pub fn bare_meta(mut self, meta: impl IntoElement) -> Self {
+        self.meta = Some(meta.into_any_element());
+        self.bare = true;
+        self
+    }
+
+    pub fn explicit(mut self) -> Self {
+        self.explicit = true;
+        self
+    }
+
+    /// Sets a badge showing `icon` after the title, after the explicit one, which screen readers
+    /// hear as `label`.
+    pub fn mark(mut self, icon: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
+        self.mark = Some((icon.into(), label.into()));
+        self
+    }
+
+    pub fn trailing(mut self, trailing: impl IntoElement) -> Self {
+        self.trailing = Some(trailing.into_any_element());
+        self
+    }
+
+    pub fn flat(mut self) -> Self {
+        self.fill = false;
+        self
+    }
+
+    /// Rounds the card to sit inside a padded panel such as a dropdown, so its corners follow
+    /// the panel's instead of bulging past them.
+    pub fn tucked(mut self) -> Self {
+        self.tucked = true;
+        self
+    }
+
+    pub fn loading(mut self) -> Self {
+        self.loading = true;
+        self.fill = false;
+        self
+    }
+
+    pub fn press(mut self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
+        self.press = Some(Box::new(handler));
+        self
+    }
+
+    pub fn menu(
+        mut self,
+        handler: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.menu = Some(Box::new(handler));
+        self
+    }
+
+    /// Draws only the cover, with the title in a tooltip beside it.
+    pub fn glance(mut self) -> Self {
+        self.glance = true;
+        self
+    }
+
+    pub fn chosen(mut self, chosen: bool) -> Self {
+        self.chosen = chosen;
+        self
+    }
+
+    /// Fills the card with `color` while `lit`, for a row that marks where the app is. Under the
+    /// pointer alone it takes the theme's `table_hover`, the hover every row shares. Either comes
+    /// on at once and fades out the way a hover does.
+    pub fn lit(mut self, lit: bool, color: Hsla) -> Self {
+        self.lit = Some((lit, color));
+        self
+    }
+}
+
+impl Styled for Card {
+    fn style(&mut self) -> &mut StyleRefinement {
+        self.base.style()
+    }
+}
+
+impl InteractiveElement for Card {
+    fn interactivity(&mut self) -> &mut Interactivity {
+        self.base.interactivity()
+    }
+
+    fn hover(mut self, f: impl FnOnce(StyleRefinement) -> StyleRefinement) -> Self {
+        self.hovered = Some(f(self.hovered.take().unwrap_or_default()));
+        self
+    }
+}
+
+impl StatefulInteractiveElement for Card {}
+
+impl RenderOnce for Card {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let Self {
+            id,
+            mut base,
+            title,
+            eyebrow,
+            description,
+            size,
+            weight,
+            meta,
+            bare,
+            trailing,
+            cover,
+            fallback,
+            accent,
+            art,
+            art_radius,
+            circle,
+            tint,
+            explicit,
+            mark,
+            fill,
+            hovered,
+            lit,
+            press,
+            loading,
+            tile,
+            play,
+            warm,
+            hint,
+            underline,
+            playing,
+            chosen,
+            tucked,
+            glance,
+            action,
+            collapsed,
+            drag_start,
+            menu,
+        } = self;
+
+        let theme = *cx.theme();
+        let inset = theme.metrics.pad;
+        let height = snapped(theme.metrics.list_row, window);
+        let listed = art.is_none() && tile.is_none();
+        // The play button wears the cover's own colours once the cache has the art,
+        // and the theme's primary until then.
+        let play_fill =
+            theme.cover_fill(cover.as_deref().and_then(|cover| cover_palette(cover, cx)));
+        let corners = match tucked {
+            true => crate::metrics::tucked(theme.radius, window),
+            false => theme.radius,
+        };
+        // A tile's cover touches the card's edges and shares its corners; a row's sits one inset
+        // inside its hover, so its corners run parallel to the row's.
+        let art_radius = art_radius.unwrap_or_else(|| match tile {
+            Some(_) => corners,
+            None => concentric(corners, inset),
+        });
+        let art = art
+            .or(tile)
+            .unwrap_or_else(|| snapped(height - inset * 2., window));
+        let mut hovered = match (hovered, fill) {
+            (Some(style), _) => Some(style),
+            (None, true) => Some(StyleRefinement::default().bg(theme.table_hover)),
+            (None, false) => None,
+        };
+        // The hover's fill fades out, so the glow paints it and gpui applies only what is left
+        // of the hover style.
+        let hover_fill = hovered.as_mut().and_then(|style| {
+            let fill = solid_fill(style)?;
+            style.background = None;
+            Some(fill)
+        });
+        let glow_color = match lit {
+            Some((true, color)) => Some(color),
+            Some((false, _)) => Some(theme.table_hover),
+            None => hover_fill,
+        }
+        .filter(|_| !chosen);
+        let overrides = std::mem::take(base.style());
+
+        let leading = match loading {
+            true => Skeleton::new()
+                .size(art)
+                .when(circle, Skeleton::circle)
+                .into_any_element(),
+            false if circle => Avatar::new(cover).size(art).into_any_element(),
+            false => Artwork::new(cover)
+                .size(art)
+                .corner_radius(art_radius)
+                .when_some(fallback, Artwork::fallback)
+                .when(accent, Artwork::accent)
+                .into_any_element(),
+        };
+        let leading = match play {
+            None => leading,
+            Some(play) => {
+                let glyph = match playing {
+                    true => "icons/pause-filled.svg",
+                    false => "icons/play-filled.svg",
+                };
+                let hint = match playing {
+                    true => "play-pause",
+                    false => "common-play",
+                };
+                let control = match tile {
+                    Some(_) => {
+                        let size =
+                            px((art / px(1.) * PLAY_RATIO).round()).clamp(PLAY_MIN, PLAY_MAX);
+
+                        div()
+                            .id("card-play")
+                            .absolute()
+                            .right(PLAY_INSET)
+                            .bottom(PLAY_INSET)
+                            .when_some(warm.clone(), |this, warm| {
+                                this.on_hover(move |hovered, window, cx| {
+                                    if *hovered {
+                                        warm(window, cx);
+                                    }
+                                })
+                            })
+                            .when(!playing, |this| {
+                                this.invisible()
+                                    .group_hover(CARD_GROUP, |style| style.visible())
+                            })
+                            .child(
+                                Button::new("card-play-button")
+                                    .primary()
+                                    .icon(glyph)
+                                    .tooltip(hint)
+                                    .size(size)
+                                    .rounded_full()
+                                    .fill(play_fill.background.opacity(PLAY_FILL), play_fill.hover)
+                                    .tint(play_fill.foreground)
+                                    .when(blurring(cx), |button| button.backdrop_blur(GLASS_BLUR))
+                                    .shadow_sm()
+                                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                                        cx.stop_propagation()
+                                    })
+                                    .on_click(move |event, window, cx| {
+                                        cx.stop_propagation();
+                                        play(event, window, cx);
+                                    }),
+                            )
+                            .into_any_element()
+                    }
+                    None => {
+                        let corner = match circle {
+                            true => art / 2.,
+                            false => art_radius,
+                        };
+                        let size = px((art / px(1.) * SCRIM_RATIO).round()).max(SCRIM_MIN);
+
+                        div()
+                            .id("card-scrim")
+                            .absolute()
+                            .inset_0()
+                            .when(!playing, |this| {
+                                this.invisible()
+                                    .group_hover(CARD_GROUP, |style| style.visible())
+                            })
+                            .child(
+                                div()
+                                    .id("card-play")
+                                    .size_full()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded(corner)
+                                    .cursor_pointer()
+                                    .bg(theme.overlay)
+                                    .role(gpui::accesskit::Role::Button)
+                                    .aria_label(i18n::lookup(hint, None))
+                                    // A glance card is little more than its cover, so the
+                                    // scrim over it shows the title the card would.
+                                    .map(|this| match glance {
+                                        true => this.tip_label(title.clone(), Perch::Trailing),
+                                        false => this.tip(hint, Perch::Below),
+                                    })
+                                    .child(
+                                        svg()
+                                            .path(icons::path(glyph))
+                                            .size(size)
+                                            .flex_none()
+                                            .text_color(theme.overlay_foreground),
+                                    )
+                                    .on_click(move |event, window, cx| {
+                                        play(event, window, cx);
+                                    }),
+                            )
+                            .into_any_element()
+                    }
+                };
+
+                let cover = div()
+                    .relative()
+                    .flex_none()
+                    .size(art)
+                    .child(leading)
+                    .child(control);
+                match tile {
+                    Some(_) => cover.into_any_element(),
+                    // The scrim fills the cover, so the cover is what takes the press: it keeps
+                    // the press and the click from reaching the card, and shrinks as a whole,
+                    // artwork and scrim together, the way a button does. What the click starts
+                    // may take a while to load, and nothing else would show the press landed.
+                    None => {
+                        let held = ElementId::NamedChild(Arc::new(id.clone()), "play".into());
+                        let cover = cover
+                            .id("card-cover")
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .on_click(|_, _, cx| cx.stop_propagation())
+                            .when_some(warm, |this, warm| {
+                                this.on_hover(move |hovered, window, cx| {
+                                    if *hovered {
+                                        warm(window, cx);
+                                    }
+                                })
+                            });
+                        pressing(cover, &held, PRESS_SCALE, window, cx).into_any_element()
+                    }
+                }
+            }
+        };
+
+        // The meta line is an element no reader can reach, so the description or the eyebrow
+        // stands in for it, and the explicit badge is read after them.
+        let about = [
+            description.or_else(|| eyebrow.clone()),
+            explicit.then(|| i18n::lookup("song-explicit", None)),
+            mark.as_ref().map(|(_, label)| label.clone()),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|part| part.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+        let name = title.clone();
+        let name_tip = title.clone();
+        let title = div()
+            .id("card-title")
+            .min_w_0()
+            .truncate()
+            .tails()
+            .when_some(drag_start.clone(), |this, drag_start| {
+                this.on_mouse_down(MouseButton::Right, move |event, window, cx| {
+                    drag_start(event, window, cx)
+                })
+            })
+            .when_some(weight, |this, weight| this.font_weight(weight))
+            .when(underline, |this| this.hover(|style| style.underline()))
+            .when(hint && !title.is_empty(), |this| {
+                this.tip_label(title.clone(), Perch::Below)
+            })
+            .text_color(tint.unwrap_or(theme.foreground))
+            .when_some(size, |this, size| this.text_size(theme.text(size)))
+            .child(title);
+        let heading = match explicit || mark.is_some() {
+            false => title.into_any_element(),
+            true => div()
+                .flex()
+                .items_center()
+                .gap(px(3.))
+                .min_w_0()
+                .child(title)
+                .when(explicit, |this| {
+                    this.child(div().flex_none().child(Badge::explicit()))
+                })
+                .when_some(mark, |this, (icon, _)| {
+                    this.child(div().flex_none().child(Badge::icon(icon)))
+                })
+                .into_any_element(),
+        };
+        let caption = meta.map(|meta| match bare {
+            true => div().child(meta),
+            false => div()
+                .min_w_0()
+                .truncate()
+                .tails()
+                .text_size(theme.text(Text::Small))
+                .text_color(theme.muted_foreground)
+                .child(meta),
+        });
+
+        let pressable = press.is_some();
+        let card = base
+            // A card that opens something reads as one button named for its
+            // title, while a still card is a group so the title stays reachable.
+            .role(match press.is_some() {
+                true => gpui::accesskit::Role::Button,
+                false => gpui::accesskit::Role::Group,
+            })
+            .aria_label(name)
+            .when(!about.is_empty(), |this| this.aria_description(about))
+            .when(chosen, |this| this.aria_selected(true))
+            .group(CARD_GROUP)
+            .flex()
+            .when_else(
+                tile.is_some(),
+                |this| this.flex_col().gap_2().w(art),
+                |this| this.items_center().gap_3().px(inset),
+            )
+            .rounded(corners)
+            .when(listed, |this| {
+                this.flex_none().h(height).py(inset).w_full().min_w_0()
+            })
+            .when(glance, |this| {
+                this.justify_center()
+                    .tip_label(name_tip.clone(), Perch::Trailing)
+            })
+            .when(chosen, |this| this.bg(theme.table_active))
+            .when_some(hovered.filter(|_| !chosen), |this, style| {
+                this.hover(move |_| style)
+            })
+            .when_some(press, |this, press| {
+                this.cursor_pointer()
+                    .on_click(move |event, window, cx| press(event, window, cx))
+            })
+            .when_some(menu, |this, menu| {
+                this.on_mouse_down(MouseButton::Right, move |event, window, cx| {
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    menu(event, window, cx);
+                })
+            })
+            .child(match drag_start.clone() {
+                Some(drag_start) => div()
+                    .flex_none()
+                    .on_mouse_down(MouseButton::Right, move |event, window, cx| {
+                        drag_start(event, window, cx)
+                    })
+                    .child(leading)
+                    .into_any_element(),
+                None => leading,
+            })
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .line_height(relative(LEADING))
+                    .when(tile.is_some(), |this| this.w_full().flex_none())
+                    .when(glance, |this| this.hidden())
+                    .when_else(
+                        loading,
+                        |this| {
+                            this.gap_2()
+                                .child(Skeleton::new().w(BAR_TITLE.0).h(BAR_TITLE.1))
+                                .child(Skeleton::new().w(BAR_META.0).h(BAR_META.1))
+                        },
+                        |this| match eyebrow {
+                            None => this.gap(TIGHT).child(heading).children(caption),
+                            Some(eyebrow) => this
+                                .when(tile.is_some(), |this| this.gap_1())
+                                .child(
+                                    div()
+                                        .text_size(theme.text(Text::Small))
+                                        .text_color(theme.muted_foreground)
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child(eyebrow),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .min_w_0()
+                                        .gap(TIGHT)
+                                        .child(heading)
+                                        .children(caption),
+                                ),
+                        },
+                    ),
+            )
+            .children(
+                trailing
+                    .filter(|_| !glance)
+                    .map(|trailing| div().flex_none().child(trailing)),
+            )
+            .children(action.filter(|_| !glance).map(|action| {
+                div()
+                    .id("card-action")
+                    .flex_none()
+                    .map(|this| match collapsed {
+                        true => this
+                            .overflow_hidden()
+                            .invisible()
+                            // Keep the action in prepaint even when it takes no space.
+                            .when_else(
+                                tile.is_some(),
+                                |this| {
+                                    this.h_0().mt_neg_2().group_hover(CARD_GROUP, |style| {
+                                        style.h_auto().mt_0().visible()
+                                    })
+                                },
+                                |this| {
+                                    this.w_0().ml_neg_3().group_hover(CARD_GROUP, |style| {
+                                        style.w_auto().ml_0().visible()
+                                    })
+                                },
+                            ),
+                        false => this
+                            .invisible()
+                            .group_hover(CARD_GROUP, |style| style.visible()),
+                    })
+                    .child(action)
+            }));
+
+        let mut card = match pressable {
+            true => pressing(card, &id, PRESS_SCALE_CARD, window, cx),
+            false => card,
+        };
+        card.style().refine(&overrides);
+        let Some(fill) = glow_color else {
+            return card;
+        };
+        let rest = solid_fill(&overrides);
+        let lit = lit.is_some_and(|(lit, _)| lit);
+        let (card, level) = glowing(card, &id, lit, 1., window, cx);
+        match glow_fill(rest, fill, level) {
+            Some(color) => card.bg(color),
+            None => card,
+        }
+    }
+}
