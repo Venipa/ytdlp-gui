@@ -18,6 +18,8 @@ use crate::tooltip::{Perch, Tipped as _};
 /// The fill of an unselected chip and the one it lifts to on hover, as shares of the foreground.
 const CHIP_FILL: f32 = 0.08;
 const CHIP_HOVER: f32 = 0.14;
+/// An outline button's edge, as a share of the foreground: over the 14% hairline of dividers.
+const OUTLINE: f32 = 0.26;
 /// How much of a white tint a frosted ghost or outline button shows when hovered
 /// and when pressed, so the fill lightens the content under the glass blur rather than
 /// laying a themed slab over it.
@@ -597,7 +599,9 @@ impl RenderOnce for Button {
                 border: Some(theme.border),
             },
             Variant::Ghost => subtle(None),
-            Variant::Outline => subtle(Some(theme.border)),
+            // an outline button's edge is a control's, a step over the hairline dividers, so it
+            // reads as a button on the light card stock too; disabled falls back to the hairline
+            Variant::Outline => subtle(Some(theme.foreground.opacity(OUTLINE))),
             Variant::Primary => solid(theme.primary, theme.primary_hover, theme.primary_foreground),
             Variant::Destructive => {
                 solid(theme.danger, theme.danger_hover, theme.danger_foreground)

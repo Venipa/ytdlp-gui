@@ -77,7 +77,7 @@ impl InteractiveElement for SwitchRow {
 }
 
 impl RenderOnce for SwitchRow {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let Self {
             id,
             mut base,
@@ -92,6 +92,11 @@ impl RenderOnce for SwitchRow {
         let hover = theme.secondary_hover;
         let press = theme.secondary_active;
 
+        // an enabled row is a Tab stop with the shared ring; Space or Enter flips it
+        let base = match disabled {
+            false => crate::focus::focusable(base, &id, window, cx),
+            true => base,
+        };
         let mut row = base
             .role(Role::Switch)
             .aria_label(title.clone())

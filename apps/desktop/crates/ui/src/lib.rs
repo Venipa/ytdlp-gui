@@ -92,7 +92,7 @@ pub use filters::{
     Filter, FilterChange, FlagAxis, RangeAxis, RangeScrubber, RangeState, SortAxis, Unit,
 };
 pub use flight::{Flight, Zoom};
-pub use focus::{focusable, handle as focus_handle};
+pub use focus::{focusable, handle as focus_handle, ring as focus_ring};
 pub use form::{FORM_CONTEXT, Field, Form, NextField, PreviousField, Submit, step_focus};
 pub use glass::{
     GLASS_BLUR, GLASS_FILL, backdrop_glass, bar_surface, blurring, frost, glass, popover_fill,

@@ -20,9 +20,6 @@ pub const MONO: &str = "IBM Plex Mono";
 
 /// Width of the call-number column.
 const CALL_WIDTH: f32 = 56.;
-/// Distance between the dots of a dotted track, and the dot size.
-const DOT_PITCH: f32 = 4.;
-const DOT: f32 = 1.;
 /// Where the probing pulse's clock starts.
 static PULSE_EPOCH: std::sync::LazyLock<std::time::Instant> =
     std::sync::LazyLock::new(std::time::Instant::now);
@@ -31,10 +28,6 @@ const FILL: f32 = 3.;
 /// How strong an active rule's track is, as an alpha of amber: the whole row width reads as
 /// the distance to go.
 const TRACK: f32 = 0.24;
-/// How strong the dots of a track are, as an alpha of pencil: a quiet ruled line under the text.
-const DOTS: f32 = 0.35;
-/// How strong the kept part of a paused rule is: a step over the dots, far under amber.
-const HELD: f32 = 0.5;
 /// A chip's side padding and the gap between its label and count.
 const CHIP_INSET: Pixels = px(10.);
 const CHIP_GAP: Pixels = px(6.);
@@ -87,24 +80,20 @@ impl RenderOnce for CallNumber {
     }
 }
 
-/// What a ledger rule shows.
+/// What a ledger rule shows. Only work in motion carries a rule; every other row sits on the
+/// list's plain hairline divider, so a still row never reads as a broken line.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Rule {
-    /// Waiting, paused, cancelled: a dotted track.
-    Dotted,
-    /// Paused part way: a pencil hairline up to the fraction kept, 0 to 1, dotted after it.
-    Held(f32),
-    /// Active: the dotted track with an amber fill up to the fraction, 0 to 1.
+    /// Active: a faint amber track with an amber fill up to the fraction, 0 to 1.
     Fill(f32),
-    /// Done: a quiet solid rule.
-    Solid,
-    /// Failed: a solid red rule.
-    Failed,
-    /// Reading the page: a short amber stretch travelling along the track.
+    /// Reading the page: a short amber stretch travelling along the faint track.
     Pulse,
+    /// Still: the plain 1px divider in the `border` colour, for a list whose lines speak (the
+    /// welcome tools) and keep a rule node whatever their state.
+    Hairline,
 }
 
-/// The ruled line under a row, which is also its progress.
+/// The ruled line under a working row, which is also its progress.
 #[derive(IntoElement)]
 pub struct ProgressRule {
     rule: Rule,
@@ -131,80 +120,53 @@ impl RenderOnce for ProgressRule {
         let rule = self.rule;
         let spoken = self.spoken;
         let fraction = match rule {
-            Rule::Fill(done) | Rule::Held(done) => Some(f64::from(done.clamp(0., 1.))),
-            Rule::Solid => Some(1.),
-            _ => None,
+            Rule::Fill(done) => Some(f64::from(done.clamp(0., 1.))),
+            Rule::Pulse | Rule::Hairline => None,
         };
         let line = canvas(
             |_, _, _| (),
             move |bounds, _, window, cx| {
                 let base = bounds.origin.y + bounds.size.height;
-                let at = |x: Pixels, w: Pixels, h: Pixels| gpui::Bounds {
-                    origin: point(x, base - h),
-                    size: size(w, h),
+                let at = |x: Pixels, w: Pixels| gpui::Bounds {
+                    origin: point(x, base - px(FILL)),
+                    size: size(w, px(FILL)),
                 };
+                if rule == Rule::Hairline {
+                    let line = gpui::Bounds {
+                        origin: point(bounds.origin.x, base - px(1.)),
+                        size: size(bounds.size.width, px(1.)),
+                    };
+                    window.paint_quad(fill(line, theme.border));
+                    return;
+                }
+                // one line: a faint amber track the row wide, the fill or the stretch solid over it
+                window.paint_quad(fill(
+                    at(bounds.origin.x, bounds.size.width),
+                    theme.progress_bar.opacity(TRACK),
+                ));
                 match rule {
-                    Rule::Solid | Rule::Failed => {
-                        let color = match rule {
-                            Rule::Failed => theme.danger,
-                            _ => theme.border,
-                        };
-                        window.paint_quad(fill(
-                            at(bounds.origin.x, bounds.size.width, px(1.)),
-                            color,
-                        ));
-                    }
                     Rule::Fill(done) => {
-                        // one line: a faint amber track the row wide, the fill solid over it
-                        window.paint_quad(fill(
-                            at(bounds.origin.x, bounds.size.width, px(FILL)),
-                            theme.progress_bar.opacity(TRACK),
-                        ));
                         let width = bounds.size.width * done.clamp(0., 1.);
-                        window.paint_quad(fill(
-                            at(bounds.origin.x, width, px(FILL)),
-                            theme.progress_bar,
-                        ));
+                        window.paint_quad(fill(at(bounds.origin.x, width), theme.progress_bar));
                     }
-                    Rule::Dotted | Rule::Pulse | Rule::Held(_) => {
-                        let mut x = bounds.origin.x;
-                        let end = bounds.origin.x + bounds.size.width;
-                        if let Rule::Held(kept) = rule {
-                            let width = bounds.size.width * kept.clamp(0., 1.);
-                            window.paint_quad(fill(
-                                at(x, width, px(DOT)),
-                                theme.muted_foreground.opacity(HELD),
-                            ));
-                            x += width + px(DOT_PITCH);
-                        }
-                        while x < end {
-                            window.paint_quad(fill(
-                                at(x, px(DOT), px(DOT)),
-                                theme.muted_foreground.opacity(DOTS),
-                            ));
-                            x += px(DOT_PITCH);
-                        }
-                        if rule == Rule::Pulse {
-                            // a run is 1.4 s; a reduced-motion setting leaves the stretch at rest
-                            let phase = match cx.reduce_motion() {
-                                true => 0.,
-                                false => {
-                                    window.request_animation_frame();
-                                    (PULSE_EPOCH.elapsed().as_secs_f32() / 1.4).fract()
-                                }
-                            };
-                            let len = bounds.size.width * 0.18;
-                            let from = bounds.origin.x - len + (bounds.size.width + len) * phase;
-                            let left = from.max(bounds.origin.x);
-                            let right = (from + len).min(bounds.origin.x + bounds.size.width);
-                            if right > left {
-                                window.paint_quad(fill(
-                                    at(left, right - left, px(FILL)),
-                                    theme.progress_bar,
-                                ));
+                    Rule::Pulse => {
+                        // a run is 1.4 s; a reduced-motion setting leaves the stretch at rest
+                        let phase = match cx.reduce_motion() {
+                            true => 0.,
+                            false => {
+                                window.request_animation_frame();
+                                (PULSE_EPOCH.elapsed().as_secs_f32() / 1.4).fract()
                             }
+                        };
+                        let len = bounds.size.width * 0.18;
+                        let from = bounds.origin.x - len + (bounds.size.width + len) * phase;
+                        let left = from.max(bounds.origin.x);
+                        let right = (from + len).min(bounds.origin.x + bounds.size.width);
+                        if right > left {
+                            window.paint_quad(fill(at(left, right - left), theme.progress_bar));
                         }
                     }
+                    Rule::Hairline => {}
                 }
             },
         )

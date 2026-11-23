@@ -317,7 +317,8 @@ pub struct Input {
 impl Input {
     pub fn new(hint: impl Into<SharedString>, cx: &mut Context<Self>) -> Self {
         Self {
-            focus_handle: cx.focus_handle(),
+            // every field is a Tab stop, so the keyboard reaches it in reading order
+            focus_handle: cx.focus_handle().tab_stop(true),
             hint: hint.into(),
             name: None,
             icon: None,
