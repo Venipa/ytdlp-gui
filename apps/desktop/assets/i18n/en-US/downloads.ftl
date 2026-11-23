@@ -132,3 +132,4 @@ dl-logs-search-hint = Search the log
 dl-logs-search-name = Search log lines
 dl-logs-follow = Follow
 dl-logs-no-match = No log line matches.
+dl-cover-alt = Cover image

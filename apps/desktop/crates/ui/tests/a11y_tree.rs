@@ -28,7 +28,9 @@
 //! handles of a `RangeScrubber`, the window control and rail arrow buttons, and
 //! the sort state and focused row of a `Table`. `InfoCard`, `Fact`, `Notice`,
 //! `Vacancy` and `Kbd` return an `AnyElement` once `spoken` gives them an id,
-//! so they are manual passes too.
+//! so they are manual passes too. `SideNav` is the same: its Tab nodes (labelled, selected) sit
+//! below a plain container, and `Chip`, `ProgressRule`, `Thumbnail` and `TokenInput` are covered
+//! by `ledger_parts_speak_when_asked`.
 
 use std::{cell::RefCell, rc::Rc};
 
@@ -918,4 +920,58 @@ async fn spinner_advertises_progress_role_and_name(cx: &mut TestAppContext) {
         lines.iter().any(|line| line.contains("name=Some(")),
         "spinner exposes no accessible name: {lines:?}"
     );
+}
+
+#[gpui::test]
+async fn ledger_parts_speak_when_asked(cx: &mut TestAppContext) {
+    let lines = open_probe(cx, |window, cx| {
+        let rule = ui::ProgressRule::new(ui::Rule::Fill(0.4))
+            .spoken("rule", "ffmpeg: 40%")
+            .render(window, cx)
+            .into_element();
+        let thumb = ui::Thumbnail::new(None, gpui::px(80.))
+            .alt("cover", "Cover image")
+            .render(window, cx)
+            .into_element();
+        let chip = ui::Chip::new("chip", "Done")
+            .count(3)
+            .render(window, cx)
+            .into_element();
+        let tokens = ui::TokenInput::new(&cx.new(|cx| Input::new("Search", cx)), vec![])
+            .spoken("search", "Search downloads")
+            .render(window, cx)
+            .into_element();
+        [
+            snapshot("rule", &rule),
+            snapshot("thumb", &thumb),
+            snapshot("chip", &chip),
+            snapshot("tokens", &tokens),
+        ]
+        .join("\n")
+    });
+    let text = rendered(&lines, "ledger").join("\n");
+    for expected in [
+        "role=ProgressIndicator",
+        "name=Some(\"ffmpeg: 40%\")",
+        "value=Some(0.4000000",
+        "role=Image",
+        "name=Some(\"Cover image\")",
+        "role=Button",
+        "name=Some(\"Done 3\")",
+        "role=Search",
+        "name=Some(\"Search downloads\")",
+    ] {
+        assert!(text.contains(expected), "missing {expected}: {text}");
+    }
+}
+
+#[gpui::test]
+async fn unnamed_rule_stays_out_of_the_tree(cx: &mut TestAppContext) {
+    let lines = open_probe(cx, |window, cx| {
+        let rule = ui::ProgressRule::new(ui::Rule::Solid)
+            .render(window, cx)
+            .into_element();
+        snapshot("rule", &rule)
+    });
+    assert!(rendered(&lines, "rule")[0].contains("NO NODE"));
 }

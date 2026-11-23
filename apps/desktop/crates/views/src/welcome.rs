@@ -142,6 +142,7 @@ pub fn welcome(cx: &App) -> AnyElement {
                     .into_any_element(),
                 ToolState::Missing => div().size(px(16.)).into_any_element(),
             };
+            let spoken = format!("{}: {state}", tool_name(tool.kind));
             let version = tool.version.clone().unwrap_or_default();
             let short = short_version(&version).to_string();
             let long = version != short;
@@ -191,7 +192,7 @@ pub fn welcome(cx: &App) -> AnyElement {
                         )
                         .child(div().flex_none().w(px(16.)).child(lead)),
                 )
-                .child(ProgressRule::new(rule))
+                .child(ProgressRule::new(rule).spoken(("tool-rule", key), spoken))
         });
     div()
         .size_full()

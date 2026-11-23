@@ -806,7 +806,10 @@ impl Downloads {
                         cx.notify();
                     }))
             })))
-            .child(TokenInput::new(&self.search, tokens))
+            .child(
+                TokenInput::new(&self.search, tokens)
+                    .spoken("dl-search-region", t!("dl-search-name")),
+            )
             .into_any_element()
     }
 
