@@ -1,22 +1,21 @@
-//! The eight settings pages as sections of rows (see `layout`).
+//! The settings pages as sections of rows (see `layout`).
 
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use domain::{
-    CookiesMode, Preset, Settings, SponsorBlockMode, ToolKind, ToolSource, ToolState, ToolStatus,
-};
+use domain::{Preset, Settings, SponsorBlockMode, ToolKind, ToolSource, ToolState, ToolStatus};
 use gpui::prelude::*;
 use gpui::{AnyElement, Context, SharedString, div, px};
 use i18n::t;
+use router::{Destination, SettingsPage};
 use ui::{
     ActiveTheme as _, Button, Chip, MAX_TRANSPARENCY, MONO, MenuItem, Notice, Picker, ProgressRule,
-    Rule, Scrubber, SwitchRow, Text, WindowBlur, tabular,
+    Rule, Scrubber, Switch, SwitchRow, Text, WindowBlur, tabular,
 };
 
-use super::fields::Field;
+use super::fields::{self, Field};
 use super::layout::{row, section, stacked};
-use super::{BROWSERS, Edit, SPONSOR_CATEGORIES, SettingsView, look, tool_key};
+use super::{Edit, SPONSOR_CATEGORIES, SettingsView, look, tool_key};
 use crate::format;
 
 /// The licence notices, bundled so About can open them without the repository around.
@@ -302,140 +301,123 @@ impl SettingsView {
 
     pub(super) fn page_network(&self, s: &Settings, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let theme = *cx.theme();
-        let mode = s.cookies.mode;
-        let has_file = s.cookies.file.is_some();
-        let source = self.chips(
-            "ck",
-            [
-                (
-                    "none",
-                    "set-cookies-none",
-                    mode == CookiesMode::None,
-                    Rc::new(|st: &mut Settings| st.cookies.mode = CookiesMode::None) as Edit,
-                ),
-                (
-                    "file",
-                    "set-cookies-file",
-                    mode == CookiesMode::File,
-                    Rc::new(move |st: &mut Settings| {
-                        if has_file {
-                            st.cookies.mode = CookiesMode::File
+        let proxy_on = self.proxy_open || s.proxy.is_some();
+        let mut connection = vec![
+            SwitchRow::new("proxy-on", t!("set-proxy-on"), proxy_on)
+                .detail(t!("set-proxy-on-desc"))
+                .mx(px(-12.))
+                .px(px(12.))
+                .py(px(10.))
+                .min_h(px(52.))
+                .rounded(px(0.))
+                .on_click(cx.listener(move |this, _, _, cx| this.set_proxy_open(!proxy_on, cx)))
+                .into_any_element(),
+        ];
+        if proxy_on {
+            let reads =
+                s.proxy
+                    .as_deref()
+                    .and_then(fields::proxy_parts)
+                    .map(|(scheme, host, port)| match port {
+                        Some(port) => {
+                            t!("set-proxy-reads", scheme = scheme, host = host, port = port)
                         }
-                    }) as Edit,
-                ),
-                (
-                    "browser",
-                    "set-cookies-browser",
-                    mode == CookiesMode::Browser,
-                    Rc::new(|st: &mut Settings| {
-                        st.cookies.mode = CookiesMode::Browser;
-                        st.cookies.browser.get_or_insert_with(|| "firefox".into());
-                    }) as Edit,
-                ),
-            ],
-        );
-        let mut cookies = vec![row(
-            t!("set-cookies"),
-            Some(t!("set-cookies-desc")),
-            source,
-            cx,
-        )];
-        if mode == CookiesMode::Browser {
-            let browser = s.cookies.browser.clone().unwrap_or_default();
-            cookies.push(row(
-                t!("set-cookies-browser-pick"),
-                Some(t!("set-cookies-firefox")),
-                self.chips(
-                    "br",
-                    BROWSERS.map(|(id, key)| {
-                        (
-                            id,
-                            key,
-                            browser == id,
-                            Rc::new(move |st: &mut Settings| st.cookies.browser = Some(id.into()))
-                                as Edit,
-                        )
-                    }),
-                ),
-                cx,
-            ));
-            cookies
-                .push(Notice::new(t!("set-cookies"), t!("set-cookies-chrome")).into_any_element());
-        } else {
-            let buttons = div()
-                .flex()
-                .gap(px(8.))
-                .child(
-                    Button::new("import-cookies")
-                        .outline()
-                        .label(t!("set-cookies-import"))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.choose_file(
-                                |this, path, cx| match std::fs::read_to_string(&path) {
-                                    Ok(text) => this.import_cookies(&text, cx),
-                                    Err(_) => {
-                                        this.cookie_note = Some((t!("set-cookies-bad"), true));
-                                        cx.notify();
-                                    }
-                                },
-                                cx,
-                            )
-                        })),
-                )
-                .child(
-                    Button::new("paste-cookies")
-                        .outline()
-                        .label(t!("set-cookies-clipboard"))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            let text = cx.read_from_clipboard().and_then(|c| c.text());
-                            this.import_cookies(&text.unwrap_or_default(), cx);
-                        })),
-                )
-                .child(
-                    Button::new("clear-cookies")
-                        .ghost()
-                        .disabled(!has_file)
-                        .label(t!("set-cookies-clear"))
-                        .on_click(cx.listener(|this, _, _, cx| this.clear_cookies(cx))),
-                );
-            cookies.push(stacked(
-                t!("set-cookies-file-title"),
-                Some(t!("set-cookies-file-desc")),
-                div().flex().flex_col().gap(px(8.)).child(buttons).children(
-                    self.cookie_note.clone().map(|(note, failed)| {
-                        div()
-                            .text_size(theme.text(Text::Small))
-                            .text_color(if failed {
-                                theme.danger
-                            } else {
-                                theme.muted_foreground
-                            })
-                            .child(note)
-                    }),
-                ),
-                cx,
-            ));
+                        None => t!("set-proxy-reads-host", scheme = scheme, host = host),
+                    });
+            connection.push(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.))
+                    .pb(px(12.))
+                    .child(self.input(Field::Proxy, 0., cx))
+                    .children(
+                        reads
+                            .filter(|_| self.field(Field::Proxy).error.is_none())
+                            .map(|line| {
+                                div()
+                                    .text_size(theme.text(Text::Small))
+                                    .text_color(theme.muted_foreground)
+                                    .child(line)
+                            }),
+                    )
+                    .into_any_element(),
+            );
         }
+        let rate_on = self.rate_open || s.rate_limit.is_some();
+        let unit = fields::rate_parts(s).1;
+        let units =
+            div()
+                .flex()
+                .gap(px(4.))
+                .children(
+                    [("K", "set-rate-kb"), ("M", "set-rate-mb")].map(|(suffix, key)| {
+                        Chip::new(
+                            SharedString::from(format!("rate-{suffix}")),
+                            i18n::lookup(key, None),
+                        )
+                        .selected(unit == suffix)
+                        .on_click(self.edit(move |st| {
+                            let digits = st
+                                .rate_limit
+                                .as_deref()
+                                .map(|r| r.trim_end_matches(char::is_alphabetic).to_owned())
+                                .filter(|d| !d.is_empty())
+                                .unwrap_or_else(|| "1".into());
+                            st.rate_limit = Some(format!("{digits}{suffix}"));
+                        }))
+                    }),
+                );
+        let rate_control = div()
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .when(rate_on, |this| {
+                this.child(self.input(Field::Rate, 72., cx)).child(units)
+            })
+            .child(
+                Switch::new("rate-on", rate_on)
+                    .name(t!("set-rate-on"))
+                    .on_click(cx.listener(move |this, _, _, cx| this.set_rate_open(!rate_on, cx))),
+            );
+        connection.push(row(
+            t!("set-rate-on"),
+            Some(t!("set-rate-on-desc")),
+            rate_control,
+            cx,
+        ));
+
+        let sets = &s.cookies.sets;
+        let on = sets.iter().filter(|set| set.on).count();
+        let domains = self.cookie_domain_count(s);
+        let summary = if sets.is_empty() {
+            t!("set-cookies-empty")
+        } else {
+            t!(
+                "set-cookies-summary",
+                on = on,
+                total = sets.len(),
+                domains = domains
+            )
+        };
         vec![
+            section(Some(t!("set-sec-connection")), connection, cx),
             section(
-                Some(t!("set-sec-connection")),
-                vec![
-                    row(
-                        t!("set-proxy"),
-                        Some(t!("set-proxy-desc")),
-                        self.input(Field::Proxy, 260., cx),
-                        cx,
-                    ),
-                    row(
-                        t!("set-rate-limit"),
-                        Some(t!("set-rate-limit-desc")),
-                        self.input(Field::Rate, 120., cx),
-                        cx,
-                    ),
-                ],
+                Some(t!("set-cookies")),
+                vec![row(
+                    summary,
+                    Some(t!("set-cookies-manage-desc")),
+                    Button::new("cookies-manage")
+                        .outline()
+                        .label(t!("set-cookies-manage"))
+                        .trailing("icons/chevron-right.svg")
+                        .on_click(|_, _, cx| {
+                            router::navigate(Destination::Settings(SettingsPage::Cookies), cx)
+                        }),
+                    cx,
+                )],
                 cx,
             ),
-            section(Some(t!("set-cookies")), cookies, cx),
         ]
     }
 
@@ -474,13 +456,17 @@ impl SettingsView {
             })
             .map(|tool| self.tool_row(&tool, cx))
             .collect();
-        vec![
-            section(None, rows, cx),
-            Notice::new(t!("set-long-paths-title"), t!("set-long-paths"))
-                .icon("icons/triangle-alert.svg")
-                .max_w_full()
-                .into_any_element(),
-        ]
+        let mut out = vec![section(None, rows, cx)];
+        // the 260-character path limit is a Windows setting
+        if cfg!(windows) {
+            out.push(
+                Notice::new(t!("set-long-paths-title"), t!("set-long-paths"))
+                    .icon("icons/triangle-alert.svg")
+                    .max_w_full()
+                    .into_any_element(),
+            );
+        }
+        out
     }
 
     fn tool_row(&self, tool: &ToolStatus, cx: &mut Context<Self>) -> AnyElement {

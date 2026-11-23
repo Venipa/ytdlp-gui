@@ -156,3 +156,4 @@ dl-copied-link = Link copied
 dl-copied-title = Title copied
 dl-col-eta = ETA
 dl-empty-keys = or press
+dl-detail-cookies = Cookies

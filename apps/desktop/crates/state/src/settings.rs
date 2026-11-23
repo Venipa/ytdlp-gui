@@ -158,7 +158,8 @@ impl AppSettings {
             embed_chapters: s.embed_chapters,
             subtitles: s.subtitles.clone(),
             sponsorblock: s.sponsorblock.clone(),
-            cookies: s.cookies.clone(),
+            // matched per link when the download starts (Downloads::with_cookies)
+            cookies: Default::default(),
             proxy: s.proxy.clone(),
             rate_limit: s.rate_limit.clone(),
             retries: None,

@@ -1635,7 +1635,6 @@ checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
 name = "engine"
 version = "1.0.2"
 dependencies = [
- "anyhow",
  "domain",
  "futures",
  "libc",
@@ -1643,7 +1642,6 @@ dependencies = [
  "pyo3",
  "serde",
  "serde_json",
- "sha2 0.11.1",
  "shlex",
  "windows-sys 0.61.2",
 ]

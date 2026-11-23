@@ -55,6 +55,34 @@ pub struct CookiesSettings {
     pub mode: CookiesMode,
     pub file: Option<String>,
     pub browser: Option<String>,
+    /// The cookie manager's sets, highest priority first. When any is on, each download gets only
+    /// the cookies for its site ([`crate::cookies::select`]) and `mode` is not used.
+    pub sets: Vec<CookieSet>,
+}
+
+/// Where a cookie set came from.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CookieSource {
+    #[default]
+    File,
+    Paste,
+    /// A copy read from this browser (yt-dlp's name: firefox, chrome, safari, ...).
+    Browser(String),
+}
+
+/// One cookie set; its text lives in `<data>/cookies/sets/<id>.txt` (owner-only).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CookieSet {
+    pub id: String,
+    pub name: String,
+    pub source: CookieSource,
+    /// When the text was last imported, pasted, edited or read (unix ms).
+    pub updated_ms: i64,
+    pub on: bool,
+    /// Cookie domains switched off in this set.
+    pub off_domains: Vec<String>,
 }
 
 /// User-chosen tool binaries.

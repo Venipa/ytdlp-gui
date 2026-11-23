@@ -97,6 +97,13 @@ impl Downloads {
         let id = s.id;
         let status = s.status;
         let has_file = s.file_path.is_some();
+        // which set gave which domains when the download last started
+        let cookies = self.app.downloads.read(cx).cookies_used(id).map(|used| {
+            used.iter()
+                .map(|(set, domains)| format!("{set}: {}", domains.join(", ")))
+                .collect::<Vec<_>>()
+                .join("; ")
+        });
         let title = s.title.clone().unwrap_or_else(|| s.url.clone());
         let thumb = s
             .thumbnail_path
@@ -261,6 +268,9 @@ impl Downloads {
                         false,
                         cx,
                     ))
+                    .children(cookies.clone().map(|used| {
+                        self.fact("d-cookies", t!("dl-detail-cookies"), used, false, false, cx)
+                    }))
                     .child(self.fact(
                         "d-attempts",
                         t!("dl-detail-attempts"),

@@ -7,6 +7,8 @@ use domain::{Backend, EngineError, ErrorCode, ProbeOpts, ProbeResult};
 use futures::FutureExt as _;
 use gpui::{Context, Task};
 
+use crate::cookies::CookieFiles;
+
 /// Parallel probes.
 const PARALLEL: usize = 3;
 /// A stuck probe is abandoned (dropped, not killed) after this long.
@@ -30,6 +32,9 @@ pub struct Probes {
     /// Probes that hit the timeout (logged; the interpreter is not told).
     abandoned: usize,
     timeout: Duration,
+    /// Set by [`Probes::with_cookies`]: the sets in `opts.cookies` are matched per link.
+    cookie_files: Option<CookieFiles>,
+    runs: u64,
 }
 
 impl Probes {
@@ -42,7 +47,15 @@ impl Probes {
             running: HashMap::new(),
             abandoned: 0,
             timeout: PROBE_TIMEOUT,
+            cookie_files: None,
+            runs: 0,
         }
+    }
+
+    /// Probes with only the cookies the sets in `ProbeOpts::cookies` have for each link.
+    pub fn with_cookies(mut self, files: CookieFiles) -> Self {
+        self.cookie_files = Some(files);
+        self
     }
 
     /// Overrides the timeout (tests).
@@ -87,13 +100,36 @@ impl Probes {
 
     fn pump(&mut self, cx: &mut Context<Self>) {
         while self.running.len() < PARALLEL {
-            let Some((url, opts)) = self.waiting.pop_front() else {
+            let Some((url, mut opts)) = self.waiting.pop_front() else {
                 break;
             };
-            let probe = self.backend.probe(url.clone(), opts);
+            let backend = self.backend.clone();
+            let files = self.cookie_files.clone();
+            self.runs += 1;
+            let run = format!("probe-{}", self.runs);
             let timeout = self.timeout;
-            let key = url.clone();
+            let (key, link) = (url.clone(), url.clone());
             let task = cx.spawn(async move |this, cx| {
+                // held until the probe ends: dropping it removes the cookie file
+                let _run_file = match (files, opts.cookies.take()) {
+                    (Some(files), Some(c)) => {
+                        let link = link.clone();
+                        let picked = cx
+                            .background_executor()
+                            .spawn(async move { files.for_run(&c.sets, &link, &run) })
+                            .await;
+                        picked.map(|(file, _)| {
+                            opts.cookies = Some(domain::CookiesSettings {
+                                mode: domain::CookiesMode::File,
+                                file: Some(file.path().to_string_lossy().into_owned()),
+                                ..Default::default()
+                            });
+                            file
+                        })
+                    }
+                    _ => None,
+                };
+                let probe = backend.probe(link, opts);
                 let timer = cx.background_executor().timer(timeout);
                 let outcome = futures::select! {
                     result = probe.fuse() => Some(result),

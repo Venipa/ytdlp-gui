@@ -14,6 +14,7 @@ use futures::StreamExt as _;
 use gpui::{Context, Entity, EventEmitter, Task};
 use storage::NewDownload;
 
+use crate::cookies::{CookieFiles, Used};
 use crate::scheduler::{Limits, Scheduler};
 use crate::settings::{AppSettings, SettingsChanged};
 use crate::{Logs, Store};
@@ -45,7 +46,7 @@ struct Job {
     handle: Option<JobHandle>,
     path: Option<String>,
     last_write: i64,
-    /// The runner; dropping it stops event handling.
+    /// The runner; dropping it stops event handling (and removes its cookie file).
     _task: Task<()>,
 }
 
@@ -73,6 +74,11 @@ pub struct Downloads {
     dirty: bool,
     tick: Option<Task<()>>,
     load_task: Option<Task<()>>,
+    /// Set by [`Downloads::with_cookies`]: each start gets only its site's cookies from these sets.
+    cookies: Option<(CookieFiles, Vec<domain::CookieSet>)>,
+    /// Which cookies each download started with (detail panel).
+    // shortcut: kept in memory only, so it is empty after a restart; persist with the row if missed
+    cookies_used: HashMap<DownloadId, Used>,
 }
 
 impl EventEmitter<DownloadsEvent> for Downloads {}
@@ -126,7 +132,21 @@ impl Downloads {
             dirty: false,
             tick: None,
             load_task: None,
+            cookies: None,
+            cookies_used: HashMap::new(),
         }
+    }
+
+    /// Starts every download with the cookies the manager's sets have for its link (none when no
+    /// set matches), instead of what its stored spec says.
+    pub fn with_cookies(mut self, files: CookieFiles, s: &domain::Settings) -> Self {
+        self.cookies = Some((files, s.cookies.sets.clone()));
+        self
+    }
+
+    /// Which set gave which cookie domains when `id` last started.
+    pub fn cookies_used(&self, id: DownloadId) -> Option<&Used> {
+        self.cookies_used.get(&id)
     }
 
     /// Re-reads limits and the retry cap (also called on settings changes).
@@ -134,6 +154,9 @@ impl Downloads {
         self.limits = limits_from(s);
         self.max_attempts = s.max_attempts;
         self.resume_on_start = s.resume_on_start;
+        if let Some((_, sets)) = &mut self.cookies {
+            sets.clone_from(&s.cookies.sets);
+        }
         self.pump(cx);
     }
 
@@ -489,6 +512,7 @@ impl Downloads {
 
     fn spawn_runner(&mut self, id: DownloadId, cx: &mut Context<Self>) {
         let backend = self.backend.clone();
+        let cookies = self.cookies.clone();
         let cached = self.specs.get(&id).cloned();
         let detail = cached.is_none().then(|| {
             self.store.read(move |db| async move {
@@ -505,7 +529,7 @@ impl Downloads {
                 (None, Some(read)) => read.await,
                 (None, None) => unreachable!("either a cached spec or a read"),
             };
-            let spec = match spec {
+            let mut spec = match spec {
                 Ok(spec) => spec,
                 Err(error) => {
                     let error = EngineError::new(
@@ -516,6 +540,25 @@ impl Downloads {
                         .ok();
                     return;
                 }
+            };
+            // held until the task ends: dropping it removes the run's cookie file
+            let _run_file = match cookies {
+                Some((files, sets)) => {
+                    let url = spec.url.clone();
+                    let picked = cx
+                        .background_executor()
+                        .spawn(async move { files.for_run(&sets, &url, &id.to_string()) })
+                        .await;
+                    spec.cookies = Default::default();
+                    picked.map(|(file, used)| {
+                        spec.cookies.mode = domain::CookiesMode::File;
+                        spec.cookies.file = Some(file.path().to_string_lossy().into_owned());
+                        this.update(cx, |this, _| this.cookies_used.insert(id, used))
+                            .ok();
+                        file
+                    })
+                }
+                None => None,
             };
             match backend.start(id, spec).await {
                 Err(error) => {

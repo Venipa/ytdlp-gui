@@ -2,6 +2,7 @@
 //! filter grammar, URL intake, settings and the backend traits. No gpui, no IO beyond settings files.
 
 pub mod backend;
+pub mod cookies;
 pub mod filter;
 pub mod model;
 pub mod retry;

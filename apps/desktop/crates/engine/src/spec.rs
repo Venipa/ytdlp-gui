@@ -287,6 +287,7 @@ mod tests {
             mode: CookiesMode::Browser,
             file: None,
             browser: Some("firefox".into()),
+            ..Default::default()
         };
         s.rate_limit = Some("1M".into());
         s.subtitles = SubtitleSettings {
@@ -340,6 +341,7 @@ mod tests {
             mode: CookiesMode::File,
             file: Some("C:/c.txt".into()),
             browser: None,
+            ..Default::default()
         };
         let o = to_opts(&s, &Env::default());
         assert_eq!(o["postprocessors"][1]["remove_sponsor_segments"], json!([]));

@@ -1,6 +1,5 @@
 //! Engine services the views need but `state` must not link (the engine is an optional
 //! dependency of the binary): the binary registers them as a global, views read them.
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use domain::JobSpec;
@@ -8,8 +7,8 @@ use gpui::Global;
 
 /// Blocking: the path yt-dlp would write for a sample video under the spec's folder and template.
 pub type PreviewFn = Arc<dyn Fn(&JobSpec) -> Result<String, String> + Send + Sync>;
-/// Blocking: stores Netscape cookie text under the data dir (owner-only) and returns the file.
-pub type StoreCookiesFn = Arc<dyn Fn(&Path, &str) -> Result<PathBuf, String> + Send + Sync>;
+/// Blocking: reads a browser's cookies (yt-dlp key: firefox, chrome, safari, ...) as cookies.txt text.
+pub type BrowserCookiesFn = Arc<dyn Fn(&str) -> Result<String, String> + Send + Sync>;
 
 /// Blocking: the version of the yt-dlp the engine runs, when the engine is in this build.
 pub type VersionFn = Arc<dyn Fn() -> Option<String> + Send + Sync>;
@@ -18,7 +17,7 @@ pub type VersionFn = Arc<dyn Fn() -> Option<String> + Send + Sync>;
 #[derive(Clone, Default)]
 pub struct Hooks {
     pub preview: Option<PreviewFn>,
-    pub store_cookies: Option<StoreCookiesFn>,
+    pub browser_cookies: Option<BrowserCookiesFn>,
     pub yt_dlp_version: Option<VersionFn>,
 }
 

@@ -34,7 +34,7 @@ impl Field {
         match self {
             Field::Template => s.outtmpl.clone(),
             Field::Proxy => s.proxy.clone().unwrap_or_default(),
-            Field::Rate => s.rate_limit.clone().unwrap_or_default(),
+            Field::Rate => rate_parts(s).0,
             Field::Global => s.concurrent_global.to_string(),
             Field::PerDomain => s.concurrent_per_domain.to_string(),
             Field::Retries => s.max_attempts.to_string(),
@@ -49,7 +49,8 @@ impl Field {
             Field::Template if text.is_empty() => return Err("set-err-template"),
             Field::Template => s.outtmpl = text.to_owned(),
             Field::Proxy => s.proxy = proxy(text)?,
-            Field::Rate => s.rate_limit = rate(text)?,
+            // the number only; the unit comes from the KB/s / MB/s choice
+            Field::Rate => s.rate_limit = rate(&format!("{text}{}", rate_parts(s).1))?,
             Field::Global => s.concurrent_global = number(text, 1, 10)?,
             Field::PerDomain => s.concurrent_per_domain = number(text, 1, 10)?,
             Field::Retries => s.max_attempts = number(text, 1, 10)?,
@@ -106,6 +107,30 @@ fn rate(text: &str) -> Result<Option<String>, Invalid> {
     ok.then(|| Some(text.to_owned())).ok_or("set-err-rate")
 }
 
+/// The stored rate split into its number and unit suffix (`K`, `M`, `G` or empty for bytes);
+/// no limit yet gives an empty number and `M`.
+pub fn rate_parts(s: &Settings) -> (String, String) {
+    let Some(rate) = &s.rate_limit else {
+        return (String::new(), "M".into());
+    };
+    let digits = rate.trim_end_matches(char::is_alphabetic);
+    (digits.to_owned(), rate[digits.len()..].to_uppercase())
+}
+
+/// What a valid proxy URL means, for the line under the field: (kind, host, port).
+pub fn proxy_parts(url: &str) -> Option<(String, String, Option<String>)> {
+    let (scheme, rest) = url.split_once("://")?;
+    let rest = rest.split('/').next()?;
+    let host_port = rest.rsplit_once('@').map_or(rest, |(_, h)| h);
+    let (host, port) = match host_port.rsplit_once(':') {
+        Some((h, p)) if !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()) => {
+            (h, Some(p.to_owned()))
+        }
+        _ => (host_port, None),
+    };
+    (!host.is_empty()).then(|| (scheme.to_owned(), host.to_owned(), port))
+}
+
 /// Comma separated language codes (`en`, `pt-BR`, `all`).
 fn langs(text: &str) -> Result<Vec<String>, Invalid> {
     let list: Vec<String> = text
@@ -119,15 +144,6 @@ fn langs(text: &str) -> Result<Vec<String>, Invalid> {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
     });
     ok.then_some(list).ok_or("set-err-langs")
-}
-
-/// Whether `text` looks like a Netscape cookies file: at least one line of seven tab-separated
-/// fields (comments and blank lines are skipped).
-pub fn is_cookies_text(text: &str) -> bool {
-    text.lines()
-        .map(|l| l.trim_start_matches("#HttpOnly_"))
-        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
-        .any(|l| l.split('\t').count() == 7)
 }
 
 #[cfg(test)]
@@ -155,13 +171,34 @@ mod tests {
     }
 
     #[test]
-    fn rates() {
-        for good in ["500K", "2M", "1.5m", "100"] {
+    fn rates_take_a_number_and_keep_the_unit() {
+        for good in ["500", "2", "1.5"] {
             assert_eq!(apply(Field::Rate, good).0, Ok(()), "{good}");
         }
-        for bad in ["fast", "0", "-1M", "5MB", "K", "1.2.3M"] {
+        assert_eq!(apply(Field::Rate, "2").1.rate_limit.as_deref(), Some("2M"));
+        for bad in ["fast", "0", "-1", "5MB", "1.2.3"] {
             assert_eq!(apply(Field::Rate, bad).0, Err("set-err-rate"), "{bad}");
         }
+        let mut s = Settings {
+            rate_limit: Some("500K".into()),
+            ..Default::default()
+        };
+        assert_eq!(rate_parts(&s), ("500".to_string(), "K".to_string()));
+        Field::Rate.apply("750", &mut s).unwrap();
+        assert_eq!(s.rate_limit.as_deref(), Some("750K"));
+    }
+
+    #[test]
+    fn proxy_read_back() {
+        assert_eq!(
+            proxy_parts("socks5://user:pw@127.0.0.1:1080"),
+            Some(("socks5".into(), "127.0.0.1".into(), Some("1080".into())))
+        );
+        assert_eq!(
+            proxy_parts("http://proxy.lan/"),
+            Some(("http".into(), "proxy.lan".into(), None))
+        );
+        assert_eq!(proxy_parts("nope"), None);
     }
 
     #[test]
@@ -183,13 +220,5 @@ mod tests {
         assert_eq!(s.concurrent_global, 1);
         Field::Global.bump(99, &mut s);
         assert_eq!(s.concurrent_global, 10);
-    }
-
-    #[test]
-    fn cookies_text() {
-        assert!(is_cookies_text(
-            "# Netscape HTTP Cookie File\n.a.com\tTRUE\t/\tTRUE\t0\tk\tv\n"
-        ));
-        assert!(!is_cookies_text("hello world"));
     }
 }

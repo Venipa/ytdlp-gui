@@ -1,6 +1,7 @@
 //! The Settings screen: the form of the page the sidebar has open, every control bound to
 //! `state::AppSettings` (settings.json), so edits in the UI and edits of the file show in both.
 
+mod cookies;
 mod fields;
 mod layout;
 mod look;
@@ -13,8 +14,8 @@ pub use look::{apply_stored, apply_window};
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use domain::{CookiesMode, Preset, Settings, ToolKind, ToolSource};
-use fields::{Field, Invalid, is_cookies_text};
+use domain::{Preset, Settings, ToolKind, ToolSource};
+use fields::{Field, Invalid};
 use gpui::prelude::*;
 use gpui::{
     AnyElement, App, ClickEvent, Context, Entity, PathPromptOptions, SharedString, Task, Window,
@@ -41,13 +42,6 @@ const SPONSOR_CATEGORIES: [(&str, &str); 7] = [
     ("music_offtopic", "set-sb-music"),
 ];
 
-/// Browsers yt-dlp can read cookies from that we name in the UI.
-const BROWSERS: [(&str, &str); 3] = [
-    ("firefox", "set-browser-firefox"),
-    ("chrome", "set-browser-chrome"),
-    ("edge", "set-browser-edge"),
-];
-
 type Edit = Rc<dyn Fn(&mut Settings)>;
 
 struct FieldState {
@@ -66,6 +60,12 @@ pub struct SettingsView {
     popovers: Popovers,
     /// The outcome of the last cookie action, `true` when it failed.
     cookie_note: Option<(SharedString, bool)>,
+    /// The Cookies page: domains per set, the search field, the editor, a browser being read.
+    cookie_page: cookies::CookiePage,
+    /// The proxy switch is on while the address is still empty.
+    proxy_open: bool,
+    /// The speed limit switch is on while the number is still empty.
+    rate_open: bool,
     /// The theme and font size the window shows now, so only a change repaints.
     applied: Look,
     /// The theme id `applied` was drawn from (theme files share the dark `Look`).
@@ -124,7 +124,10 @@ impl SettingsView {
         let fields = Field::ALL
             .into_iter()
             .map(|field| {
-                let numeric = matches!(field, Field::Global | Field::PerDomain | Field::Retries);
+                let numeric = matches!(
+                    field,
+                    Field::Global | Field::PerDomain | Field::Retries | Field::Rate
+                );
                 let hint = match field {
                     Field::Proxy => "set-proxy-hint",
                     Field::Rate => "set-rate-hint",
@@ -157,6 +160,9 @@ impl SettingsView {
             fields,
             popovers: Popovers::default(),
             cookie_note: None,
+            cookie_page: cookies::CookiePage::new(cx),
+            proxy_open: false,
+            rate_open: false,
             applied: look::look_of(&current, None),
             applied_theme: current.theme.clone(),
             theme_variants: None,
@@ -172,7 +178,35 @@ impl SettingsView {
         };
         this.refresh_preview(cx);
         this.load_ytdlp_version(cx);
+        this.reload_cookie_domains(cx);
         this
+    }
+
+    /// The proxy switch: off clears the address, on opens the field.
+    fn set_proxy_open(&mut self, open: bool, cx: &mut Context<Self>) {
+        self.proxy_open = open;
+        if !open {
+            self.settings()
+                .update(cx, |s, cx| s.update(|st| st.proxy = None, cx));
+        }
+        cx.notify();
+    }
+
+    /// The speed limit switch: on starts at 2 MB/s, off removes the limit.
+    fn set_rate_open(&mut self, open: bool, cx: &mut Context<Self>) {
+        self.rate_open = open;
+        self.settings().update(cx, |s, cx| {
+            s.update(
+                |st| match open {
+                    true => {
+                        st.rate_limit.get_or_insert_with(|| "2M".into());
+                    }
+                    false => st.rate_limit = None,
+                },
+                cx,
+            )
+        });
+        cx.notify();
     }
 
     /// Asks the engine, off the UI thread, which yt-dlp it runs.
@@ -258,6 +292,7 @@ impl SettingsView {
             // the window background follows on the next frame
             self.window_look = None;
         }
+        self.cookies_changed(&current, cx);
         if current.language != self.language {
             self.language = current.language.clone();
             i18n::set(i18n::resolve(&current.language));
@@ -354,7 +389,13 @@ impl SettingsView {
             .flex()
             .flex_col()
             .gap(px(4.))
-            .w(px(width))
+            .map(|this| {
+                if width > 0. {
+                    this.w(px(width))
+                } else {
+                    this.w_full()
+                }
+            })
             .child(state.input.clone())
             .when_some(state.error, |this, key| {
                 this.child(
@@ -457,49 +498,6 @@ impl SettingsView {
         .detach();
     }
 
-    /// Stores `text` as the cookies file under the data directory and selects it.
-    fn import_cookies(&mut self, text: &str, cx: &mut Context<Self>) {
-        if !is_cookies_text(text) {
-            self.cookie_note = Some((t!("set-cookies-bad"), true));
-            return cx.notify();
-        }
-        let data = &self.state.paths.data;
-        // the engine stores the file owner-only; without it (no-engine build) a plain copy
-        let stored = match cx
-            .try_global::<Hooks>()
-            .and_then(|h| h.store_cookies.clone())
-        {
-            Some(store) => store(data, text),
-            None => {
-                let file = data.join("cookies").join("cookies.txt");
-                std::fs::create_dir_all(data.join("cookies"))
-                    .and_then(|_| std::fs::write(&file, text))
-                    .map(|_| file)
-                    .map_err(|e| e.to_string())
-            }
-        };
-        match stored {
-            Ok(file) => {
-                let path = file.to_string_lossy().into_owned();
-                self.settings().update(cx, |s, cx| {
-                    s.update(
-                        |st| {
-                            st.cookies.mode = CookiesMode::File;
-                            st.cookies.file = Some(path);
-                        },
-                        cx,
-                    )
-                });
-                self.cookie_note = Some((t!("set-cookies-saved"), false));
-            }
-            Err(error) => {
-                log::warn!("settings: cannot save cookies: {error}");
-                self.cookie_note = Some((t!("set-cookies-save-failed"), true));
-            }
-        }
-        cx.notify();
-    }
-
     /// Recomputes the file name preview off the UI thread; the newest request wins.
     fn refresh_preview(&mut self, cx: &mut Context<Self>) {
         let Some(preview) = cx.try_global::<Hooks>().and_then(|h| h.preview.clone()) else {
@@ -535,24 +533,6 @@ impl SettingsView {
             })
             .ok();
         }));
-    }
-
-    fn clear_cookies(&mut self, cx: &mut Context<Self>) {
-        let file = self.settings().read(cx).get().cookies.file.clone();
-        if let Some(file) = file {
-            std::fs::remove_file(file).ok();
-        }
-        self.settings().update(cx, |s, cx| {
-            s.update(
-                |st| {
-                    st.cookies.mode = CookiesMode::None;
-                    st.cookies.file = None;
-                },
-                cx,
-            )
-        });
-        self.cookie_note = Some((t!("set-cookies-cleared"), false));
-        cx.notify();
     }
 }
 
@@ -628,6 +608,7 @@ pub(crate) fn page_icon(page: SettingsPage) -> &'static str {
         SettingsPage::Downloads => "icons/download.svg",
         SettingsPage::Formats => "icons/film.svg",
         SettingsPage::Network => "icons/radio.svg",
+        SettingsPage::Cookies => "icons/cookie.svg",
         SettingsPage::Tools => "icons/settings.svg",
         SettingsPage::Appearance => "icons/palette.svg",
         SettingsPage::Updates => "icons/circle-arrow-down.svg",
@@ -668,6 +649,7 @@ impl Render for SettingsView {
             SettingsPage::Downloads => self.page_downloads(&s, cx),
             SettingsPage::Formats => self.page_formats(&s, cx),
             SettingsPage::Network => self.page_network(&s, cx),
+            SettingsPage::Cookies => self.page_cookies(&s, window, cx),
             SettingsPage::Tools => self.page_tools(cx),
             SettingsPage::Appearance => self.page_appearance(&s, cx),
             SettingsPage::Updates => self.page_updates(&s, cx),

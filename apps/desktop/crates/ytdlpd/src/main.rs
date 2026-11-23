@@ -283,8 +283,15 @@ fn engine_hooks() -> state::Hooks {
         });
         engine::preview_filename(spec, &engine::spec::Env::default(), &info).map_err(|e| e.message)
     });
-    let store_cookies: state::StoreCookiesFn =
-        Arc::new(|dir, text| engine::cookies::store_text(dir, text).map_err(|e| format!("{e:#}")));
+    let browser_cookies: state::BrowserCookiesFn = Arc::new(|browser| {
+        engine::runtime::init(engine::runtime::InitOptions {
+            home: None,
+            site_updates: None,
+            sink: engine::runtime::log_sink,
+        })
+        .map_err(|e| e.to_string())?;
+        engine::cookies::read_browser(browser).map_err(|e| e.message)
+    });
     let yt_dlp_version: state::VersionFn = Arc::new(|| {
         engine::runtime::init(engine::runtime::InitOptions {
             home: None,
@@ -296,7 +303,7 @@ fn engine_hooks() -> state::Hooks {
     });
     state::Hooks {
         preview: Some(preview),
-        store_cookies: Some(store_cookies),
+        browser_cookies: Some(browser_cookies),
         yt_dlp_version: Some(yt_dlp_version),
     }
 }

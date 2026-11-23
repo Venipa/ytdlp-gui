@@ -11,7 +11,7 @@ use std::{
 use common::server::{self, Server};
 use domain::{CookiesMode, CookiesSettings, ErrorCode, JobSpec, Preset};
 use engine::{
-    Event, WorkerConfig, WorkerHandle, cookies, runtime,
+    Event, WorkerConfig, WorkerHandle, runtime,
     spec::{Env, simple_job, split_extra_args},
 };
 
@@ -163,16 +163,19 @@ fn proxy_sees_the_request() {
 }
 
 #[test]
-fn cookies_file_from_pasted_text_reaches_the_server() {
+fn cookies_file_reaches_the_server() {
     let s = srv();
     let data = out_dir("cookie-data");
     let text = "# Netscape HTTP Cookie File\n127.0.0.1\tFALSE\t/\tFALSE\t0\tsid\tabc123\n";
-    let f = cookies::store_text(&data, text).unwrap();
+    std::fs::create_dir_all(&data).unwrap();
+    let f = data.join("cookies.txt");
+    std::fs::write(&f, text).unwrap();
     let mut j = simple_job(s.url("/sample.mp4"), Preset::DEFAULT, out_dir("cookies"));
     j.cookies = CookiesSettings {
         mode: CookiesMode::File,
         file: Some(f.to_string_lossy().into()),
         browser: None,
+        ..Default::default()
     };
     ok_path(&run(&j, &Env::default()));
     let c = s.cookies.lock().unwrap();

@@ -1,6 +1,7 @@
 //! gpui entities for ytdlpd: settings, downloads (queue, scheduler, lifecycle), probes, tools, logs, toasts.
 //! The engine and tools are reached only through `domain::Backend` / `domain::ToolsApi`.
 
+pub mod cookies;
 mod downloads;
 pub mod fake;
 mod hooks;
@@ -15,9 +16,10 @@ mod toast;
 mod tools;
 pub mod updates;
 
+pub use cookies::CookieFiles;
 pub use downloads::{Downloads, DownloadsEvent, Live, UPDATE_REASON};
 pub use fake::{FakeBackend, FakeTools, Scene};
-pub use hooks::{Hooks, PreviewFn, StoreCookiesFn, VersionFn};
+pub use hooks::{BrowserCookiesFn, Hooks, PreviewFn, VersionFn};
 pub use intake::{Intake, IntakeEvent};
 pub use logs::{LogEntry, Logs};
 pub use probes::{ProbeState, Probes};
@@ -126,6 +128,7 @@ pub struct AppState {
     pub toasts: Entity<Toasts>,
     pub intake: Entity<Intake>,
     pub updates: Entity<Updates>,
+    pub cookies: CookieFiles,
     pub store: Store,
     /// `Some` for `--demo <scene>`.
     pub scene: Option<Scene>,
@@ -275,15 +278,28 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
 
     let settings_path = paths.settings_file();
     let settings = cx.new(|cx| AppSettings::new(settings_path, cx));
+    let cookies = CookieFiles::new(&paths.data);
+    cookies.sweep_runs();
+    settings.update(cx, |s, cx| {
+        let mut c = s.get().cookies.clone();
+        if cookies.migrate(&mut c, clock.now_ms()) {
+            s.update(|st| st.cookies = c, cx);
+        }
+        cookies.prune(&s.get().cookies.sets);
+    });
     let logs = cx.new(|_| Logs::default());
     let toasts = cx.new(|_| Toasts::default());
     let intake = cx.new(|_| Intake::default());
-    let probes = cx.new(|_| Probes::new(backend.clone()));
+    let probes = cx.new(|_| Probes::new(backend.clone()).with_cookies(cookies.clone()));
     let tools = cx.new(|_| Tools::new(tools_api));
     wire_site(&backend, &store, &tools, cx);
     let downloads = {
         let (store, logs, clock) = (store.clone(), logs.clone(), clock.clone());
-        cx.new(|cx| Downloads::new(backend, store, clock, logs, &settings, cx))
+        let files = cookies.clone();
+        cx.new(|cx| {
+            let current = settings.read(cx).get().clone();
+            Downloads::new(backend, store, clock, logs, &settings, cx).with_cookies(files, &current)
+        })
     };
     downloads.update(cx, |d, cx| d.load(cx));
     tools.update(cx, |t, cx| t.refresh(cx));
@@ -316,6 +332,7 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
         settings,
         downloads,
         probes,
+        cookies,
         tools,
         logs,
         toasts,
