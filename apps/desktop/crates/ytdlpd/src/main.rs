@@ -244,7 +244,8 @@ fn open_window(scene: Option<String>, first: Size<Pixels>, frame_stats: bool, cx
             titlebar: Some(TitlebarOptions {
                 title: Some("ytdlpd".into()),
                 appears_transparent: true,
-                ..Default::default()
+                // vertically centred in the 36px title bar (ui metrics.title_bar)
+                traffic_light_position: Some(gpui::point(px(12.), px(11.))),
             }),
             is_movable: true,
             is_resizable: true,

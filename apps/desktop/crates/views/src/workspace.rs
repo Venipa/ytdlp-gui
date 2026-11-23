@@ -617,7 +617,9 @@ impl Render for Workspace {
                 div()
                     .flex()
                     .flex_none()
+                    .relative()
                     .items_center()
+                    .justify_end()
                     .h(theme.metrics.title_bar)
                     .border_b_1()
                     .border_color(theme.title_bar_border)
@@ -642,20 +644,19 @@ impl Render for Workspace {
                         }
                     }))
                     .child(
+                        // centred over the whole bar, not the space left of the window controls
                         div()
+                            .absolute()
+                            .inset_0()
                             .flex()
-                            .flex_1()
-                            .h_full()
                             .items_center()
-                            .gap(px(2.))
-                            .px(theme.metrics.gutter)
+                            .justify_center()
                             .child(
                                 div()
                                     .flex()
                                     .flex_none()
                                     .items_center()
                                     .gap(px(8.))
-                                    .mr(theme.metrics.gutter)
                                     .child(
                                         div()
                                             .flex()
@@ -681,13 +682,16 @@ impl Render for Workspace {
                                     ),
                             ),
                     )
-                    .child(
-                        div()
-                            .flex_none()
-                            .h_full()
-                            .self_stretch()
-                            .child(WindowControls::new(false)),
-                    ),
+                    // macOS draws its own traffic lights (placed in main.rs); ours would be a second set
+                    .when(!cfg!(target_os = "macos"), |bar| {
+                        bar.child(
+                            div()
+                                .flex_none()
+                                .h_full()
+                                .self_stretch()
+                                .child(WindowControls::new(false)),
+                        )
+                    }),
             )
             .child(
                 div()
