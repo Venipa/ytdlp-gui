@@ -119,3 +119,12 @@ dl-status-bar-queued = { $running } running, { $paused } paused, { $queued } wai
 dl-logs-copied = Log copied
 notify-finished = Download finished
 dl-formats-hint = Up and Down choose, Tab switches list, Enter downloads, Esc closes.
+
+# UI polish (lane P-A)
+dl-intake-invalid = Needs a full link
+dl-drop-none = No links in the dropped files
+dl-empty-paste = Paste from clipboard
+dl-detail-section = Details
+dl-detail-url = Link
+dl-more = More
+dl-detail-nolog = No log lines for this download yet.

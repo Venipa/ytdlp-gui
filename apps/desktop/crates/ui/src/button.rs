@@ -489,7 +489,7 @@ impl RenderOnce for Button {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let Self {
             id,
-            mut base,
+            base,
             label,
             reserve,
             name,
@@ -541,6 +541,10 @@ impl RenderOnce for Button {
                 })
             },
         );
+        let mut base = match disabled {
+            false => crate::focus::focusable(base, &id, window, cx),
+            true => base,
+        };
         // A button that sizes itself to an icon, a label and a trailing icon springs to its new
         // width as the label changes. One the caller sizes, or with parts of its own, keeps to
         // plain layout.

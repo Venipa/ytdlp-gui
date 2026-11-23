@@ -552,6 +552,14 @@ fn demo_row(i: usize, status: DownloadStatus, created_at: i64) -> SeedRow {
     new.uploader = Some(format!("{b} {c} Channel"));
     new.extractor = Some(extractor.to_string());
     new.video_id = Some(format!("demo{i:05}"));
+    // a few rows keep no thumbnail so the icon fallback shows
+    if i % 7 != 6 {
+        new.thumbnail_url = Some(format!(
+            "file://{}/../../assets/fixtures/thumbs/t{}.jpg",
+            env!("CARGO_MANIFEST_DIR"),
+            i % 6
+        ));
+    }
     new.duration_s = Some(60.0 + (i % 50) as f64 * 37.0);
     new.format_label = Some(match preset {
         Preset::Audio(_) => "mp3".into(),

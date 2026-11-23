@@ -4,11 +4,15 @@ use std::sync::Arc;
 
 use domain::{AudioFormat, Preset, ProbeResult, VideoQuality};
 use gpui::prelude::*;
-use gpui::{AnyElement, Context, FontWeight, SharedString, div, px, uniform_list};
+use gpui::{
+    Animation, AnimationExt as _, AnyElement, Context, FontWeight, SharedString, div, px,
+    uniform_list,
+};
 use i18n::t;
 use state::ProbeState;
 use ui::{
-    ActiveTheme as _, Button, Checkbox, Chip, MONO, Notice, Skeleton, Text, Thumbnail, tabular,
+    ActiveTheme as _, Button, Checkbox, Chip, MONO, Notice, ProgressRule, Rule, Skeleton, Text,
+    Thumbnail, ease_out_cubic, tabular,
 };
 
 use crate::downloads::{Card, Downloads, error_text};
@@ -30,6 +34,10 @@ const AUDIO: [AudioFormat; 4] = [
     AudioFormat::M4a,
     AudioFormat::Opus,
 ];
+/// The width of the result card's thumbnail.
+const CARD_THUMB: f32 = 168.;
+/// The tallest a one-link card gets, which its unfold opens to.
+const CARD_MAX: f32 = 220.;
 /// Playlist rows shown before the list scrolls.
 const PLAYLIST_ROWS: usize = 8;
 
@@ -43,8 +51,13 @@ impl Downloads {
             }))
     }
 
-    /// The two chip rows, Video and Audio, with `extra` at the end of the audio row.
-    fn preset_rows(&self, extra: impl IntoElement, cx: &mut Context<Self>) -> AnyElement {
+    /// The two labelled chip rows, Video and Audio, each with something at its end.
+    fn preset_rows(
+        &self,
+        video_end: impl IntoElement,
+        audio_end: impl IntoElement,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let muted = cx.theme().muted_foreground;
         let name = |text: SharedString| div().w(px(48.)).text_color(muted).child(text);
         div()
@@ -63,7 +76,9 @@ impl Downloads {
                             q => SharedString::from(q.as_str()),
                         };
                         self.preset_chip(Preset::Video(q), label, cx)
-                    })),
+                    }))
+                    .child(div().flex_1())
+                    .child(video_end),
             )
             .child(
                 div()
@@ -79,7 +94,7 @@ impl Downloads {
                         self.preset_chip(Preset::Audio(a), label, cx)
                     }))
                     .child(div().flex_1())
-                    .child(extra),
+                    .child(audio_end),
             )
             .into_any_element()
     }
@@ -102,28 +117,41 @@ impl Downloads {
         let dismiss = |cx: &mut Context<Self>| {
             Button::new("card-cancel")
                 .ghost()
-                .label(t!("dl-cancel"))
+                .small()
+                .icon("icons/x.svg")
+                .tooltip("dl-cancel")
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.intake.update(cx, |input, cx| input.set_text("", cx));
                     this.clear_card(cx);
                 }))
         };
-        Some(match self.card(cx) {
+        let compact = matches!(
+            self.card(cx),
+            Card::Probing | Card::Result(_) | Card::Failed(_) | Card::NotLink
+        );
+        let card = match self.card(cx) {
             Card::None => return None,
             Card::Probing => shell()
                 .child(
                     div()
                         .flex()
                         .gap_3()
-                        .child(Skeleton::new().w(px(240.)).h(px(135.)))
+                        .child(
+                            Skeleton::new()
+                                .w(px(CARD_THUMB))
+                                .h(px(CARD_THUMB * 9. / 16.)),
+                        )
                         .child(
                             div()
                                 .flex()
                                 .flex_col()
+                                .flex_1()
                                 .gap_2()
-                                .child(Skeleton::new().w(px(260.)).h(px(18.)))
-                                .child(Skeleton::new().w(px(140.)).h(px(12.)))
-                                .child(div().text_color(muted).child(t!("dl-probing"))),
+                                .child(Skeleton::new().w(px(280.)).h(px(16.)))
+                                .child(Skeleton::new().w(px(160.)).h(px(12.)))
+                                .child(Skeleton::new().w(px(220.)).h(px(24.)))
+                                .child(div().text_color(muted).child(t!("dl-probing")))
+                                .child(ProgressRule::new(Rule::Pulse)),
                         ),
                 )
                 .into_any_element(),
@@ -180,15 +208,30 @@ impl Downloads {
             Card::Result(probe) => {
                 let remembered = self.preset == self.remembered;
                 let remembered_label = format::preset_label(self.remembered);
+                let meta = [
+                    probe.uploader.clone().unwrap_or_default(),
+                    domain::domain_of(&probe.url),
+                ]
+                .into_iter()
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join("  \u{b7}  ");
                 shell()
+                    .relative()
                     .child(
                         div()
                             .flex()
                             .gap_3()
-                            .child(Thumbnail::new(
-                                probe.thumbnail_url.clone().map(SharedString::from),
-                                px(240.),
-                            ))
+                            .child({
+                                let thumb = Thumbnail::new(
+                                    probe.thumbnail_url.clone().map(SharedString::from),
+                                    px(CARD_THUMB),
+                                );
+                                match probe.duration_s {
+                                    Some(d) => thumb.pill(format::duration(d)),
+                                    None => thumb,
+                                }
+                            })
                             .child(
                                 div()
                                     .flex()
@@ -198,7 +241,9 @@ impl Downloads {
                                     .gap_1()
                                     .child(
                                         div()
-                                            .text_size(theme.text(Text::Large))
+                                            .truncate()
+                                            .pr(px(28.))
+                                            .text_size(theme.text(Text::Heading))
                                             .font_weight(FontWeight::MEDIUM)
                                             .child(probe.title.clone().unwrap_or_default()),
                                     )
@@ -206,15 +251,21 @@ impl Downloads {
                                         div()
                                             .flex()
                                             .justify_between()
+                                            .gap_3()
+                                            .text_size(theme.text(Text::Small))
                                             .text_color(muted)
-                                            .child(probe.uploader.clone().unwrap_or_default())
-                                            .child(div().font_features(tabular()).child(
-                                                format::duration(probe.duration_s.unwrap_or(0.)),
-                                            )),
+                                            .child(div().truncate().child(meta))
+                                            .when(remembered, |this| {
+                                                this.child(div().flex_none().child(t!(
+                                                    "dl-remembered",
+                                                    preset = remembered_label.as_str()
+                                                )))
+                                            }),
                                     )
                                     .child(
-                                        div().mt_2().child(
+                                        div().mt_1().child(
                                             self.preset_rows(
+                                                self.download_button("card-download", None, cx),
                                                 Button::new("choose-formats")
                                                     .ghost()
                                                     .label(t!("dl-choose-formats"))
@@ -227,27 +278,31 @@ impl Downloads {
                                     ),
                             ),
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .child(div().text_color(muted).when(remembered, |this| {
-                                this.child(t!("dl-remembered", preset = remembered_label.as_str()))
-                            }))
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap_2()
-                                    .child(dismiss(cx))
-                                    .child(self.download_button("card-download", None, cx)),
-                            ),
-                    )
+                    .child(div().absolute().top_1().right_1().child(dismiss(cx)))
                     .into_any_element()
             }
             Card::Batch => self.batch_card(shell(), cx),
             Card::Playlist(probe) => self.playlist_card(shell(), &probe, cx),
-        })
+        };
+        // the card unfolds once as it appears: height and opacity over 160 ms
+        let span = match ui::motion::animates(cx) {
+            true => std::time::Duration::from_millis(160),
+            false => std::time::Duration::from_millis(1),
+        };
+        Some(
+            div()
+                .overflow_hidden()
+                .child(card)
+                .with_animation(
+                    "card-in",
+                    Animation::new(span).with_easing(ease_out_cubic),
+                    move |this, delta| match compact {
+                        true => this.opacity(delta).max_h(px(CARD_MAX * delta)),
+                        false => this.opacity(delta),
+                    },
+                )
+                .into_any_element(),
+        )
     }
 
     fn download_button(
@@ -315,7 +370,7 @@ impl Downloads {
                             .child(self.download_button("batch-download", Some(ready), cx)),
                     ),
             )
-            .child(self.preset_rows(div(), cx))
+            .child(self.preset_rows(div(), div(), cx))
             .children(lines.into_iter().map(|(label, note, dim)| {
                 div()
                     .flex()
@@ -394,7 +449,7 @@ impl Downloads {
                             ),
                     ),
             )
-            .child(self.preset_rows(div(), cx))
+            .child(self.preset_rows(div(), div(), cx))
             .child(
                 uniform_list(
                     "playlist-entries",
