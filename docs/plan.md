@@ -171,11 +171,11 @@ Exit checklist: perf budget table filled with pass/fail; `clipboard_never_writes
 ## Phase 7: packaging and release (G5)
 | Item | Status | Ref |
 |---|---|---|
-| Inno installer (win x64 + arm64), dmg (mac arm64 + x64), AppImage (linux x64 + arm64), each with the python runtime | open | `scripts/package-*` |
-| macOS: codesign the runtime dir, Frameworks/rpath layout, `install_name_tool` for libpython | open | - |
-| Windows exe manifest `longPathAware`, GUI subsystem, deep link registration in installer | open | - |
-| 6-target release matrix workflow, runtime hash pinned | open | `.github/workflows/release.yml` |
-| `THIRD-PARTY.md` generated (yt-dlp Unlicense, PBS, ffmpeg GPL download notice, fonts OFL), CHANGELOG | open | - |
+| Inno installer (win x64 + arm64), dmg (mac arm64 + x64), AppImage (linux x64 + arm64), each with the python runtime | in progress | `scripts/package-*` |
+| macOS: codesign the runtime dir, Frameworks/rpath layout, `install_name_tool` for libpython | in progress | - |
+| Windows exe manifest `longPathAware`, GUI subsystem, deep link registration in installer | review | - |
+| 6-target release matrix workflow, runtime hash pinned | review | `.github/workflows/release.yml` |
+| `THIRD-PARTY.md` generated (yt-dlp Unlicense, PBS, ffmpeg GPL download notice, fonts OFL), CHANGELOG | review | - |
 
 Exit checklist: silent install to a temp dir, `ytdlpd.exe --self-test` exits 0 on a runner with no Python or ffmpeg; THIRD-PARTY.md non-empty; owner-run mac and linux pass recorded (the lead cannot run them).
 

@@ -80,7 +80,7 @@ fn is_home(p: &Path) -> bool {
         || p.join("lib").join("python3.14").join("os.py").is_file()
 }
 
-/// Candidate homes in priority order: explicit, env, `<exe dir>/python`, dev runtime baked by build.rs.
+/// Candidate homes in priority order: explicit, env, `<exe dir>/python`, the packaged mac/linux layouts, dev runtime baked by build.rs.
 pub fn resolve_home(explicit: Option<&Path>) -> Result<PathBuf, InitError> {
     let mut tried: Vec<PathBuf> = vec![];
     tried.extend(explicit.map(Path::to_path_buf));
@@ -90,6 +90,9 @@ pub fn resolve_home(explicit: Option<&Path>) -> Result<PathBuf, InitError> {
         .and_then(|e| e.parent().map(Path::to_path_buf))
     {
         tried.push(d.join("python"));
+        // packaged layouts: macOS .app (Contents/MacOS -> Contents/Resources), Linux AppImage/deb (bin -> lib/ytdlpd)
+        tried.push(d.join("../Resources/python"));
+        tried.push(d.join("../lib/ytdlpd/python"));
     }
     tried.extend(option_env!("YTDLPD_DEV_PYTHON_HOME").map(PathBuf::from));
     tried
