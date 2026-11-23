@@ -28,19 +28,21 @@ const TAIL: usize = 60;
 
 impl Downloads {
     /// A labelled line of the Details section: the value is cut with an ellipsis and shows whole
-    /// on hover.
+    /// on hover. A `copy` value (link, file) runs to two lines and copies itself on click.
     fn fact(
         &self,
         key: &'static str,
         label: SharedString,
         value: String,
         mono: bool,
+        copy: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = *cx.theme();
+        // the label sits on the value's first line, also when a link runs to two
         div()
             .flex()
-            .items_baseline()
+            .items_start()
             .gap(px(12.))
             .min_h(px(20.))
             .child(
@@ -56,9 +58,26 @@ impl Downloads {
                     .id(key)
                     .flex_1()
                     .min_w_0()
-                    .truncate()
+                    .when(!copy, |this| this.truncate())
                     .when(mono, |this| {
                         this.font_family(MONO).text_size(theme.text(Text::Small))
+                    })
+                    .when(copy, |this| {
+                        let text = value.clone();
+                        this.line_clamp(2)
+                            .cursor_pointer()
+                            .hover(|style| style.text_color(theme.table_active_border))
+                            .on_click(move |_, _, cx| {
+                                cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                    text.clone(),
+                                ));
+                                crate::toasts::toast(
+                                    cx,
+                                    crate::toasts::Kind::Info,
+                                    t!("dl-copied"),
+                                    None,
+                                );
+                            })
                     })
                     .tip_label(value.clone(), Perch::Above)
                     .child(value),
@@ -107,7 +126,7 @@ impl Downloads {
             .flex()
             .flex_wrap()
             .items_center()
-            .gap_2()
+            .gap(px(8.))
             .children(primary)
             .when(has_file && status == DownloadStatus::Completed, |this| {
                 this.child(
@@ -130,21 +149,31 @@ impl Downloads {
                         .on_click(cx.listener(move |this, _, _, cx| this.cancel(id, cx))),
                 )
             })
-            .child({
-                // copy, delete and the rest live in the same menu a right-click opens
-                {
-                    Button::new("detail-more")
-                        .ghost()
-                        .icon("icons/ellipsis.svg")
-                        .tooltip("dl-more")
-                        .on_click(cx.listener(move |this, event: &gpui::ClickEvent, _, cx| {
-                            this.menu = Some((event.position(), id));
-                            cx.notify();
-                        }))
-                }
-            });
+            .child(
+                Button::new("detail-copy-link")
+                    .ghost()
+                    .icon("icons/link.svg")
+                    .tooltip("dl-copy-link")
+                    .on_click(cx.listener(move |this, _, _, cx| this.copy_link(id, cx))),
+            )
+            // delete and the rest live in the same menu a right-click opens
+            .child(
+                Button::new("detail-more")
+                    .ghost()
+                    .icon("icons/ellipsis.svg")
+                    .tooltip("dl-more")
+                    .on_click(cx.listener(move |this, event: &gpui::ClickEvent, _, cx| {
+                        this.menu = Some((event.position(), id));
+                        cx.notify();
+                    })),
+            );
 
         let (status_label, tone) = crate::rows::status_text(s, &theme);
+        // the error box under the actions carries the reason, the header only the state
+        let status_label = match status {
+            DownloadStatus::Failed => t!("dl-status-failed"),
+            _ => status_label,
+        };
         let header = div()
             .flex()
             .gap(px(12.))
@@ -212,16 +241,15 @@ impl Downloads {
             .border_color(theme.border)
             .child(div().flex().ml(px(-8.)).child(details_head))
             .when(open, |this| {
-                this.child(self.fact("d-url", t!("dl-detail-url"), s.url.clone(), true, cx))
-                    .children(
-                        s.file_path
-                            .clone()
-                            .map(|path| self.fact("d-file", t!("dl-detail-file"), path, true, cx)),
-                    )
+                this.child(self.fact("d-url", t!("dl-detail-url"), s.url.clone(), true, true, cx))
+                    .children(s.file_path.clone().map(|path| {
+                        self.fact("d-file", t!("dl-detail-file"), path, true, true, cx)
+                    }))
                     .child(self.fact(
                         "d-format",
                         t!("dl-detail-format"),
                         s.format_label.clone().unwrap_or_else(|| "-".into()),
+                        false,
                         false,
                         cx,
                     ))
@@ -230,12 +258,14 @@ impl Downloads {
                         t!("dl-detail-options"),
                         s.preset.clone(),
                         true,
+                        false,
                         cx,
                     ))
                     .child(self.fact(
                         "d-attempts",
                         t!("dl-detail-attempts"),
                         s.attempts.to_string(),
+                        false,
                         false,
                         cx,
                     ))
@@ -296,7 +326,7 @@ impl Downloads {
                     .children(logs.into_iter().skip(skip).map(|(time, text)| {
                         div()
                             .flex()
-                            .gap_2()
+                            .gap(px(8.))
                             .font_family(MONO)
                             .text_size(theme.text(Text::Small))
                             .child(div().flex_none().text_color(pencil).child(time))
@@ -306,7 +336,7 @@ impl Downloads {
         let log = div()
             .flex()
             .flex_col()
-            .gap_1()
+            .gap(px(4.))
             .child(
                 div()
                     .flex()

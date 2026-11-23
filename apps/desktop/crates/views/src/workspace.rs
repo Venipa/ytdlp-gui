@@ -167,7 +167,9 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = *cx.theme();
-        let on = to.same_section(&current);
+        // Getting ready is the first state of Downloads, so its tab stays lit there
+        let on = to.same_section(&current)
+            || (current == Destination::Welcome && to == Destination::Downloads);
         let id = ElementId::from(key);
         let label = i18n::lookup(key, None);
         let tip = match key {
@@ -219,8 +221,9 @@ impl Workspace {
                         .items_center()
                         .justify_center()
                         .rounded_full()
-                        .bg(theme.progress_bar.opacity(0.16))
-                        .text_color(theme.progress_bar)
+                        .bg(theme.progress_bar)
+                        .text_color(theme.primary_foreground)
+                        .font_weight(gpui::FontWeight::MEDIUM)
                         .text_size(theme.text(ui::Text::Tiny))
                         .font_features(ui::tabular())
                         .child(count.to_string()),
@@ -435,6 +438,15 @@ impl Render for Workspace {
                     ),
             )
             .child(div().flex_1().min_h_0().child(self.page(current, cx)))
-            .child(self.toasts.clone())
+            // Downloads places the stack in its own flow, above the status bar
+            .when(current != Destination::Downloads, |this| {
+                this.child(
+                    div()
+                        .absolute()
+                        .bottom(px(8.))
+                        .right_0()
+                        .child(self.toasts.clone()),
+                )
+            })
     }
 }

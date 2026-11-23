@@ -1,5 +1,6 @@
-//! The toast stack at the bottom right of the window. Any view pushes a toast with `toast(..)`;
-//! each one leaves by itself after a few seconds.
+//! The toast stack at the bottom right: on Downloads it sits in the page's flow above the
+//! status bar, so it never covers a row; other pages lay it over their bottom right corner. Any
+//! view pushes a toast with `toast(..)`; each one leaves by itself after a few seconds.
 
 use std::rc::Rc;
 use std::time::Duration;
@@ -8,14 +9,15 @@ use gpui::prelude::*;
 use gpui::{
     Animation, AnimationExt as _, App, Context, Entity, Global, SharedString, Window, div, px,
 };
-use ui::{Toast, motion};
+use ui::{ActiveTheme as _, Toast, motion};
 
 /// How long a toast stays when nobody dismisses it; a pointer over the stack holds the clock.
 const LIFETIME: Duration = Duration::from_secs(4);
 /// A toast that carries a button stays longer, so there is time to reach it.
 const LIFETIME_ACTION: Duration = Duration::from_secs(8);
-/// The most toasts on screen; a new one pushes the oldest out.
-const MAX: usize = 3;
+/// The most toasts on screen, kept low since Downloads gives them room in its flow; a new one
+/// pushes the oldest out.
+const MAX: usize = 2;
 const TICK: Duration = Duration::from_millis(100);
 /// How long a leaving toast fades.
 const LEAVE: Duration = Duration::from_millis(120);
@@ -129,6 +131,11 @@ impl ToastLayer {
     }
 }
 
+/// The window's toast layer, for a page that places the stack in its own flow.
+pub fn layer(cx: &App) -> Option<Entity<ToastLayer>> {
+    cx.try_global::<Handle>().map(|handle| handle.0.clone())
+}
+
 /// Shows a toast, with an optional button (`Undo`, `Show in folder`).
 pub fn toast(
     cx: &mut App,
@@ -167,15 +174,14 @@ pub fn toast(
 impl Render for ToastLayer {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layer = cx.entity();
+        let gutter = cx.theme().metrics.gutter;
         div()
             .id("toast-stack")
-            .absolute()
-            .bottom(px(40.))
-            .right(px(16.))
-            .w(px(400.))
             .flex()
             .flex_col()
+            .items_end()
             .gap(px(8.))
+            .when(!self.items.is_empty(), |this| this.px(gutter).pb(px(8.)))
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                 this.hovered = *hovered;
                 cx.notify();
@@ -202,7 +208,7 @@ impl Render for ToastLayer {
                     });
                 }
                 let fade = item.leaving;
-                div().child(card).with_animation(
+                div().w(px(400.)).max_w_full().child(card).with_animation(
                     ("toast-fade", id as usize * 2 + usize::from(fade)),
                     Animation::new(if fade { LEAVE } else { motion::dim_span() }),
                     move |el, delta| el.opacity(if fade { 1. - delta } else { delta }),
