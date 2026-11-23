@@ -178,7 +178,6 @@ impl LogsView {
 impl Render for LogsView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = *cx.theme();
-        let pencil = theme.muted_foreground;
         let entries = Rc::new(self.shown(cx));
         if !self.follow && self.resume_at_end && self.scroll.is_scrolled_to_end() == Some(true) {
             self.follow = true;
@@ -192,7 +191,7 @@ impl Render for LogsView {
             }
         }
         let job_label = match self.job {
-            Some(id) => format!("{:04}", id.0),
+            Some(id) => format!("{} {:04}", t!("dl-logs-job"), id.0),
             None => t!("dl-logs-all-jobs").to_string(),
         };
         let chips = [
@@ -320,7 +319,6 @@ impl Render for LogsView {
                             .gap(px(8.))
                             .items_center()
                             .child(div().w(px(220.)).child(self.search.clone()))
-                            .child(div().text_color(pencil).child(t!("dl-logs-job")))
                             .child(
                                 Button::new("logs-job")
                                     .outline()

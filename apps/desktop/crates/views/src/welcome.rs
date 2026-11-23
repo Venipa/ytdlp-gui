@@ -224,7 +224,9 @@ pub fn welcome(cx: &App) -> AnyElement {
                         .child(
                             Button::new("own-ffmpeg")
                                 .ghost()
-                                .small()
+                                .icon("icons/folder-open.svg")
+                                // the ghost's text lines up with the tool names above it
+                                .ml(px(-12.))
                                 .label(t!("welcome-own-ffmpeg"))
                                 .on_click(|_, _, cx| choose_ffmpeg(cx)),
                         )

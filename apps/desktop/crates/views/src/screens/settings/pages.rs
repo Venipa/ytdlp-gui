@@ -473,7 +473,10 @@ impl SettingsView {
             .collect();
         vec![
             section(None, rows, cx),
-            Notice::new(t!("set-page-tools"), t!("set-long-paths")).into_any_element(),
+            Notice::new(t!("set-page-tools"), t!("set-long-paths"))
+                .icon("icons/triangle-alert.svg")
+                .max_w_full()
+                .into_any_element(),
         ]
     }
 
@@ -495,7 +498,6 @@ impl SettingsView {
         let button = |id: &'static str, label: SharedString| {
             Button::new(SharedString::from(format!("{id}-{kind}")))
                 .outline()
-                .small()
                 .disabled(busy)
                 .label(label)
         };
@@ -564,9 +566,9 @@ impl SettingsView {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .gap_4()
-                    .min_h(px(48.))
-                    .py_2()
+                    .gap(px(16.))
+                    .min_h(px(52.))
+                    .py(px(10.))
                     .child(
                         div()
                             .flex_1()
@@ -588,7 +590,7 @@ impl SettingsView {
                                     .child(detail),
                             ),
                     )
-                    .child(div().flex().flex_none().gap_2().children(actions)),
+                    .child(div().flex().flex_none().gap(px(8.)).children(actions)),
             )
             .children(rule.map(|rule| div().pb_2().child(ProgressRule::new(rule))))
             .into_any_element()
