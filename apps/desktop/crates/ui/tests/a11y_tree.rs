@@ -968,7 +968,7 @@ async fn ledger_parts_speak_when_asked(cx: &mut TestAppContext) {
 #[gpui::test]
 async fn unnamed_rule_stays_out_of_the_tree(cx: &mut TestAppContext) {
     let lines = open_probe(cx, |window, cx| {
-        let rule = ui::ProgressRule::new(ui::Rule::Solid)
+        let rule = ui::ProgressRule::new(ui::Rule::Hairline)
             .render(window, cx)
             .into_element();
         snapshot("rule", &rule)
