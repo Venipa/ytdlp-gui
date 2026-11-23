@@ -45,6 +45,18 @@ jobs:
       - name: inno setup
         if: runner.os == 'Windows'
         run: choco install innosetup -y --no-progress
+      # a tag push builds that version: vX.Y.Z becomes the workspace version (Cargo.toml and the
+      # workspace crates in Cargo.lock, so --locked still holds); the packaging scripts read it from there
+      - name: version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]] || { echo "tag $GITHUB_REF_NAME is not vX.Y.Z"; exit 1; }
+          names="$(sed -n 's/^name = "\(.*\)"/\1/p' crates/*/Cargo.toml | paste -sd'|' -)"
+          perl -0pi -e 's/^version = "[^"]*"/version = "'"$v"'"/m' Cargo.toml
+          perl -0pi -e 's/(\[\[package\]\]\nname = "(?:'"$names"')"\nversion = ")[^"]+"/${1}'"$v"'"/g' Cargo.lock
+          echo "building version $(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop
