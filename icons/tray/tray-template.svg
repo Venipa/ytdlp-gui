@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- 80%: the menu bar scales the whole canvas, so the margin sets the glyph size -->
+  <g transform="translate(128 133) scale(0.8) translate(-128 -133)">
+  <rect x="104" y="24" width="48" height="112" rx="10" fill="#000"/>
+  <path d="M54 122 H202 L128 196 Z" fill="#000" stroke="#000" stroke-width="20" stroke-linejoin="round"/>
+  <rect x="40" y="214" width="176" height="28" rx="14" fill="#000"/>
+  </g>
+</svg>
