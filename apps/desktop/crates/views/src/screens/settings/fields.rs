@@ -16,11 +16,10 @@ pub enum Field {
     PerDomain,
     Retries,
     Langs,
-    FontSize,
 }
 
 impl Field {
-    pub const ALL: [Field; 8] = [
+    pub const ALL: [Field; 7] = [
         Field::Template,
         Field::Proxy,
         Field::Rate,
@@ -28,7 +27,6 @@ impl Field {
         Field::PerDomain,
         Field::Retries,
         Field::Langs,
-        Field::FontSize,
     ];
 
     /// The text the field shows for `s`.
@@ -41,7 +39,6 @@ impl Field {
             Field::PerDomain => s.concurrent_per_domain.to_string(),
             Field::Retries => s.max_attempts.to_string(),
             Field::Langs => s.subtitles.langs.join(", "),
-            Field::FontSize => s.font_size.to_string(),
         }
     }
 
@@ -57,7 +54,6 @@ impl Field {
             Field::PerDomain => s.concurrent_per_domain = number(text, 1, 10)?,
             Field::Retries => s.max_attempts = number(text, 1, 10)?,
             Field::Langs => s.subtitles.langs = langs(text)?,
-            Field::FontSize => s.font_size = number(text, 11, 18)? as f32,
         }
         Ok(())
     }
@@ -72,10 +68,7 @@ impl Field {
     }
 
     fn range(self) -> (u32, u32) {
-        match self {
-            Field::FontSize => (11, 18),
-            _ => (1, 10),
-        }
+        (1, 10)
     }
 }
 
