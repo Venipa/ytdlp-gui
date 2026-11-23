@@ -1,7 +1,19 @@
 //! The screens of ytdlpd: the root, the Workspace shell with its title-bar navigation and the
 //! pages it switches between.
 
+mod detail;
+mod downloads;
+mod format;
+mod formats;
+mod pages;
 mod root;
+mod sample;
 mod workspace;
 
 pub use root::{Root, UI_FONT};
+
+/// The ink-blue used for selection, focus and links (a solid field of the theme).
+pub fn ink(cx: &gpui::App) -> gpui::Hsla {
+    use ui::ActiveTheme as _;
+    cx.theme().table_active_border
+}

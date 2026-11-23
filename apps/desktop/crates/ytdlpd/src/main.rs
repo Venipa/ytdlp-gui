@@ -28,6 +28,12 @@ struct Args {
     /// The first window size, as WIDTHxHEIGHT.
     #[arg(long, value_name = "WxH")]
     window_size: Option<WindowSize>,
+    /// Debug: open on a named screen state, such as `card`, `logs` or `settings-network`.
+    #[arg(long, value_name = "NAME")]
+    screen: Option<String>,
+    /// Theme: `dark` (default) or `light`.
+    #[arg(long, default_value = "dark")]
+    theme: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -75,9 +81,13 @@ fn main() -> ExitCode {
             i18n::set(i18n::resolve(i18n::AUTO));
             ui::motion::apply(Default::default(), Default::default(), cx);
             let look = Look {
-                kind: ThemeKind::Dark,
-                rounding: Rounding::Rounded,
-                font: 14.,
+                kind: if args.theme == "light" {
+                    ThemeKind::Light
+                } else {
+                    ThemeKind::Dark
+                },
+                rounding: Rounding::Subtle,
+                font: 13.,
                 transparent: false,
                 transparency: 1.,
                 blur: false,
@@ -98,6 +108,7 @@ fn main() -> ExitCode {
             let _backend = build_app(args.data_dir.clone(), cx);
             router::init(Destination::Downloads, cx);
             open_window(
+                args.screen.clone(),
                 args.window_size.map(|size| size.0).unwrap_or(FIRST_SIZE),
                 cx,
             );
@@ -107,7 +118,7 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn open_window(first: Size<Pixels>, cx: &mut App) {
+fn open_window(scene: Option<String>, first: Size<Pixels>, cx: &mut App) {
     cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, first, cx))),
@@ -126,7 +137,7 @@ fn open_window(first: Size<Pixels>, cx: &mut App) {
         |window, cx| {
             use ui::ActiveTheme as _;
             window.set_rem_size(cx.theme().font_size);
-            cx.new(|cx| Root::new(window, cx))
+            cx.new(|cx| Root::new(scene.as_deref(), window, cx))
         },
     )
     .expect("cannot open the window");

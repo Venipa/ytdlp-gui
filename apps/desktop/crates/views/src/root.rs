@@ -14,10 +14,10 @@ pub struct Root {
 
 impl Root {
     /// Builds the root over the current navigation.
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(scene: Option<&str>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let navigation: Entity<Navigation> = router::trail(cx);
         Self {
-            workspace: cx.new(|cx| Workspace::new(navigation, window, cx)),
+            workspace: cx.new(|cx| Workspace::new(navigation, scene, window, cx)),
         }
     }
 }
