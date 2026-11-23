@@ -63,5 +63,13 @@ fn python_runtime() {
         }
     } else if let Some(lib) = get("lib_dir") {
         println!("cargo:rustc-link-arg=-Wl,-rpath,{lib}");
+        // shipped layouts, relative to the exe: AppImage/deb, flat tarball, macOS .app (libpython sits in Frameworks)
+        for rel in if cfg!(target_os = "macos") {
+            vec!["@executable_path/../Frameworks"]
+        } else {
+            vec!["$ORIGIN/../lib/ytdlpd/python/lib", "$ORIGIN/python/lib"]
+        } {
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{rel}");
+        }
     }
 }
