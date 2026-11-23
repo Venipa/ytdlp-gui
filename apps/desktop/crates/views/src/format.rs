@@ -30,6 +30,25 @@ pub fn duration(seconds: f64) -> String {
     }
 }
 
+
+/// `1080p`, `best`, `mp3`: the short label of a preset, as stored in a row's format column.
+pub fn preset_label(preset: domain::Preset) -> String {
+    use domain::{Preset, VideoQuality};
+    match preset {
+        Preset::Video(VideoQuality::Best) => "best".into(),
+        Preset::Video(q) => format!("{}p", q.as_str()),
+        Preset::Audio(a) => a.as_str().into(),
+        Preset::Custom => "custom".into(),
+    }
+}
+
+/// `14:03:09` in the local time zone from unix milliseconds.
+pub fn clock(at_ms: i64) -> String {
+    jiff::Timestamp::from_millisecond(at_ms)
+        .map(|t| t.to_zoned(jiff::tz::TimeZone::system()).strftime("%H:%M:%S").to_string())
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -42,5 +61,7 @@ mod tests {
         assert_eq!(speed(2_411_724.), "2.3 MB/s");
         assert_eq!(duration(213.), "3:33");
         assert_eq!(duration(3723.), "1:02:03");
+        assert_eq!(preset_label(domain::Preset::DEFAULT), "best");
+        assert_eq!(preset_label("video:1080".parse().unwrap()), "1080p");
     }
 }

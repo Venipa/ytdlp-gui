@@ -12,8 +12,16 @@ icons.workspace = true
 input.workspace = true
 router.workspace = true
 state.workspace = true
+open.workspace = true
 log.workspace = true
+jiff.workspace = true
 ui.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem"] }
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
