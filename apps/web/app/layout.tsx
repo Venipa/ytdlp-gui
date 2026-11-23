@@ -1,5 +1,6 @@
 import localFont from 'next/font/local';
 import type { Metadata, Viewport } from 'next';
+import Script from 'next/script';
 import { Provider } from '@/components/provider';
 import './global.css';
 
@@ -35,6 +36,9 @@ export default function Layout({ children }: LayoutProps<'/'>) {
     <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <body className="flex flex-col min-h-screen">
         <Provider>{children}</Provider>
+        {process.env.NODE_ENV === 'production' && (
+          <Script src="https://rybbit.venipa.net/api/script.js?siteId=3" strategy="afterInteractive" />
+        )}
       </body>
     </html>
   );
