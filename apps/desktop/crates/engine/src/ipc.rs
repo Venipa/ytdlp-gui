@@ -49,6 +49,9 @@ pub enum Event {
         code: ErrorCode,
         message: String,
         retryable: bool,
+        /// Seconds from a 429 `Retry-After` header.
+        #[serde(default)]
+        retry_after: Option<u64>,
     },
 }
 

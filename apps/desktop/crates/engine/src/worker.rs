@@ -1,6 +1,7 @@
 //! Worker side (`<exe> --engine-worker`): one JSON job on stdin, JSON-lines events on stdout, hooks as `#[pyclass]`.
 use std::{
     collections::HashSet,
+    ffi::CStr,
     io::BufRead,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -152,6 +153,7 @@ fn fail(e: EngineError) -> ! {
         code: e.code,
         message: e.message,
         retryable: e.retryable,
+        retry_after: e.retry_after,
     });
     std::process::exit(1)
 }
@@ -173,8 +175,32 @@ fn info_paths(info: &Value) -> Vec<String> {
     own.map(str::to_string).chain(nested).collect()
 }
 
+/// Merges CLI-style args into `opts`: only what differs from the defaults of `parse_options`, post-processors appended.
+const MERGE_ARGS: &CStr = c"
+def merge(opts, args):
+    import yt_dlp
+    try:
+        base = yt_dlp.parse_options(['--ignore-config'])[3]
+        new = yt_dlp.parse_options(['--ignore-config'] + list(args))[3]
+    except SystemExit:
+        raise ValueError('invalid extra arguments: ' + ' '.join(args))
+    for k, v in new.items():
+        if k in base and base[k] == v:
+            continue
+        if k == 'postprocessors':
+            opts.setdefault(k, []).extend(p for p in v if p not in base.get(k, []))
+        else:
+            opts[k] = v
+";
+
 fn download(py: Python<'_>, url: &str, spec: &Value, sh: &Arc<Shared>) -> PyResult<Value> {
     let opts = json_to_py(py, spec)?;
+    let extra = opts.call_method1("pop", (crate::spec::EXTRA_ARGS_KEY, py.None()))?;
+    if !extra.is_none() {
+        PyModule::from_code(py, MERGE_ARGS, c"merge_args.py", c"merge_args")?
+            .getattr("merge")?
+            .call1((&opts, extra))?;
+    }
     let hook = |kind| {
         Py::new(
             py,
