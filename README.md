@@ -28,6 +28,28 @@
 - **Tools fetched for you.** ffmpeg and a JavaScript runtime download when missing; yt-dlp updates without a new app.
 - **Native and light.** Rust and GPUI, not a browser in a window. Dark and light themes, plus window blur on macOS and Windows.
 
+## Compared with the old app
+
+ytdlpd replaces the earlier Electron app (the v0.x releases in this repository).
+
+| | ytdlpd | Old Electron app |
+|---|---|---|
+| Memory, idle | **124 MB** in 1 process | 291 MB in 4 processes |
+| CPU, idle | **0.3 %** | 0.9 % |
+| On disk: app + tools it downloads | **136 + 205 MB** | 485 + 94 MB |
+| Installer size (Windows / macOS / Linux) | **31 / 89 / 61 MB** | 122 / 159 / 174 MB |
+| Builds | Windows x64, macOS Apple silicon and Intel, Linux x64 and arm64 (5) | Windows x64, macOS Apple silicon, Linux x64 (3) |
+| Runs in | A native window (Rust, GPUI) | Electron (Chromium) |
+| Talks to yt-dlp through | Its Python API, with typed progress hooks | Parsing its text output |
+| Final file path | Taken from yt-dlp's post hooks | Guessed; a merge or convert that changes the extension shows as an error |
+| Queue | 3 at a time, 2 per site (adjustable); pause, resume, cancel and retry in place | Queue waiters leak |
+| Progress updates | At most four a second, latest wins | Re-renders on every tick |
+| Clipboard | Reads only; site rules decide whether a link is added, offered or ignored | Wipes the clipboard |
+| yt-dlp options | The common ones as settings; no free-form arguments | Free-form, split on spaces |
+| Site support and speed | Same as yt-dlp | Same as yt-dlp |
+
+<sub>ytdlpd v1.0.4 against ytdlp-gui v0.15.3, release builds on an Apple silicon Mac. Memory is the physical footprint (as Activity Monitor shows it) of all the app's processes; CPU is the average over 30 s after start, with nothing downloading. ytdlpd's tools are ffmpeg, ffprobe and a JavaScript runtime (deno); the old app's are ffmpeg. Installer sizes are the release downloads (macOS: Apple silicon, Linux: x64 AppImage).</sub>
+
 ## Install
 
 Grab the installer for your system from the [latest release](https://github.com/Venipa/ytdlp-gui/releases/latest):
