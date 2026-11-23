@@ -90,7 +90,8 @@ mod tests {
                 .output()
                 .unwrap();
             let acl = String::from_utf8_lossy(&out.stdout).to_lowercase();
-            for who in ["everyone", "users"] {
+            // match ACL entries (`<who>:(`), not the path, which can itself contain `\users\`
+            for who in ["everyone:(", "\\users:("] {
                 assert!(!acl.contains(who), "{acl}");
             }
             assert!(acl.contains(&std::env::var("USERNAME").unwrap().to_lowercase()));
