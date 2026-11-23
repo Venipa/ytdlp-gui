@@ -502,13 +502,13 @@ impl SettingsView {
         let mut actions = Vec::new();
         match kind {
             ToolKind::YtDlp => actions.push(button("tool-check", t!("set-tool-check")).on_click({
-                let tools = tools.clone();
+                let tools = tools;
                 let current = self.ytdlp_version.clone();
                 move |_, _, cx| tools.update(cx, |t, cx| t.check_update(kind, current.clone(), cx))
             })),
             ToolKind::Ffmpeg | ToolKind::Ffprobe | ToolKind::Deno => {
                 actions.push(button("tool-redo", t!("set-tool-redownload")).on_click({
-                    let tools = tools.clone();
+                    let tools = tools;
                     move |_, _, cx| tools.update(cx, |t, cx| t.reinstall(kind, cx))
                 }))
             }
