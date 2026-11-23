@@ -21,12 +21,16 @@ const features = [
   ['Queue with pause and resume', 'Three at a time, two per site. After a restart, unfinished work waits, paused.'],
   ['Presets with real conversion', 'Video best down to 480p; audio as mp3, m4a or opus.'],
   ['Tools fetched for you', 'ffmpeg and a JavaScript runtime are downloaded when missing; yt-dlp updates without a new app.'],
+  ['Files that play everywhere', "Each finished file is checked; one that won't play in QuickTime, Photos or Windows is one click from compatible."],
+  ['Site rules', 'Per site: what a copied link does, which preset it gets and which fix runs after it.'],
+  ['Cookies per site', "Import a file, paste one or copy a browser's; each download only gets its own site's cookies."],
 ];
 
 const columns = ['ytdlpd', 'Old Electron app', 'yt-dlp CLI'];
 
 const comparison: [string, string, string, string][] = [
   ['Runs in', 'A native window (Rust, GPUI)', 'Electron (Chromium)', 'A terminal'],
+  ['Memory, idle', '124 MB in 1 process', '291 MB in 4 processes', 'Nothing running'],
   ['Talks to yt-dlp through', 'Its Python API, with typed progress hooks', 'Parsing its text output', 'It is yt-dlp'],
   [
     'Final file path',
@@ -41,7 +45,7 @@ const comparison: [string, string, string, string][] = [
     'One command at a time, or your own script',
   ],
   ['Progress updates', 'At most four a second, latest wins', 'Re-renders on every tick', 'One terminal line'],
-  ['Clipboard', 'Reads only, and asks before adding a link', 'Wipes the clipboard', 'Not involved'],
+  ['Clipboard', 'Reads only; site rules decide whether a link is added, offered or ignored', 'Wipes the clipboard', 'Not involved'],
   ['yt-dlp options', 'The common ones as settings; no free-form arguments', 'Free-form, split on spaces', 'Every option'],
   ['Site support and speed', 'Same as yt-dlp', 'Same as yt-dlp', 'Same as yt-dlp'],
 ];

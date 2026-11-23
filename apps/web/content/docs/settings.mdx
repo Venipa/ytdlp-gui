@@ -1,6 +1,6 @@
 ---
 title: Settings
-description: Every settings page, including cookies for sites that need you to sign in.
+description: Every settings page, including cookies for sites that need you to sign in and site rules.
 ---
 
 Settings open from the sidebar; each page is listed under it. Changes apply at once. They are stored in `settings.json` (see [where things live](/docs/troubleshooting#where-things-live)), which you may also edit by hand: the app reloads it, and keeps the last good settings if the file is not valid JSON.
@@ -12,7 +12,7 @@ Settings open from the sidebar; each page is listed under it. Changes apply at o
 - **Close to tray**: closing the window keeps downloads running in the tray.
 - **Notifications**: tell you when a download finishes or fails.
 - **Watch the clipboard for links**: offer a link you copy as soon as the window is in front. Read only; nothing is cleared.
-- **Add copied links automatically**: add a copied link without asking (off by default).
+- **Add copied links automatically**: add a copied link without asking (off by default). [Site rules](#site-rules) can choose per site instead.
 - **Resume interrupted downloads on start**: continue downloads that were running when the app closed.
 
 ## Downloads
@@ -35,25 +35,47 @@ Settings open from the sidebar; each page is listed under it. Changes apply at o
 
 ## Network
 
-![Settings, Network: proxy, rate limit, and cookies with None, File and From browser.](../../assets/shots/settings-network.webp)
+- **Use a proxy**: switch it on and type the address, like `http://host:port` or `socks5://host:port`. A line under the field reads it back (for example "socks5 proxy at 127.0.0.1, port 1080").
+- **Limit speed**: switch it on, then set a number and choose KB/s or MB/s. It caps each download; off is as fast as the site allows.
+- **Cookies**: how many cookie sets are on and how many sites they cover, with **Manage** to open the Cookies page.
 
-- **Proxy**: `http://host:port` or `socks5://host:port`. Empty is none.
-- **Rate limit**: cap the speed of each download, like `500K` or `2M`. Empty is unlimited.
+## Cookies
 
-### Cookies
+Some videos need you to be signed in (private, members-only or age-restricted ones). ytdlpd reuses a sign-in through cookies, kept as **sets**:
 
-Some videos need you to be signed in (private, members-only or age-restricted ones). ytdlpd can reuse your browser's sign-in through cookies. Pick one of:
+- **Add or read cookies** opens the ways to add a set: **Import file** (a Netscape `cookies.txt`), **Paste from clipboard**, or **Read a browser** (Firefox, Chrome, Edge, Brave; Safari on macOS). A browser set is a copy; **Refresh** reads the browser again.
+- **Sets** lists them, highest first. Each can be switched off, moved up or down, edited as `cookies.txt` text (checked as you type) or removed. When two sets have cookies for the same site, the higher one is used.
+- **Sites** lists every site the sets have cookies for, grouped (`accounts.google.com` sits under `google.com`), with a search and a switch per site and per set.
 
-- **None**: no cookies are sent.
-- **From browser**: read the cookies of a browser on this computer. **Firefox is recommended.**
-- **File**: use a `cookies.txt` file (Netscape format).
+Each download, and each link preview, only gets the cookies for its own site (plus `google.com` for YouTube), in a private file that is removed when it ends.
 
-**Import cookies file** copies a `cookies.txt` into ytdlpd. **Paste from clipboard** takes the text of one you copied instead, for example from a browser extension that exports cookies. **Clear cookies** removes the stored copy.
-
-<Callout type="warn" title="Chrome and Edge on Windows">
-  Chrome blocks other apps from reading its cookies on Windows. Use Firefox, or export a cookies file. If reading
-  fails with "Couldn't read the browser's cookies", close the browser and try again, or use a cookies file.
+<Callout type="warn" title="Reading a browser">
+  Chrome and Edge block other apps from reading their cookies on Windows: use Firefox, or export a cookies file. Safari
+  on macOS needs ytdlpd allowed under System Settings, Privacy &amp; Security, Full Disk Access. Chrome on macOS may ask
+  for keychain access.
 </Callout>
+
+## Site rules
+
+Rules decide, per site, what happens to its links. A rule matches a **domain with its subdomains** (`youtube.com` also covers `music.youtube.com`), a **URL start** (`https://www.twitch.tv/videos/`) or a **regex**, and sets:
+
+- **Clipboard**: add a copied link automatically, ask, or ignore it.
+- **Format**: the preset its links are added with, unless you pick another one yourself.
+- **Fix after download**: one of the fixes below.
+
+The first switched-on rule that matches wins; **Everything else** holds the defaults. The editor's **Test a link** field shows which rule a link gets before you save.
+
+### Fixes
+
+| Fix | What it does |
+|---|---|
+| Compatible | Plays everywhere (QuickTime, Photos, Windows, TVs): picks H.264 and AAC formats first, and converts only when the site has none. |
+| Edit-friendly | Constant frame rate for editing apps (ProRes on macOS). |
+| Repair | Rebuilds timestamps without re-encoding: wrong length, stutter, seeking. |
+| Normalize audio | Even loudness for music and podcasts. |
+| Smaller file | Re-encodes to HEVC: about half the size, slower. |
+
+**Encoder** chooses how converting runs: **Automatic** uses the graphics chip when ffmpeg has it and the processor otherwise.
 
 ## Tools
 

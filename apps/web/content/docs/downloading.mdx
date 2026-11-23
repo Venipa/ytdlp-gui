@@ -44,7 +44,8 @@ Every download is a numbered line. A line that is moving draws an amber rule und
 - Filter chips: **All**, **Active**, **Done**, **Failed**, each with a count.
 - Search narrows the list. Tokens: `type:audio`, `type:video`, `status:failed`, `size:>50mb` (`<`, `<=`, `>`, `>=`, `=`) and `site:youtube.com`. Press `/` to focus the search.
 - Hover a line for its actions: pause, resume, cancel, try again, open, show in folder.
-- Select a line to open its details: thumbnail, link, file path, format, options used, attempts, error text and the last log lines.
+- Click a line to open its details in a sheet over the list: thumbnail, link, file path, format, options used, the cookies it used, attempts, error text and the last log lines. Right click opens the actions menu instead.
+- If a finished file may not play in QuickTime, Photos or Windows (for example AV1 video with Opus audio), the details say so and offer **Make compatible**. [Site rules](/docs/settings#site-rules) can run a fix after every download from a site.
 - Delete an entry (with Undo for a few seconds) or delete the file from disk (asks first).
 
 Downloads run three at a time and two per site by default. Retryable errors such as "Too many requests" back off and try again by themselves. If you close the app while something runs, it comes back paused, ready to resume.
@@ -53,4 +54,4 @@ Downloads run three at a time and two per site by default. Retryable errors such
 
 - `ytdlpd add <url>` from a terminal adds a link to the running app (or starts it).
 - `ytdlpd://add?url=<encoded url>` links do the same from a browser.
-- With **Watch the clipboard for links** on (Settings, General), a copied link is offered once in a small notice; it is never added without asking unless you also turn on **Add copied links automatically**.
+- With **Watch the clipboard for links** on (Settings, General), a copied link is offered once in a small notice; it is never added without asking unless you turn on **Add copied links automatically** or a [site rule](/docs/settings#site-rules) says so. A rule can also ignore a site's links.
