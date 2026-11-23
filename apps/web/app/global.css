@@ -420,30 +420,41 @@ html > body[data-scroll-locked] {
 .lp section[id] {
   scroll-margin-top: 88px;
 }
+/* At the top the bar spans the .lp .wrap content box; scrolled, min-width drops below the bar's own
+   width so it shrinks to fit its links (480px sits under that width, so the shrink ends near the curve's end). */
 .sn {
   position: fixed;
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 40;
+  min-width: calc(min(1280px, 100%) - 2 * clamp(20px, 4vw, 40px));
   max-width: calc(100vw - 24px);
+  transition: min-width 0.35s ease;
+}
+.sn[data-scrolled] {
+  min-width: 480px;
 }
 .sn-bar {
   display: flex;
   align-items: center;
   gap: 22px;
   height: 52px;
-  padding: 0 8px 0 14px;
+  padding: 0;
   border: 1px solid transparent;
   border-radius: 2px;
   color: var(--l-paper);
   white-space: nowrap;
   transition:
+    padding 0.35s ease,
+    height 0.35s ease,
     background-color 0.2s,
     border-color 0.2s,
     box-shadow 0.2s;
 }
 .sn[data-scrolled] .sn-bar {
+  height: 48px;
+  padding: 0 6px 0 14px;
   background: var(--l-ground);
   border-color: var(--l-edge);
   box-shadow: 0 12px 32px -20px rgb(0 0 0 / 0.5);
@@ -456,6 +467,7 @@ html > body[data-scroll-locked] {
   min-height: 44px;
 }
 .sn-more {
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 20px;
@@ -509,6 +521,7 @@ html > body[data-scroll-locked] {
   display: none;
 }
 @media (prefers-reduced-motion: reduce) {
+  .sn,
   .sn-bar {
     transition: none;
   }
@@ -519,11 +532,15 @@ html > body[data-scroll-locked] {
     padding-top: 56px;
     padding-bottom: calc(64px + env(safe-area-inset-bottom));
   }
-  .sn {
+  .sn,
+  .sn[data-scrolled] {
     left: 12px;
     transform: none;
+    min-width: 0;
   }
-  .sn-bar {
+  .sn-bar,
+  .sn[data-scrolled] .sn-bar {
+    height: 52px;
     padding: 0 4px;
   }
   .sn-brand {
