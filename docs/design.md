@@ -73,7 +73,7 @@ maple `motion` presets only. Result card unfold 160 ms ease-out (`Unfold`); ledg
 
 ## Copy rules
 - Sentence case everywhere. No ALL-CAPS eyebrows. No middle-dot meta strings: metadata lives in separate aligned columns. No arrow-suffixed buttons. Real verbs, say what happened and what to do.
-- Examples (key prefixes in plan.md):
+- Examples:
   - Empty Downloads: "Paste a link to start" with "Or drop one here."
   - Filtered empty: "Nothing matches `type:audio size:>50mb`" with action "Clear filter"
   - Buttons: "Download", "Download 47", "Choose formats", "Show in folder", "Open", "Try again", "Pause", "Resume", "Cancel", "Delete entry", "Delete file", "Continue", "Use my own ffmpeg"
@@ -305,7 +305,7 @@ Verified against `E:\git\ytm-maple-rs\apps\desktop\crates\ui\src` (file list rea
 | Tabs | exists but horizontal only (no vertical tabs); not used for Settings |
 | Table | exists, full-featured but music-shaped and heavy; used only for Choose formats |
 | Virtual list | none; use gpui `uniform_list` directly (as maple) |
-| `ProgressRule` (ledger rule: amber fill on a faint track, travelling pulse, plain hairline) | build (lane A) |
+| `ProgressRule` (ledger rule: amber fill on a faint track, travelling pulse, plain hairline) | build |
 | `CallNumber` (4-digit mono) | build |
 | `Thumbnail` (gpui img + Skeleton + 16:9 crop; replaces music `Artwork` use) | build |
 | `Chip` (filter chip with count, selected state: filled pill, D-224) | built |

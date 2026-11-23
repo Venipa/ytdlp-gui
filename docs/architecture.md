@@ -268,7 +268,7 @@ Dev builds use `ytdlpd.dev`. Never literal paths: `storage::app_dir_name()`.
 `--data-dir <dir>` overrides all three for tests and screenshots.
 
 ## 14. Logging
-`log` + `env_logger` (as maple), subsystem-prefixed lines; app log `logs/ytdlpd.log` rotated 5 x 2 MB (confirm in lane D); `RUST_LOG=ytdlpd=debug,engine=trace`. yt-dlp lines are forwarded through the engine logger with the job id into `download_logs`. Startup logs `startup: first_frame ms=...` and Python init timing.
+`log` + `env_logger` (as maple), subsystem-prefixed lines; app log `logs/ytdlpd.log` rotated 5 x 2 MB; `RUST_LOG=ytdlpd=debug,engine=trace`. yt-dlp lines are forwarded through the engine logger with the job id into `download_logs`. Startup logs `startup: first_frame ms=...` and Python init timing.
 
 ## 15. Security (D-018, D-031)
 - Cookies are secrets: cookie files are copied to `data/cookies/` with a restricted ACL (`icacls /inheritance:r` plus the user on Windows, mode 0600 on unix), never stored in settings.json, never logged. Log scrubbing removes `Cookie:` and `Authorization` values and URL query values for keys like `token`, `key`, `sig` before lines reach `download_logs` or the log file (test: values never appear).

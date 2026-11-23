@@ -1,4 +1,4 @@
-# Lane C contract: `domain` + `storage` (for Lane A review)
+# Contract: `domain` + `storage` + `state` public API
 
 Location: `F:\tmp\ytdlpd-rs\pre\c\{domain,storage,migrations}`. Lead moves to `apps/desktop/crates/{domain,storage}` and `apps/desktop/migrations`; `sqlx::migrate!("../migrations")` in `storage/src/lib.rs` and `storage/build.rs` (`rerun-if-changed=../migrations`) need the relative path adjusted (architecture.md says `../../migrations`).
 Verified: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` (domain 11 tests, storage 9). sqlx **0.9.1** works (features `runtime-tokio`, `sqlite`, `migrate`, `macros`, no default); no fallback needed. 0.9 note: `query*` only accept `&'static str` (no `&format!(..)`); dynamic SQL needs `AssertSqlSafe`. The summary column list is a `concat!` macro for that reason.
@@ -58,11 +58,11 @@ Example: `cargo run --release -p storage --example seed -- 10000 [db]` (inserts 
 - **AppSettings**: `get() -> &Settings`, `update(|s| ..., cx)` (debounced 500 ms save, `SettingsChanged` event), `error()` (last invalid reload), `reload`, `save_now`, `job_spec(...)`. File changes reload by notify.
 - **Logs** (`entries()`, `for_job(id)`, cap 5000), **Toasts** (`push(kind, message, download, cx)`, `dismiss`, `items()`), **Intake** (`IntakeEvent::{Add(urls), Offer(urls)}`, `take_pending()`, `offered()`).
 - **Demo**: `--demo <scene>` with `Scene::NAMES` = empty, downloading, mixed (10k rows), failed, first-run. Fake engine plays scripts, URL words steer it: `fail` (network error at 40%, retries), `private`, `429`, `slow`; probe URLs: `playlist`, `private`, `unsupported`, `probefail`. Tests use `FakeBackend::manual()` (`send`, `finish`, `fail`, `started`, `killed`) and `FakeTools` (`fail_first(n)`).
-- Engine notes (lane B questions): the final path is the last `JobEvent::Path` before `Finished`; `ProbeOpts` carries no runtime or cache dir (EngineConfig does); `playlist_index` Some = a playlist entry (engine maps it to `playlist_items=N`, `noplaylist=false`; state selects `playlist_outtmpl`); `extra_args` is stored but not applied yet; `rate_limit` is a string; `ErrorCode::message_key()` is `err-<code>`.
+- Engine notes: the final path is the last `JobEvent::Path` before `Finished`; `ProbeOpts` carries no runtime or cache dir (EngineConfig does); `playlist_index` Some = a playlist entry (engine maps it to `playlist_items=N`, `noplaylist=false`; state selects `playlist_outtmpl`); `extra_args` is stored but not applied yet; `rate_limit` is a string; `ErrorCode::message_key()` is `err-<code>`.
 - CONTRACT: `EngineError.retry_after: Option<u64>` added (serde default, skipped when none): seconds from a 429 `Retry-After`. `Event::Error` on the IPC wire carries the same optional field. `errors.ftl` now has an `err-<code>` message for every `ErrorCode` (plus `err-rate-limited-wait` with `$seconds`). State can use `retry_after` for the penalty box and the "Trying again in N seconds" copy.
 
-## Additive settings keys (lane A3)
+## Additive settings keys (settings pages)
 `Settings.show_thumbnails: bool` (default false; compact rows are the inverse, `compact_mode` is kept in step), `Settings.background: String` (`solid` default | `translucent` | `blur`), `font_size` default now 12. `state::Hooks` (global, set by the binary when the engine is built in): `preview(&JobSpec) -> Result<String,String>` and `store_cookies(&data_dir, text) -> Result<PathBuf,String>`; views call them so `views` never links `engine`.
 
-## Additive settings keys (lane F2)
+## Additive settings keys (appearance)
 `Settings.transparency: f32` (default 0.15; how see-through a non-solid window is, 0..1, the Appearance opacity slider is `1 - transparency`), `Settings.blur_ui: bool` (default false; frosted menus/dialogs, `ui::Look.blur`). `Settings.background` keeps `solid` | `translucent` | `blur` (blur = translucent plus the platform blur behind the window). `Settings.theme` now also takes a bundled theme file id (`catppuccin/mocha`, `nord`, ...; `assets/themes`), laid over Ledger dark; an unknown id falls back to Ledger dark.

@@ -1,6 +1,6 @@
 # ytdlpd QA
 
-Per-phase exit checklists live in `plan.md` (they are the acceptance gates). This file holds the strategy, fixtures, regression table, matrix, live smoke list and perf methods. Primary platform: Windows 11 x64 (the dev box). macOS and Linux: CI unit tests and compile checks, and owner-run passes before a release candidate (D-059).
+This file holds the strategy, fixtures, regression table, matrix, live smoke list and perf methods. Primary platform: Windows 11 x64 (the dev box). macOS and Linux: CI unit tests and compile checks, and owner-run passes before a release candidate (D-059).
 
 ## 1. Strategy
 | Layer | What | Where |
@@ -11,7 +11,7 @@ Per-phase exit checklists live in `plan.md` (they are the acceptance gates). Thi
 | UI headless | gpui `test-support` `TestAppContext`: roles, behaviour, a11y tree (extend maple `ui/tests/a11y_tree.rs`); no pixels | `ui`, `views` |
 | UI visual | `scripts/screenshot.ps1` plus `--demo <scene>`; lead reviews against `design.md` | manual |
 | Live smoke | opt-in, replaceable URLs | section 5 |
-| Manual per phase | lead script from `plan.md` checklists | Windows |
+| Manual per phase | manual script | Windows |
 CI (D-052, adapted from maple `ci.yml`): ubuntu `fmt` + `clippy --workspace --all-targets --locked -- -D warnings` and `cargo nextest run --workspace --locked` (dev profile opt-level 0 for ui/views); windows-latest nextest (not clippy only: primary platform and Python embedding are OS specific); macos-15 clippy. Live smoke only through a weekly `workflow_dispatch` job allowed to fail.
 
 ## 2. Fixture server and fixtures (D-051)
@@ -92,4 +92,4 @@ List lives in `crates/engine/tests/live_urls.toml`: one URL, expected `extractor
 | Worker cost (G1 spike) | spawn 3 workers, record RSS and time to `ready` |
 
 ## 7. Rules for the lead
-An agent report "done" is a claim. Re-run the check commands (plan.md "Self-verification"), run the phase manual script, look at one fresh screenshot per UI change, and quote the output before marking an item `done`. Releases need an owner-run macOS and Linux pass.
+A "done" claim needs evidence: re-run the check commands, run the phase manual script, look at one fresh screenshot per UI change, and quote the output before marking an item `done`. Releases need an owner-run macOS and Linux pass.

@@ -1,7 +1,7 @@
 //! Platform layer: single instance, tray, notifications, deep-link registration, clipboard
 //! watcher and debug stats. State and views never touch this; they receive [`Event`]s through the
 //! `on_event` hook given to [`Platform::install`].
-// shortcut: the notifier and close-to-tray setters are API for lanes A and C and have no caller yet,
+// shortcut: the notifier and close-to-tray setters are API for the UI and state and have no caller yet,
 // drop this allow when they do.
 #![allow(dead_code)]
 
@@ -52,7 +52,7 @@ pub type EventHandler = Box<dyn Fn(&Event, &mut App)>;
 pub struct Hooks {
     /// Open the main window (called when it is asked for and none exists).
     pub open_window: Box<dyn Fn(&mut App)>,
-    /// Every event, after the platform's own handling (show window, quit). Lane C routes into state here.
+    /// Every event, after the platform's own handling (show window, quit). State routes them here.
     pub on_event: EventHandler,
 }
 
@@ -171,7 +171,7 @@ pub fn keeps_running(cx: &App) -> bool {
         .is_some_and(|p| p.tray.is_some() && p.close_to_tray.get())
 }
 
-/// The "close to tray" setting (Lane C wires it to settings); only effective with a tray.
+/// The "close to tray" setting (wired to settings); only effective with a tray.
 pub fn set_close_to_tray(on: bool, cx: &App) {
     if let Some(p) = cx.try_global::<Installed>() {
         p.close_to_tray.set(on);

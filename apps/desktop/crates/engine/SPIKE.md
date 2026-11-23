@@ -1,4 +1,4 @@
-# G1 engine spike report (Lane B, Windows 11 x64, 2026-11-23)
+# Engine spike report (Windows 11 x64, 2026-11-23)
 
 ## Decision: PyO3 embedding PASSES G1. No worker.py fallback built.
 All four G1 failure criteria checked on Windows x64; none failed.
@@ -34,7 +34,7 @@ Also verified: in-process `probe` (single URL, timeout + abandoned counter), `ru
 ## IPC (architecture.md schema, extensions marked)
 Host to worker, one line: `{"cmd":"download","url":"...","spec":{yt-dlp opts}}` (**extension: `url` beside `spec`**); `{"cmd":"exit"}`. Worker to host: `ready` (**sent after `import yt_dlp`, so "ready" = usable**), `progress` (`done,total,speed,eta,frag`), `phase` (`downloading`, `merging`, `postprocess:<Name>`), `path`, `files` (`.part`, `.ytdl`, `filename`, `tmpfilename`, deduped), `log` (yt-dlp logger and stray stdout/stderr; **levels debug/info/warning/error**), `result` (**extension: `path` = verified final path (from `requested_downloads[].filepath`, hook path only as fallback, mismatch logged), `paths` for playlists, small `info` summary instead of the full dict**), `error` (`code,message,retryable`). Host-side extra: stderr lines of the worker arrive as `log` with level `stderr`; unparsable stdout lines as `log` level `stdout`. Worker exits on stdin EOF (parent gone, exit 3), `exit` (0), process exit without `Py_Finalize`.
 
-## Deviations and decisions for the lead
+## Deviations and decisions
 1. **Job Object per worker, not one for the app.** Nested jobs work on Win 8+, a single tree can be killed on its own, and KILL_ON_JOB_CLOSE still reaps all workers when the GUI dies. Known gap (comment in code): grandchild forked before the assignment microseconds after spawn would escape; workers only fork after Python is up.
 2. Worker re-exec needs the app `main` to call `engine::worker::run_worker()` first thing when argv[1] == `--engine-worker` (before gpui). Env `YTDLPD_PYTHON_HOME` / `YTDLPD_SITE_UPDATES` carry the runtime and update dir (also `WorkerConfig`).
 3. `build.rs` (DLL copy + rpath + `YTDLPD_DEV_PYTHON_HOME`) lives in the engine crate; the final app layout (`python/` beside the exe, DLLs beside the exe) must be done by the `ytdlpd` bin `build.rs`/packager. Any crate depending on `engine` needs `PYO3_CONFIG_FILE` set to link, so `real-engine` must gate that dependency (fake backend path builds without Python).

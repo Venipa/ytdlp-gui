@@ -1,4 +1,4 @@
-//! `FakeBackend`, `FakeTools` and the `--demo <scene>` seed rows: the A/C contract. Lane A builds
+//! `FakeBackend`, `FakeTools` and the `--demo <scene>` seed rows: the UI-facing contract. The UI builds
 //! screens against these; tests drive them by hand (`FakeBackend::manual`).
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

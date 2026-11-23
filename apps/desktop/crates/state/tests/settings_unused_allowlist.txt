@@ -1,4 +1,4 @@
-# Settings keys no code reads yet (UI and platform lanes wire them). Remove a line when a feature starts using the key.
+# Settings keys no code reads yet (not wired yet). Remove a line when a feature starts using the key.
 clipboard_auto_add
 clipboard_watch
 close_to_tray

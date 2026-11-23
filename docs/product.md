@@ -10,7 +10,7 @@ People who archive video, music and podcasts locally and want a fast, quiet tool
 The old app parses stdout, guesses final paths (wrong extension after merge or convert is reported as an error), leaks queue waiters, wipes the clipboard, re-renders on every progress tick, ships dead settings and splits extra arguments on spaces. Each of these is a named regression test in `qa.md`.
 
 ## v1 feature list
-Ordered must first. "Must" ships first in the phase order (plan.md Phases 0 to 4); "depth" follows (Phase 5 and 6). All of it is v1 (D-041).
+Ordered must first. "Must" ships first in the phase order; "depth" follows (Phase 5 and 6). All of it is v1 (D-041).
 
 Must
 1. Getting ready: yt-dlp (baked, updatable), ffmpeg and ffprobe (settings path, then PATH, then download for this OS and architecture), JavaScript runtime (detect deno, node, bun, quickjs; else download deno).
@@ -72,7 +72,7 @@ Where it does not
 | Download overhead | within 10% of the yt-dlp CLI on the 40 MB fixture over loopback |
 | Python init in the app process | < 700 ms on its own thread, no UI frame > 50 ms during it |
 | Filter keystroke at 10k rows | result < 50 ms |
-Methods are in `qa.md`. The first Phase 2 measurement may re-baseline once; the change is recorded in `decisions.md`.
+Methods are in `qa.md`. The first Phase 2 measurement may re-baseline once.
 
 ## Identity
 Name `ytdlpd`, app id `net.venipa.ytdlpd`, GPL-3.0-or-later (same as maple; yt-dlp is Unlicense; ffmpeg is downloaded, not bundled). Data directories `ytdlpd` and `ytdlpd.dev` (D-054).

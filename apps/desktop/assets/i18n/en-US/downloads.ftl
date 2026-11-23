@@ -126,7 +126,7 @@ dl-logs-copied = Log copied
 notify-finished = Download finished
 dl-formats-hint = Up and Down choose, Tab switches list, Enter downloads, Esc closes.
 
-# UI polish (lane P-A)
+# UI polish
 dl-intake-invalid = Needs a full link
 dl-intake-more = +{ $count }
 dl-intake-skipped = { $count } skipped

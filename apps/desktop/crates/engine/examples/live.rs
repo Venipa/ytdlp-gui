@@ -23,7 +23,7 @@ fn main() {
         "https://www.youtube.com/playlist?list=PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI".into()
     });
     let out =
-        PathBuf::from(opt("--out").unwrap_or_else(|| "F:/tmp/ytdlpd-rs/tmp/b2/live-out".into()));
+        opt("--out").map(PathBuf::from).unwrap_or_else(|| std::env::temp_dir().join("ytdlpd-live-out"));
     std::fs::create_dir_all(&out).unwrap();
     let deno = opt("--deno").expect("--deno PATH");
     let backend = EngineBackend::new(EngineConfig {

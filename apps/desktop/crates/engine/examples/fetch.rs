@@ -34,7 +34,7 @@ fn main() {
         ),
     };
     let out =
-        PathBuf::from(opt("--out").unwrap_or_else(|| "F:/tmp/ytdlpd-rs/tmp/b/fetch-out".into()));
+        opt("--out").map(PathBuf::from).unwrap_or_else(|| std::env::temp_dir().join("ytdlpd-fetch-out"));
     std::fs::create_dir_all(&out).unwrap();
     let mut job = engine::spec::simple_job(url.clone(), preset, &out);
     job.ffmpeg_location = opt("--ffmpeg");
