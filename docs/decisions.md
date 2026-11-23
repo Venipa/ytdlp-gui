@@ -20,7 +20,14 @@ Decisions marked with the pencil flag, one line each: id, pick, main alternative
 - D-054: name `ytdlpd`, id `net.venipa.ytdlpd`, GPL-3.0-or-later; alternative: another name or license.
 - D-055: no self-updater in v1; alternative: port maple's updater earlier.
 
-## Questions for the owner (only what changes what gets built)
+## Owner answers (2026-11-23)
+1. Name and id: **keep** `ytdlpd` / `net.venipa.ytdlpd` (D-054 confirmed).
+2. License: **GPL-3.0-or-later**, ffmpeg gpl builds (D-015 confirmed).
+3. Python runtime: neither "bundle" nor "download on first run" is a goal in itself; Python is bundled **only because the in-process yt-dlp engine really needs it** and it is the best implementation. Keep it as small as possible (prune list, measure per OS); revisit if a Python-free engine becomes viable (D-010 confirmed with that condition).
+4. Owner runs the macOS pass after pushes (and Linux): push to `origin master` regularly so the owner can continue on macOS (D-059).
+5. Cookies: recommend Firefox; **plus** a cookies text field (paste Netscape cookies) and "Paste from clipboard", alongside the file import. Do not promise Chrome on Windows.
+
+## Questions for the owner (answered above; kept for history)
 1. Name and id: keep `ytdlpd` / `net.venipa.ytdlpd`? (changes bundle ids, data dirs, installer, deep-link scheme)
 2. License: GPL-3.0-or-later like maple, with ffmpeg gpl builds downloaded? (alternative: lgpl ffmpeg builds, fewer encoders)
 3. Installer size: bundle the Python runtime (+25 to 35 MB, works offline for yt-dlp) or download it on first run (about 10 MB installer, needs network at first start)?

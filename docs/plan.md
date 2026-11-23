@@ -133,7 +133,7 @@ Exit checklist: all named regression tests in qa.md for queue pass (`cancel_queu
 | Settings pages (General, Downloads, Formats, Network, Tools, Appearance, About) on `SideNav` | open | `views/.../settings/*` |
 | Output folder + template with live preview (equals yt-dlp `prepare_filename` on the fixture) | open | - |
 | Subtitles (langs, embed or file), embed thumbnail, metadata, chapters | open | - |
-| Proxy, rate limit, retries, cookies file (copied to `data/cookies/`, restricted ACL) | open | - |
+| Proxy, rate limit, retries, cookies: file import, paste text field, "Paste from clipboard" (stored in `data/cookies/`, restricted ACL); Firefox recommended | open | - |
 | Tools page: versions, source, Check for update (yt-dlp + ejs pair), Re-download, Choose file | open | - |
 | Logs view: level chips, job picker, Copy all | open | - |
 | Tools-missing banner on Downloads; presets needing ffmpeg disabled with a reason | open | - |
@@ -207,7 +207,7 @@ Shared-file owners
 
 Contract crate and fake backend: `domain` (headless, no gpui) is authored by C on day 1 of 0b, reviewed by A, frozen at `contract-1`. `state::fake::FakeBackend` implements the same traits as the real backend so A builds every screen without engine or tools. The bin has a Cargo feature `real-engine` (default on); `--no-default-features` builds UI and state against the fake with no Python (D-043).
 
-Merge order per phase: B and D (leaf crates) first, then C, then A, then the lead's integration commit on `main`. Each merge must pass `cargo check --workspace`, clippy `-D warnings` and tests (CI on the PR); lanes rebase on `main` daily; the lead only resolves conflicts.
+Merge order per phase: B and D (leaf crates) first, then C, then A, then the lead's integration commit on `master`. Each merge must pass `cargo check --workspace`, clippy `-D warnings` and tests (CI on the PR); lanes rebase on `master` daily; lead pushes `origin master` after each merged phase step (owner continues on macOS); the lead only resolves conflicts.
 
 Dependencies between lanes
 | Needs | From | When |
