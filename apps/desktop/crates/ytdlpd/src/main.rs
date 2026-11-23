@@ -197,10 +197,17 @@ fn wire_platform(state: &state::AppState, cx: &mut App) {
         };
         match event {
             state::DownloadsEvent::Completed(id) => {
-                platform::notifier(cx).notify(&title(*id), "Download finished")
+                platform::notifier(cx).notify(&title(*id), &i18n::lookup("notify-finished", None))
             }
             state::DownloadsEvent::Failed(id, error) => {
-                platform::notifier(cx).notify(&title(*id), &error.message)
+                // the localised cause when `err-*` has one, else the engine's own words
+                let key = error.code.message_key();
+                let text = i18n::translate(&key);
+                let reason = match text.as_ref() == key {
+                    true => error.message.clone(),
+                    false => text.to_string(),
+                };
+                platform::notifier(cx).notify(&title(*id), &reason)
             }
             state::DownloadsEvent::Loaded => {}
         }

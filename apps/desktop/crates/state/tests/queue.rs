@@ -550,3 +550,28 @@ fn finished_records_path_and_logs(cx: &mut TestAppContext) {
     std::fs::remove_file(file).ok();
     assert_eq!(r.downloads.read_with(cx, |d, _| d.running_jobs()), 0);
 }
+
+#[gpui::test]
+fn retry_after_sets_backoff_and_penalty(cx: &mut TestAppContext) {
+    let r = rig(cx, |_| {}, |_, _| {});
+    let a = r.enqueue(cx, "https://a.com/1");
+    settle(cx, "started", |_| r.started().len() == 1);
+
+    let mut error = err(ErrorCode::RateLimited);
+    error.retry_after = Some(40);
+    r.backend.fail(a, error);
+    settle(cx, "requeued", |cx| {
+        r.row(cx, a).status == DownloadStatus::Queued
+    });
+    assert_eq!(
+        r.row(cx, a).next_attempt_at.unwrap() - T0,
+        40_000,
+        "the server's Retry-After replaces the jittered backoff"
+    );
+    assert!(r.downloads.read_with(cx, |d, _| d.penalized("a.com")));
+    r.clock.advance_ms(41_000);
+    assert!(
+        !r.downloads.read_with(cx, |d, _| d.penalized("a.com")),
+        "the penalty lasts as long as the server asked, not five minutes"
+    );
+}

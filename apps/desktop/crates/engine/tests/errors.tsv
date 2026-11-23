@@ -36,5 +36,5 @@ PermissionError		[Errno 13] Permission denied: 'C:\Windows\x.mp4.part'	permissio
 PermissionError		[WinError 5] Access is denied	permission
 DownloadError		ERROR: Could not copy Chrome cookie database. See https://github.com/yt-dlp/yt-dlp/issues/7271 for more info	cookies_locked
 OperationalError		database is locked	cookies_locked
-DownloadError	403	ERROR: unable to download video data: HTTP Error 403: Forbidden	unknown
+DownloadError	403	ERROR: unable to download video data: HTTP Error 403: Forbidden	network
 RuntimeError		something nobody has seen before	unknown
