@@ -48,11 +48,11 @@ Exit checklist (G0):
 ## Phase 0b: contract, themes, spikes (all four lanes in parallel after G0)
 | Item | Status | Ref |
 |---|---|---|
-| Lane C: `domain` crate: `DownloadId`, `DownloadSummary`, `DownloadStatus`, `JobSpec`, `Preset`, `ProbeResult`, `EngineError`, `ToolStatus`, filter AST, `transition()` with its full table test | open | `crates/domain` |
-| Lane C: `state::fake` `FakeBackend` implementing the backend traits, plus `--demo <scene>` scene list file (the A/C contract) | open | `crates/state/src/fake.rs` |
-| Lane C: tag `contract-1` after Lane A review | open | git tag |
-| Lane C: `storage`: sqlx pool (4 connections, WAL, FK on, busy 5000), `migrations/0001_init.sql` (final SQL in architecture.md), `paths`, `app_dir_name()`, backup-before-migrate | open | `crates/storage`, `migrations/` |
-| Lane C: `state::Io` (copy of maple), `AppSettings` + settings.json hot reload, theme apply, `tests/settings_used.rs` | open | `crates/state` |
+| Lane C: `domain` crate: `DownloadId`, `DownloadSummary`, `DownloadStatus`, `JobSpec`, `Preset`, `ProbeResult`, `EngineError`, `ToolStatus`, filter AST, `transition()` with its full table test | review | `crates/domain` |
+| Lane C: `state::fake` `FakeBackend` implementing the backend traits, plus `--demo <scene>` scene list file (the A/C contract) | review | `crates/state/src/fake.rs` |
+| Lane C: tag `contract-1` after Lane A review | in progress (tag set on lane/c; Lane A review pending) | git tag |
+| Lane C: `storage`: sqlx pool (4 connections, WAL, FK on, busy 5000), `migrations/0001_init.sql` (final SQL in architecture.md), `paths`, `app_dir_name()`, backup-before-migrate | review | `crates/storage`, `migrations/` |
+| Lane C: `state::Io` (copy of maple), `AppSettings` + settings.json hot reload, theme apply, `tests/settings_used.rs` | review | `crates/state` |
 | Lane A: dark + light themes as `ui::Theme::dark()/light()` from the design.md token table, WCAG contrast unit test, radius 2, check where `ui` reads the focus colour and point it at the ink-blue field | open | `crates/ui/src/theme.rs` |
 | Lane A: verify gpui dashed border support for the ledger rule; if absent, build the rule as a custom element | open | spike note in `docs/design.md` |
 | Lane A: new `ui` parts: `ProgressRule`, `Thumbnail`, `Chip`, `TokenInput`, `SideNav`, `CallNumber`, `MONO` const | open | `crates/ui` |

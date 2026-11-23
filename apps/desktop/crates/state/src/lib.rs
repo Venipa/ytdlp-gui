@@ -3,6 +3,7 @@
 
 mod downloads;
 pub mod fake;
+mod intake;
 mod logs;
 mod probes;
 mod realtools;
@@ -14,6 +15,7 @@ mod tools;
 
 pub use downloads::{Downloads, DownloadsEvent, Live};
 pub use fake::{FakeBackend, FakeTools, Scene};
+pub use intake::{Intake, IntakeEvent};
 pub use logs::{LogEntry, Logs};
 pub use probes::{ProbeState, Probes};
 pub use realtools::RealTools;
@@ -118,6 +120,7 @@ pub struct AppState {
     pub tools: Entity<Tools>,
     pub logs: Entity<Logs>,
     pub toasts: Entity<Toasts>,
+    pub intake: Entity<Intake>,
     pub store: Store,
     /// `Some` for `--demo <scene>`.
     pub scene: Option<Scene>,
@@ -129,6 +132,37 @@ impl AppState {
     /// The state registered by `init`.
     pub fn global(cx: &App) -> Self {
         cx.global::<Self>().clone()
+    }
+
+    /// A spec for a new download from settings; detected tool paths fill in what settings leave empty
+    /// (ffmpeg location, JavaScript runtime).
+    pub fn job_spec(
+        &self,
+        url: &str,
+        preset: domain::Preset,
+        format_spec: &str,
+        playlist_index: Option<u32>,
+        cx: &App,
+    ) -> domain::JobSpec {
+        let mut spec = self
+            .settings
+            .read(cx)
+            .job_spec(url, preset, format_spec, playlist_index);
+        let tools = self.tools.read(cx);
+        let found = |kind| tools.get(kind).and_then(|s| s.path.clone());
+        spec.ffmpeg_location = spec
+            .ffmpeg_location
+            .or_else(|| found(domain::ToolKind::Ffmpeg));
+        spec.js_runtime = spec
+            .js_runtime
+            .or_else(|| found(domain::ToolKind::Deno).map(|p| ("deno".to_string(), p)));
+        spec
+    }
+
+    /// Pauses running jobs, saves settings and closes the database; resolves when it is safe to exit.
+    pub fn shutdown(&self, cx: &mut App) -> Task<()> {
+        self.settings.update(cx, |s, _| s.save_now());
+        self.downloads.update(cx, |d, cx| d.shutdown(cx))
     }
 }
 
@@ -200,6 +234,7 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
     let settings = cx.new(|cx| AppSettings::new(settings_path, cx));
     let logs = cx.new(|_| Logs::default());
     let toasts = cx.new(|_| Toasts::default());
+    let intake = cx.new(|_| Intake::default());
     let probes = cx.new(|_| Probes::new(backend.clone()));
     let tools = cx.new(|_| Tools::new(tools_api));
     let downloads = {
@@ -218,6 +253,7 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
         tools,
         logs,
         toasts,
+        intake,
         store,
         scene,
     };

@@ -29,6 +29,7 @@ fn spec(url: &str) -> JobSpec {
         url,
         Preset::DEFAULT,
         "bv*+ba/b",
+        None,
     )
 }
 
