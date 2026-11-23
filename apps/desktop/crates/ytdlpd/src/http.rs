@@ -91,6 +91,7 @@ impl HttpClient for Client {
         let cache = self.cache.clone();
         Box::pin(async move {
             let (parts, body) = request.into_parts();
+            let parts_uri = parts.uri.to_string();
             let body = read(body)?;
             let file = cache
                 .filter(|_| parts.method == gpui::http_client::http::Method::GET)
@@ -120,7 +121,15 @@ impl HttpClient for Client {
                 }
                 Ok::<_, anyhow::Error>((status, bytes))
             });
-            let (status, bytes) = fetch.await??;
+            // a failed cover stays failed for the session (the artwork cache keeps the error), so
+            // say why under the default `ytdlpd=info` filter
+            let link = parts_uri.split('?').next().unwrap_or_default().to_owned();
+            let (status, bytes) = fetch
+                .await?
+                .inspect_err(|error| log::warn!("http: cannot fetch {link}: {error:#}"))?;
+            if !status.is_success() {
+                log::warn!("http: {link} answered {status}");
+            }
             Ok(Response::builder()
                 .status(status)
                 .body(AsyncBody::from(bytes))?)
