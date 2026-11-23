@@ -1,11 +1,14 @@
 use std::time::Duration;
 
+use domain::{ToolKind, ToolSource, ToolState, ToolStatus};
 use gpui::accesskit::Role;
 use gpui::prelude::*;
 use gpui::{
     Animation, AnimationExt as _, AnyElement, Context, ElementId, Entity, FocusHandle, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Window, WindowControlArea, div, px, svg,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, SharedString, Window, WindowControlArea, div, px,
+    svg,
 };
+use i18n::t;
 use input::{
     DeleteEntry, DeleteFile, FirstRow, FocusIntake, FocusSearch, LastRow, OpenSettings,
     PasteIntake, ShowDownloads, ShowLogs, ShowSettings, TogglePause, WORKSPACE_CONTEXT,
@@ -13,17 +16,54 @@ use input::{
 use router::{Destination, Navigation, NavigationEvent, SettingsPage};
 use state::AppState;
 use ui::{
-    Activate, ActiveTheme as _, Deselect, NextField, Perch, PreviousField, SelectNext,
-    SelectPrevious, Tipped as _, WindowControls,
+    Activate, ActiveTheme as _, Deselect, NextField, Perch, PreviousField, ProgressRule, Rule,
+    SelectNext, SelectPrevious, Tipped as _, WindowControls,
 };
 
 use crate::downloads::{Downloads, Key};
 use crate::logs::LogsView;
-use crate::screens::settings::SettingsView;
+use crate::screens::settings::{SettingsView, page_icon, tool_key};
 use crate::toasts::ToastLayer;
 use crate::welcome;
 
-/// The shell: a title bar with the page navigation over the current page.
+/// The sidebar's width, and the icon rail's it folds to in a narrow window.
+const SIDEBAR: f32 = 180.;
+const RAIL: f32 = 48.;
+/// Below this window width the sidebar folds to the rail.
+const NARROW: f32 = 900.;
+/// The tools the sidebar's foot reports on, in order.
+const TOOLS: [ToolKind; 4] = [
+    ToolKind::YtDlp,
+    ToolKind::Ffmpeg,
+    ToolKind::Ffprobe,
+    ToolKind::Deno,
+];
+
+/// What the sidebar says about one tool.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Mark {
+    Ready,
+    Missing,
+    /// Downloading or updating, with how far along when that is known.
+    Busy(Option<f32>),
+    Checking,
+}
+
+/// Reads a tool's mark from its state; `updating` is an update of yt-dlp under way.
+fn mark(tool: &ToolStatus, updating: bool) -> Mark {
+    match &tool.state {
+        ToolState::Downloading { done, total } => {
+            Mark::Busy(total.map(|total| (*done as f32 / total.max(1) as f32).min(1.)))
+        }
+        _ if updating && tool.kind == ToolKind::YtDlp => Mark::Busy(None),
+        ToolState::Ready => Mark::Ready,
+        ToolState::Missing | ToolState::Failed(_) => Mark::Missing,
+        ToolState::Checking => Mark::Checking,
+    }
+}
+
+/// The shell: a title bar with the app mark and the window controls over the sidebar and the
+/// current page.
 pub struct Workspace {
     navigation: Entity<Navigation>,
     focus: FocusHandle,
@@ -79,6 +119,10 @@ impl Workspace {
         cx.observe(&app.tools, |this, _, cx| this.route(cx))
             .detach();
         cx.observe(&app.downloads, |_, _, cx| cx.notify()).detach();
+        // the sidebar's tools block follows every tool state, not only what routing acts on
+        cx.observe(&app.tools, |_, _, cx| cx.notify()).detach();
+        // and the yt-dlp version Settings asks the engine for
+        cx.observe(&settings, |_, _, cx| cx.notify()).detach();
         let read = app
             .store
             .read(|db| async move { db.state_get("first_run_done").await });
@@ -164,105 +208,315 @@ impl Workspace {
         cx.notify();
     }
 
-    /// One page tab of the bar: icon and label, muted until hovered or open; the open page has an
-    /// ink rule on the bar's bottom edge, and Downloads carries the amber count of unfinished jobs.
-    #[allow(clippy::too_many_arguments)]
-    fn entry(
+    /// The left sidebar: Downloads with its count of unfinished jobs, Logs, and Settings with its
+    /// pages nested under it while Settings is open. Below `NARROW` it folds to an icon rail
+    /// whose items name themselves in tooltips, and the open Settings group lists its pages there
+    /// as icons too.
+    fn sidebar(
         &self,
-        key: &'static str,
-        icon: &'static str,
-        to: Destination,
         current: Destination,
-        count: usize,
+        unfinished: usize,
+        rail: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = *cx.theme();
-        // Getting ready is the first state of Downloads, so its tab stays lit there
-        let on = to.same_section(&current)
-            || (current == Destination::Welcome && to == Destination::Downloads);
-        let id = ElementId::from(key);
-        let label = i18n::lookup(key, None);
-        let tip = match key {
-            "nav-downloads" => "nav-downloads-tip",
-            "nav-logs" => "nav-logs-tip",
-            _ => "nav-settings-tip",
+        // Getting ready is the first state of Downloads, so its entry stays lit there
+        let lit = |to: Destination| {
+            to.same_section(&current)
+                || (current == Destination::Welcome && to == Destination::Downloads)
         };
-        let tint = match on {
-            true => theme.foreground,
-            false => theme.muted_foreground,
+        let entry = |key: &'static str, icon: &'static str, tip: &'static str, to: Destination| {
+            ui::nav_item(key, i18n::lookup(key, None), icon, tip, lit(to), rail, cx)
         };
-        let tab = ui::focusable(div().id(id.clone()), &id, window, cx)
-            .role(Role::Tab)
-            .aria_label(match count {
-                0 => label.clone(),
-                n => format!("{label} {n}").into(),
+        let label = i18n::lookup("nav-downloads", None);
+        let downloads = entry(
+            "nav-downloads",
+            "icons/download.svg",
+            "nav-downloads-tip",
+            Destination::Downloads,
+        )
+        .when(unfinished > 0, |row| match rail {
+            true => row.name(format!("{label} {unfinished}")),
+            false => row.detail(ui::grouped(unfinished)),
+        })
+        .on_click(|_, _, cx| router::navigate(Destination::Downloads, cx));
+        let logs = entry(
+            "nav-logs",
+            "icons/list.svg",
+            "nav-logs-tip",
+            Destination::Logs,
+        )
+        .on_click(|_, _, cx| router::navigate(Destination::Logs, cx));
+        let open = match current {
+            Destination::Settings(page) => Some(page),
+            _ => None,
+        };
+        // while Settings is open its page carries the pill, so the group row only brightens
+        let settings = ui::nav_item(
+            "nav-settings",
+            i18n::lookup("nav-settings", None),
+            "icons/settings.svg",
+            "nav-settings-tip",
+            false,
+            rail,
+            cx,
+        )
+        .when(open.is_some(), |row| row.tint(theme.foreground))
+        .when(!rail, |row| {
+            row.trailing(match open {
+                Some(_) => "icons/chevron-down.svg",
+                None => "icons/chevron-right.svg",
             })
-            .aria_selected(on)
-            .group(key)
-            .flex()
-            .items_center()
-            .gap(px(6.))
-            .h(theme.metrics.control)
-            .px(px(10.))
-            .rounded(theme.radius)
-            .cursor_pointer()
-            .text_color(tint)
-            // the open page's tab carries the selection wash as well as its ink underline
-            .when(on, |this| this.bg(theme.table_active))
-            .hover(|style| style.bg(theme.secondary_hover).text_color(theme.foreground))
-            .active(|style| style.bg(theme.secondary_active))
-            .tip(tip, Perch::Below)
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .on_click(move |_, _, cx| router::navigate(to, cx))
-            .child(
-                svg()
-                    .path(icons::path(icon))
-                    .size(px(16.))
-                    .flex_none()
-                    .text_color(tint)
-                    .group_hover(key, |style| style.text_color(theme.foreground)),
-            )
-            .child(label)
-            .when(count > 0, |this| {
-                this.child(
-                    div()
-                        .h(px(16.))
-                        .min_w(px(16.))
-                        .px(px(5.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded_full()
-                        .bg(theme.progress_bar)
-                        .text_color(theme.primary_foreground)
-                        .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_size(theme.text(ui::Text::Tiny))
-                        .font_features(ui::tabular())
-                        .child(count.to_string()),
+            .expanded(open.is_some())
+        })
+        .on_click(|_, _, cx| router::open_settings(cx));
+        let pages = open.map(|open| {
+            let rows = SettingsPage::ALL.iter().enumerate().map(|(index, page)| {
+                let page = *page;
+                let key = page.key();
+                ui::nav_item(
+                    ElementId::from(SharedString::from(format!("nav-settings-{}", page.id()))),
+                    i18n::lookup(key, None),
+                    page_icon(page),
+                    key,
+                    page == open,
+                    rail,
+                    cx,
                 )
+                .aria_position_in_set(index + 1)
+                .aria_size_of_set(SettingsPage::ALL.len())
+                .on_click(move |_, _, cx| router::navigate(Destination::Settings(page), cx))
             });
-        let tab = ui::motion::pressing(tab, &id, ui::motion::PRESS_SCALE, window, cx);
+            div()
+                .id("nav-settings-pages")
+                .role(Role::Group)
+                .aria_label(i18n::lookup("nav-settings", None))
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .map(|this| match rail {
+                    // on the rail a hairline sets the pages off from the entries above
+                    true => this.pt(px(4.)).border_t_1().border_color(theme.border),
+                    // a guide line under the Settings icon carries the pages, as in maple
+                    false => this
+                        .ml(theme.metrics.pad + px(7.))
+                        .pl(px(6.))
+                        .border_l_1()
+                        .border_color(theme.border),
+                })
+                .children(rows)
+        });
         div()
-            .relative()
+            .id("sidebar")
+            .role(Role::Navigation)
+            .aria_label(i18n::lookup("nav-sidebar", None))
             .flex()
+            .flex_col()
             .flex_none()
-            .items_center()
-            .h_full()
-            .child(tab)
-            .when(on, |this| {
-                this.child(
-                    div()
-                        .absolute()
-                        .left(px(10.))
-                        .right(px(10.))
-                        .bottom(px(-1.))
-                        .h(px(2.))
-                        .bg(theme.table_active_border),
-                )
-            })
+            .w(px(if rail { RAIL } else { SIDEBAR }))
+            .gap(px(2.))
+            .p(theme.metrics.pad)
+            .border_r_1()
+            .border_color(theme.sidebar_border)
+            .child(downloads)
+            .child(logs)
+            .child(settings)
+            .children(pages)
+            .child(div().flex_1())
+            .child(self.tools_block(rail, window, cx))
             .into_any_element()
     }
+
+    /// The tools at the sidebar's foot: one line per tool with its short version in mono and a
+    /// status glyph, a hairline of progress while one downloads, and the full versions and
+    /// sources in a tooltip. The whole block is one control that opens Settings > Tools; on the
+    /// rail it is a wrench with a dot, amber while a tool is busy and red while one is missing.
+    fn tools_block(&self, rail: bool, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let theme = *cx.theme();
+        let tools = self.app.tools.read(cx);
+        let updating = tools.updating();
+        let ytdlp = self.settings.read(cx).ytdlp_version().map(str::to_string);
+        let shown: Vec<(ToolStatus, Mark)> = TOOLS
+            .iter()
+            .filter_map(|kind| match (tools.get(*kind), kind) {
+                (Some(tool), _) => Some(tool.clone()),
+                // the bundled yt-dlp is not detected: the engine reports its version to Settings
+                (None, ToolKind::YtDlp) => Some(ToolStatus {
+                    kind: ToolKind::YtDlp,
+                    state: match ytdlp {
+                        Some(_) => ToolState::Ready,
+                        None => ToolState::Checking,
+                    },
+                    source: None,
+                    path: None,
+                    version: ytdlp.clone(),
+                }),
+                (None, _) => None,
+            })
+            .map(|tool| {
+                let mark = mark(&tool, updating);
+                (tool, mark)
+            })
+            .collect();
+        let name = |tool: &ToolStatus| i18n::lookup(tool_key(tool.kind), None);
+        let state = |mark: Mark| {
+            i18n::lookup(
+                match mark {
+                    Mark::Ready => "tools-ready",
+                    Mark::Missing => "tools-missing",
+                    Mark::Busy(_) => "tools-updating",
+                    Mark::Checking => "tools-checking",
+                },
+                None,
+            )
+        };
+        let tip = shown
+            .iter()
+            .map(|(tool, mark)| {
+                let source = match (tool.source, tool.kind) {
+                    (Some(ToolSource::Path), _) => "tools-source-path",
+                    (Some(ToolSource::Custom), _) => "tools-source-custom",
+                    (_, ToolKind::YtDlp) => "set-tool-bundled",
+                    _ => "tools-source-managed",
+                };
+                match (mark, tool.version.as_deref()) {
+                    (Mark::Ready, Some(version)) => format!(
+                        "{}  {version}  \u{b7}  {}",
+                        name(tool),
+                        i18n::lookup(source, None)
+                    ),
+                    // a tool that is not there has no version or source to name
+                    _ => format!("{}  {}", name(tool), state(*mark)),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let summary = shown
+            .iter()
+            .map(|(tool, mark)| match tool.version.as_deref() {
+                Some(version) => format!(
+                    "{} {} {}",
+                    name(tool),
+                    welcome::short_version(version),
+                    state(*mark)
+                ),
+                None => format!("{} {}", name(tool), state(*mark)),
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let dot = match (
+            shown.iter().any(|(_, m)| *m == Mark::Missing),
+            shown.iter().any(|(_, m)| matches!(m, Mark::Busy(_))),
+        ) {
+            (true, _) => Some(theme.danger),
+            (false, true) => Some(theme.progress_bar),
+            _ => None,
+        };
+        let lines: Vec<AnyElement> = match rail {
+            true => Vec::new(),
+            false => shown
+                .iter()
+                .map(|(tool, mark)| {
+                    let (glyph, color) = match mark {
+                        Mark::Ready => ("icons/check.svg", theme.muted_foreground),
+                        Mark::Missing => ("icons/circle-alert.svg", theme.danger),
+                        Mark::Busy(_) => ("icons/refresh-cw.svg", theme.progress_bar),
+                        Mark::Checking => ("icons/loader-circle.svg", theme.muted_foreground),
+                    };
+                    let version = match (mark, tool.version.as_deref()) {
+                        (Mark::Ready, Some(version)) => {
+                            SharedString::from(welcome::short_version(version).to_string())
+                        }
+                        _ => state(*mark),
+                    };
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(6.))
+                                .h(px(18.))
+                                .child(div().flex_1().min_w_0().truncate().child(name(tool)))
+                                .child(
+                                    div()
+                                        .flex_none()
+                                        .max_w(px(72.))
+                                        .truncate()
+                                        .font_family(ui::MONO)
+                                        .text_size(theme.text(ui::Text::Tiny))
+                                        .child(version),
+                                )
+                                .child(
+                                    svg()
+                                        .path(icons::path(glyph))
+                                        .size(px(12.))
+                                        .flex_none()
+                                        .text_color(color),
+                                ),
+                        )
+                        .children(match mark {
+                            Mark::Busy(fraction) => Some(ProgressRule::new(match fraction {
+                                Some(fraction) => Rule::Fill(*fraction),
+                                None => Rule::Pulse,
+                            })),
+                            _ => None,
+                        })
+                        .into_any_element()
+                })
+                .collect(),
+        };
+        let id = ElementId::from("tools-status");
+        let block = ui::focusable(div().id(id.clone()), &id, window, cx)
+            .role(Role::Button)
+            .aria_label(t!("tools-block-label", summary = summary))
+            .flex()
+            .flex_col()
+            .flex_none()
+            .rounded(theme.radius)
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.table_hover))
+            .active(|style| style.bg(theme.secondary_hover))
+            .tip_label(tip, Perch::Trailing)
+            .on_click(|_, _, cx| router::navigate(Destination::Settings(SettingsPage::Tools), cx))
+            .map(|this| match rail {
+                true => this
+                    .h(theme.metrics.control + px(4.))
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        div()
+                            .relative()
+                            .child(
+                                svg()
+                                    .path(icons::path("icons/wrench.svg"))
+                                    .size(px(16.))
+                                    .text_color(theme.muted_foreground),
+                            )
+                            .children(dot.map(|color| {
+                                div()
+                                    .absolute()
+                                    .top(px(-2.))
+                                    .right(px(-3.))
+                                    .size(px(6.))
+                                    .rounded_full()
+                                    .bg(color)
+                            })),
+                    ),
+                false => this
+                    .gap(px(2.))
+                    .px(theme.metrics.pad)
+                    .py(px(6.))
+                    .text_size(theme.text(ui::Text::Small))
+                    .text_color(theme.muted_foreground)
+                    .children(lines),
+            });
+        ui::motion::pressing(block, &id, ui::motion::PRESS_SCALE, window, cx).into_any_element()
+    }
+
     fn page(&self, current: Destination, cx: &mut Context<Self>) -> AnyElement {
         let (n, page): (usize, AnyElement) = match current {
             Destination::Welcome => (0, welcome::welcome(cx)),
@@ -298,7 +552,7 @@ impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = *cx.theme();
         let current = self.navigation.read(cx).current();
-        let settings = Destination::Settings(SettingsPage::General);
+        let rail = window.viewport_size().width < px(NARROW);
         let unfinished = self
             .app
             .downloads
@@ -414,34 +668,7 @@ impl Render for Workspace {
                                             .text_color(theme.muted_foreground)
                                             .child(i18n::lookup("app-wordmark", None)),
                                     ),
-                            )
-                            .child(self.entry(
-                                "nav-downloads",
-                                "icons/download.svg",
-                                Destination::Downloads,
-                                current,
-                                unfinished,
-                                window,
-                                cx,
-                            ))
-                            .child(self.entry(
-                                "nav-logs",
-                                "icons/list.svg",
-                                Destination::Logs,
-                                current,
-                                0,
-                                window,
-                                cx,
-                            ))
-                            .child(self.entry(
-                                "nav-settings",
-                                "icons/settings.svg",
-                                settings,
-                                current,
-                                0,
-                                window,
-                                cx,
-                            )),
+                            ),
                     )
                     .child(
                         div()
@@ -453,15 +680,66 @@ impl Render for Workspace {
             )
             .child(
                 div()
-                    .relative()
+                    .flex()
                     .flex_1()
                     .min_h_0()
-                    .child(self.page(current, cx))
-                    // toasts lie over the page's bottom right; Downloads hangs them above its
-                    // status bar itself
-                    .when(current != Destination::Downloads, |this| {
-                        this.child(self.toasts.clone())
-                    }),
+                    .child(self.sidebar(current, unfinished, rail, window, cx))
+                    .child(
+                        div()
+                            .relative()
+                            .flex_1()
+                            .min_w_0()
+                            .child(self.page(current, cx))
+                            // toasts lie over the page's bottom right; Downloads hangs them above
+                            // its status bar itself
+                            .when(current != Destination::Downloads, |this| {
+                                this.child(self.toasts.clone())
+                            }),
+                    ),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use domain::{EngineError, ErrorCode, ToolKind, ToolState, ToolStatus};
+
+    use super::{Mark, mark};
+
+    fn tool(kind: ToolKind, state: ToolState) -> ToolStatus {
+        ToolStatus {
+            kind,
+            state,
+            source: None,
+            path: None,
+            version: None,
+        }
+    }
+
+    #[test]
+    fn a_tool_reads_as_ready_missing_or_busy() {
+        assert_eq!(
+            mark(&tool(ToolKind::Ffmpeg, ToolState::Ready), false),
+            Mark::Ready
+        );
+        let failed = ToolState::Failed(EngineError::new(ErrorCode::Network, "reset"));
+        assert_eq!(mark(&tool(ToolKind::Deno, failed), false), Mark::Missing);
+        let half = ToolState::Downloading {
+            done: 50,
+            total: Some(100),
+        };
+        assert_eq!(
+            mark(&tool(ToolKind::Ffprobe, half), false),
+            Mark::Busy(Some(0.5))
+        );
+        // an update of yt-dlp marks yt-dlp busy and leaves the others be
+        assert_eq!(
+            mark(&tool(ToolKind::YtDlp, ToolState::Ready), true),
+            Mark::Busy(None)
+        );
+        assert_eq!(
+            mark(&tool(ToolKind::Ffmpeg, ToolState::Ready), true),
+            Mark::Ready
+        );
     }
 }

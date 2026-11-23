@@ -1,4 +1,4 @@
-//! The Settings screen: a side list of pages beside a form, every control bound to
+//! The Settings screen: the form of the page the sidebar has open, every control bound to
 //! `state::AppSettings` (settings.json), so edits in the UI and edits of the file show in both.
 
 mod fields;
@@ -25,7 +25,7 @@ use router::{Destination, Navigation, NavigationEvent, SettingsPage};
 use state::{AppSettings, AppState, Hooks, Tools, ToolsEvent};
 use ui::{
     ActiveTheme as _, Chip, Input, Look, MONO, Notice, Popovers, Scrollbar, Scroller,
-    ScrubberState, SideNav, SideNavItem, Stepper, SwitchRow, Text,
+    ScrubberState, Stepper, SwitchRow, Text,
 };
 
 use crate::toasts::{Kind, toast};
@@ -49,9 +49,6 @@ const BROWSERS: [(&str, &str); 3] = [
 ];
 
 type Edit = Rc<dyn Fn(&mut Settings)>;
-
-/// Below this window width the side list shows icons only.
-const NARROW: f32 = 900.;
 
 struct FieldState {
     field: Field,
@@ -188,6 +185,11 @@ impl SettingsView {
             .ok();
         })
         .detach();
+    }
+
+    /// The version of the bundled yt-dlp the engine reported, once it has.
+    pub(crate) fn ytdlp_version(&self) -> Option<&str> {
+        self.ytdlp_version.as_deref()
     }
 
     fn settings(&self) -> Entity<AppSettings> {
@@ -611,8 +613,8 @@ fn retry_preview(entering: bool, preview: &Option<Result<String, String>>) -> bo
     entering && !matches!(preview, Some(Ok(_)))
 }
 
-/// The icon of a settings page in the side list.
-fn page_icon(page: SettingsPage) -> &'static str {
+/// The icon of a settings page in the sidebar.
+pub(crate) fn page_icon(page: SettingsPage) -> &'static str {
     match page {
         SettingsPage::General => "icons/sliders-horizontal.svg",
         SettingsPage::Downloads => "icons/download.svg",
@@ -624,7 +626,7 @@ fn page_icon(page: SettingsPage) -> &'static str {
     }
 }
 
-fn tool_key(kind: ToolKind) -> &'static str {
+pub(crate) fn tool_key(kind: ToolKind) -> &'static str {
     match kind {
         ToolKind::YtDlp => "welcome-tool-yt-dlp",
         ToolKind::YtDlpEjs => "welcome-tool-yt-dlp-ejs",
@@ -637,7 +639,6 @@ fn tool_key(kind: ToolKind) -> &'static str {
 
 impl Render for SettingsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let narrow = window.viewport_size().width < px(NARROW);
         if self.window_look != Some(self.applied) {
             self.window_look = Some(self.applied);
             look::apply_window(window, cx);
@@ -653,21 +654,6 @@ impl Render for SettingsView {
         }
         let s = self.settings().read(cx).get().clone();
         let broken = self.settings().read(cx).error().is_some();
-        let nav = SideNav::new(
-            SettingsPage::ALL
-                .into_iter()
-                .map(|p| SideNavItem {
-                    label: i18n::lookup(p.key(), None),
-                })
-                .collect(),
-            SettingsPage::ALL
-                .iter()
-                .position(|p| *p == page)
-                .unwrap_or(0),
-            |index, _, cx| router::navigate(Destination::Settings(SettingsPage::ALL[index]), cx),
-        )
-        .icons(SettingsPage::ALL.map(page_icon))
-        .narrow(narrow);
         let sections = match page {
             SettingsPage::General => self.page_general(&s, cx),
             SettingsPage::Downloads => self.page_downloads(&s, cx),
@@ -682,18 +668,14 @@ impl Render for SettingsView {
                 .failed()
                 .into_any_element()
         });
-        div()
-            .flex()
-            .size_full()
-            .child(nav)
-            .child(div().flex_1().min_w_0().child(
-                Scroller::new("settings-scroll", &self.bar).child(layout::page(
-                    i18n::lookup(page.key(), None),
-                    notice,
-                    sections,
-                    cx,
-                )),
-            ))
+        div().size_full().child(
+            Scroller::new("settings-scroll", &self.bar).child(layout::page(
+                i18n::lookup(page.key(), None),
+                notice,
+                sections,
+                cx,
+            )),
+        )
     }
 }
 
