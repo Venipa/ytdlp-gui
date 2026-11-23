@@ -22,6 +22,8 @@ concurrency:
 env:
   # The repo this runs in names the site: links, downloads, stats and the /<name> base path (apps/web/site.config.mjs).
   SITE_REPO: ${{ github.repository }}
+  # the site is served from a custom domain root (ytdlp.venipa.net), not /<repo>
+  BASE_PATH: ""
   NEXT_TELEMETRY_DISABLED: 1
 
 jobs:
