@@ -392,6 +392,8 @@ impl Downloads {
         };
         div()
             .id("detail-slide")
+            // a click on the panel's empty room stays on the panel, never on the row under it
+            .occlude()
             .flex_none()
             .h_full()
             .overflow_hidden()

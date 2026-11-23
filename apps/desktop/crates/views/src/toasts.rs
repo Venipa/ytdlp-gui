@@ -1,5 +1,5 @@
-//! The toast tray: a band of its own at the bottom of the page, in the page's flow (above the
-//! status bar on Downloads, under the page elsewhere), so a toast never covers a row. Any view
+//! The toast stack: cards laid over the bottom right of the page, out of its flow (above the
+//! status bar on Downloads), so a toast never moves the page. Any view
 //! pushes a toast with `toast(..)`; each one leaves by itself after a few seconds, which a
 //! hairline along its bottom edge counts down.
 
@@ -17,12 +17,9 @@ use ui::{ActiveTheme as _, Toast, motion};
 const LIFETIME: Duration = Duration::from_secs(4);
 /// A toast that carries a button stays longer, so there is time to reach it.
 const LIFETIME_ACTION: Duration = Duration::from_secs(8);
-/// The most toasts on screen, kept low since Downloads gives them room in its flow; a new one
-/// pushes the oldest out.
+/// The most toasts on screen; a new one pushes the oldest out.
 const MAX: usize = 2;
 const TICK: Duration = Duration::from_millis(100);
-/// The narrowest window whose tray holds two cards side by side.
-const TWO_FIT: f32 = 860.;
 /// How long a leaving toast fades.
 const LEAVE: Duration = Duration::from_millis(120);
 
@@ -139,7 +136,8 @@ impl ToastLayer {
     }
 }
 
-/// The window's toast layer, for a page that places the stack in its own flow.
+/// The window's toast layer, for a page that lays the stack over its own content: add it as a
+/// direct child of a `relative` element, which it hangs from the bottom right of.
 pub fn layer(cx: &App) -> Option<Entity<ToastLayer>> {
     cx.try_global::<Handle>().map(|handle| handle.0.clone())
 }
@@ -181,33 +179,27 @@ pub fn toast(
 }
 
 impl Render for ToastLayer {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layer = cx.entity();
         let theme = *cx.theme();
-        // a narrow window has room for one card on the tray's line: the newest shows, the older
-        // one keeps counting down out of sight
-        let room = match window.viewport_size().width < px(TWO_FIT) {
-            true => 1,
-            false => MAX,
-        };
-        let shown = self.items.len().saturating_sub(room);
+        // laid over the page, out of its flow; the stack blocks the pointer so a click between
+        // or on the cards never reaches the row under them
         div()
             .id("toast-stack")
+            .absolute()
+            .right(theme.metrics.gutter)
+            .bottom(px(8.))
+            .max_w(px(400.))
             .flex()
-            .flex_wrap()
-            .justify_end()
+            .flex_col()
+            .items_end()
             .gap(px(8.))
-            .when(!self.items.is_empty(), |this| {
-                this.px(theme.metrics.gutter)
-                    .py(px(8.))
-                    .border_t_1()
-                    .border_color(theme.border)
-            })
+            .when(!self.items.is_empty(), |this| this.occlude())
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                 this.hovered = *hovered;
                 cx.notify();
             }))
-            .children(self.items.iter().skip(shown).map(|item| {
+            .children(self.items.iter().map(|item| {
                 let id = item.id;
                 let icon = match item.kind {
                     Kind::Info => "icons/info.svg",
@@ -230,21 +222,14 @@ impl Render for ToastLayer {
                 }
                 let fade = item.leaving;
                 let kept = item.left.as_secs_f32() / item.life.as_secs_f32().max(0.001);
-                // the card sits in a tray of its own, so it casts no shadow over the page; cards
-                // side by side stretch to one height, so their edges and countdowns line up
+                // the card floats over the page, so it keeps its shadow
                 div()
                     .relative()
                     .flex()
                     .flex_col()
                     .w(px(400.))
                     .max_w_full()
-                    .child(
-                        card.shadow_none()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .justify_center(),
-                    )
+                    .child(card)
                     .child(
                         div()
                             .absolute()

@@ -242,6 +242,7 @@ impl Workspace {
                         .child(count.to_string()),
                 )
             });
+        let tab = ui::motion::pressing(tab, &id, ui::motion::PRESS_SCALE, window, cx);
         div()
             .relative()
             .flex()
@@ -450,11 +451,17 @@ impl Render for Workspace {
                             .child(WindowControls::new(false)),
                     ),
             )
-            .child(div().flex_1().min_h_0().child(self.page(current, cx)))
-            // the toast tray takes its own room under the page, so it never covers a line;
-            // Downloads places it in its own flow, above the status bar
-            .when(current != Destination::Downloads, |this| {
-                this.child(div().flex_none().child(self.toasts.clone()))
-            })
+            .child(
+                div()
+                    .relative()
+                    .flex_1()
+                    .min_h_0()
+                    .child(self.page(current, cx))
+                    // toasts lie over the page's bottom right; Downloads hangs them above its
+                    // status bar itself
+                    .when(current != Destination::Downloads, |this| {
+                        this.child(self.toasts.clone())
+                    }),
+            )
     }
 }

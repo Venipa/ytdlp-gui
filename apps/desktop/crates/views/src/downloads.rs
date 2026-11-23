@@ -1370,10 +1370,10 @@ impl Render for Downloads {
                                     .child(list),
                             ),
                     )
-                    .children(selected.map(|row| self.detail_panel(&row, !docked, cx))),
+                    .children(selected.map(|row| self.detail_panel(&row, !docked, cx)))
+                    // toasts lie over the list, just above the status bar, out of the flow
+                    .children(crate::toasts::layer(cx)),
             )
-            // toasts stack above the status bar in the page's flow, so they never cover a row
-            .children(crate::toasts::layer(cx).map(|layer| div().flex_none().child(layer)))
             .child(status)
             .children(menu)
             .children(confirm)

@@ -67,9 +67,10 @@ pub fn section(title: Option<SharedString>, rows: Vec<AnyElement>, cx: &App) -> 
                 .border_color(theme.border)
                 .overflow_hidden()
                 .children(rows.into_iter().enumerate().map(|(at, row)| {
+                    // a row lights up only when it is the control itself (a SwitchRow fills
+                    // its cell and hovers on its own); a row that holds a field stays still
                     div()
                         .px(px(12.))
-                        .hover(|style| style.bg(theme.table_hover))
                         .when(at > 0, |this| this.border_t_1().border_color(theme.border))
                         .child(row)
                 })),

@@ -287,8 +287,14 @@ impl SettingsView {
         on: bool,
         set: fn(&mut Settings, bool),
     ) -> AnyElement {
+        // the row fills its cell edge to edge, so its hover and focus have no gap at the sides
         SwitchRow::new(id, i18n::lookup(key, None), on)
             .detail(i18n::lookup(&format!("{key}-desc"), None))
+            .mx(px(-12.))
+            .px(px(12.))
+            .py(px(10.))
+            .min_h(px(52.))
+            .rounded(px(0.))
             .on_click(self.edit(move |s| set(s, !on)))
             .into_any_element()
     }
