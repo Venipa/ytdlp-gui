@@ -1,0 +1,14 @@
+# Settings keys no code reads yet (UI and platform lanes wire them). Remove a line when a feature starts using the key.
+clipboard_auto_add
+clipboard_watch
+close_to_tray
+compact_mode
+detail_panel_width
+ffmpeg_flavor
+language
+last_preset
+notifications
+playlist_outtmpl
+start_minimized
+window
+ytdlp_auto_check

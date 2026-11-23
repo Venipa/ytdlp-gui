@@ -246,6 +246,47 @@ pub struct DownloadSummary {
 }
 
 impl DownloadSummary {
+    /// A fresh queued row (what an enqueue creates before the engine touches it).
+    pub fn new(id: DownloadId, url: &str, preset: Preset, now: i64) -> Self {
+        Self {
+            id,
+            url: url.to_string(),
+            domain: crate::domain_of(url),
+            extractor: None,
+            video_id: None,
+            title: None,
+            uploader: None,
+            title_lc: String::new(),
+            uploader_lc: String::new(),
+            duration_s: None,
+            thumbnail_url: None,
+            thumbnail_path: None,
+            kind: preset.kind(),
+            preset: preset.to_string(),
+            format_label: None,
+            status: DownloadStatus::Queued,
+            status_reason: None,
+            phase: None,
+            progress: 0.0,
+            bytes_done: None,
+            bytes_total: None,
+            file_path: None,
+            file_size: None,
+            file_missing: false,
+            error_code: None,
+            error_message: None,
+            attempts: 0,
+            next_attempt_at: None,
+            playlist_id: None,
+            playlist_index: None,
+            position: id.0 as f64,
+            created_at: now,
+            started_at: None,
+            finished_at: None,
+            updated_at: now,
+        }
+    }
+
     /// Recomputes the lowercase search fields after `title`/`uploader` change.
     pub fn refresh_lc(&mut self) {
         self.title_lc = self.title.as_deref().unwrap_or_default().to_lowercase();
