@@ -1,14 +1,18 @@
 //! The screens of ytdlpd: the root, the Workspace shell with its title-bar navigation and the
 //! pages it switches between.
 
+mod card;
 mod detail;
 mod downloads;
 mod format;
 mod formats;
-mod pages;
+mod logs;
+mod os;
 mod root;
-mod sample;
+mod rows;
 mod screens;
+mod toasts;
+mod welcome;
 mod workspace;
 
 pub use root::{Root, UI_FONT};

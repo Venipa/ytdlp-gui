@@ -1,163 +1,841 @@
-//! The Downloads page: intake strip, result card, ledger list, filter chips and detail panel.
+//! The Downloads page over the state entities: intake and result card, the pinned "In progress"
+//! group over the history, filter chips, the detail panel and the status bar.
 
+use std::collections::HashSet;
 use std::ops::Range;
+use std::path::Path;
 use std::rc::Rc;
+use std::str::FromStr as _;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use domain::{
-    AudioFormat, Chip as StatusChip, DownloadId, DownloadStatus, Filter, MediaKind, Preset,
-    ProbeResult, Term, VideoQuality, split_urls,
+    Chip as StatusChip, DownloadId, DownloadStatus, DownloadSummary, EngineError, ErrorCode,
+    Filter, Preset, ProbeOpts, ProbeResult, Term, ToolState, split_urls,
 };
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, App, Context, Entity, FontWeight, Hsla, SharedString, UniformListScrollHandle,
-    Window, div, px, uniform_list,
+    AnyElement, App, ClipboardItem, Context, Entity, Pixels, Point, ScrollStrategy, SharedString,
+    Subscription, UniformListScrollHandle, Window, div, px, uniform_list,
 };
 use i18n::t;
+use state::{AppState, DownloadsEvent, IntakeEvent, ProbeState};
 use ui::{
-    ActiveTheme as _, Button, CallNumber, Chip, Input, MONO, Notice, ProgressRule, Rule, Skeleton,
-    Text, Thumbnail, TokenInput, Vacancy, tabular,
+    ActiveTheme as _, Button, Chip, FORM_CONTEXT, Input, Submit, Text, TokenInput, Vacancy,
 };
 
 use crate::format;
-use crate::sample::{Data, Row};
+use crate::formats::Draft;
+use crate::os;
+use crate::toasts::{Kind, toast};
+
+/// How long a deleted entry can still be brought back.
+const UNDO: Duration = Duration::from_secs(6);
+/// How often the free space of the output drive is read again.
+const FREE_EVERY: Duration = Duration::from_secs(5);
 
 /// What the result card under the intake shows.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone)]
 pub enum Card {
     None,
     Probing,
-    Result,
+    /// One video, probed.
+    Result(Arc<ProbeResult>),
+    /// Several links.
     Batch,
-    Playlist,
-    /// A probe failure: the Fluent key of the message.
-    Failed(&'static str),
+    /// One link that is a playlist.
+    Playlist(Arc<ProbeResult>),
+    /// A probe failure.
+    Failed(EngineError),
+    /// The text holds no link.
+    NotLink,
+}
+
+/// One line of the list: a group header or a download (its index in the state rows).
+#[derive(Clone, Copy)]
+pub enum Line {
+    Header(&'static str, usize),
+    Row(usize),
+}
+
+/// A keyboard action of the page, as forwarded by the Workspace.
+#[derive(Clone, Copy)]
+pub enum Key {
+    Next,
+    Previous,
+    TogglePause,
+    DeleteEntry,
+    DeleteFile,
+    Deselect,
+    Paste,
+    FocusIntake,
+    FocusSearch,
 }
 
 /// The Downloads page.
 pub struct Downloads {
-    data: Rc<Data>,
-    intake: Entity<Input>,
-    search: Entity<Input>,
-    chip: StatusChip,
-    selected: Option<DownloadId>,
-    card: Card,
-    preset: Preset,
-    formats_open: bool,
-    empty: bool,
-    scroll: UniformListScrollHandle,
+    pub(crate) app: AppState,
+    pub(crate) intake: Entity<Input>,
+    pub(crate) search: Entity<Input>,
+    pub(crate) chip: StatusChip,
+    pub(crate) selected: Option<DownloadId>,
+    /// The preset the card will download with.
+    pub(crate) preset: Preset,
+    /// The preset of the last download, which the card says it remembers.
+    pub(crate) remembered: Preset,
+    /// The links the card is about.
+    pub(crate) urls: Vec<String>,
+    /// Pasted words that are not links.
+    pub(crate) skipped: Vec<String>,
+    /// Enter was pressed while the page was still being read.
+    enter_waits: bool,
+    last_text: String,
+    /// The open Choose formats modal.
+    pub(crate) formats: Option<Draft>,
+    /// Playlist entries the user switched off.
+    pub(crate) playlist_off: HashSet<u32>,
+    /// A right-click menu: where, and for which row.
+    pub(crate) menu: Option<(Point<Pixels>, DownloadId)>,
+    /// A delete-file confirmation.
+    pub(crate) confirm: Option<DownloadId>,
+    /// Entries hidden while their undo toast is up.
+    pub(crate) hidden: HashSet<DownloadId>,
+    /// The ids in list order, for the arrow keys.
+    order: Vec<DownloadId>,
+    pub(crate) scroll: UniformListScrollHandle,
+    free: Option<(u64, String)>,
+    free_at: Option<Instant>,
+    _subs: Vec<Subscription>,
 }
 
 impl Downloads {
-    /// Builds the page over `data`.
-    pub fn new(data: Rc<Data>, cx: &mut Context<Self>) -> Self {
+    /// Builds the page over the registered state.
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let app = AppState::global(cx);
         let intake = cx.new(|cx| Input::new(t!("dl-intake-hint"), cx).name("dl-intake-name"));
         let search = cx.new(|cx| {
             Input::new(t!("dl-search-hint"), cx)
                 .name("dl-search-name")
                 .clearable()
         });
-        cx.observe(&search, |_, _, cx| cx.notify()).detach();
-        Self {
-            data,
+        let subs = vec![
+            cx.observe(&search, |_, _, cx| cx.notify()),
+            cx.observe(&intake, |this, _, cx| this.intake_changed(cx)),
+            cx.observe(&app.downloads, |_, _, cx| cx.notify()),
+            cx.observe(&app.settings, |_, _, cx| cx.notify()),
+            cx.observe(&app.tools, |_, _, cx| cx.notify()),
+            cx.observe(&app.logs, |_, _, cx| cx.notify()),
+            cx.observe(&app.probes, |this, _, cx| this.probes_changed(cx)),
+            cx.subscribe_in(&app.downloads, window, Self::download_event),
+            cx.subscribe_in(&app.intake, window, Self::intake_event),
+        ];
+        let remembered = Preset::from_str(&app.settings.read(cx).get().last_preset)
+            .unwrap_or(Preset::DEFAULT);
+        let mut this = Self {
+            app,
             intake,
             search,
             chip: StatusChip::All,
             selected: None,
-            card: Card::None,
-            preset: Preset::DEFAULT,
-            formats_open: false,
-            empty: false,
+            preset: remembered,
+            remembered,
+            urls: Vec::new(),
+            skipped: Vec::new(),
+            enter_waits: false,
+            last_text: String::new(),
+            formats: None,
+            playlist_off: HashSet::new(),
+            menu: None,
+            confirm: None,
+            hidden: HashSet::new(),
+            order: Vec::new(),
             scroll: UniformListScrollHandle::new(),
+            free: None,
+            free_at: None,
+            _subs: subs,
+        };
+        // links that arrived before the window (command line, deep link)
+        let waiting = this.app.intake.update(cx, |i, _| i.take_pending());
+        if !waiting.is_empty() {
+            this.fill(&waiting, cx);
+        }
+        this
+    }
+
+    // ---- intake -------------------------------------------------------------------------
+
+    /// Puts links into the field and starts reading them.
+    pub(crate) fn fill(&mut self, urls: &[String], cx: &mut Context<Self>) {
+        let text = urls.join(" ");
+        self.last_text.clone_from(&text);
+        self.intake.update(cx, |input, cx| input.set_text(text, cx));
+        self.begin(cx);
+    }
+
+    fn intake_event(
+        &mut self,
+        _: &Entity<state::Intake>,
+        event: &IntakeEvent,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            IntakeEvent::Add(_) => {
+                let urls = self.app.intake.update(cx, |i, _| i.take_pending());
+                self.fill(&urls, cx);
+            }
+            IntakeEvent::Offer(urls) => {
+                let urls = urls.clone();
+                let intake = self.app.intake.clone();
+                let message = match urls.len() {
+                    1 => t!("dl-toast-clip-one"),
+                    n => t!("dl-toast-clip-many", count = n),
+                };
+                toast(
+                    cx,
+                    Kind::Info,
+                    message,
+                    Some((
+                        t!("dl-toast-clip-add"),
+                        Rc::new(move |cx: &mut App| {
+                            let urls = urls.clone();
+                            intake.update(cx, |i, cx| i.add(&urls, cx));
+                        }),
+                    )),
+                );
+            }
         }
     }
 
-    /// Puts the page into a named demo state for screenshots.
-    pub fn demo(&mut self, scene: &str, cx: &mut Context<Self>) {
-        let url = |text: &str, this: &mut Self, cx: &mut Context<Self>| {
-            this.intake
-                .update(cx, |input, cx| input.set_text(text.to_owned(), cx))
-        };
-        match scene {
-            "card" => {
-                url("https://www.youtube.com/watch?v=dQw4w9WgXcQ", self, cx);
-                self.card = Card::Result;
-            }
-            "probing" => {
-                url("https://www.youtube.com/watch?v=dQw4w9WgXcQ", self, cx);
-                self.card = Card::Probing;
-            }
-            "batch" => {
-                url(
-                    "https://youtu.be/aaaaaaaaaaa https://youtu.be/bbbbbbbbbbb",
-                    self,
-                    cx,
-                );
-                self.card = Card::Batch;
-            }
-            "playlist" => {
-                url("https://www.youtube.com/playlist?list=PL123", self, cx);
-                self.card = Card::Playlist;
-            }
-            "error" => {
-                url("https://www.youtube.com/watch?v=private1", self, cx);
-                self.card = Card::Failed("dl-err-login");
-            }
-            "formats" => {
-                self.card = Card::Result;
-                self.formats_open = true;
-            }
-            "detail" => self.selected = Some(DownloadId(131)),
-            "failed-detail" => self.selected = Some(DownloadId(127)),
-            "filtered" => {
-                self.search
-                    .update(cx, |input, cx| input.set_text("type:audio size:>50mb", cx));
-            }
-            "empty" => self.empty = true,
-            _ => {}
+    /// Typing edits a link, pasting starts reading it.
+    fn intake_changed(&mut self, cx: &mut Context<Self>) {
+        let text = self.intake.read(cx).text().to_owned();
+        if text == self.last_text {
+            return;
+        }
+        let pasted = text.len() > self.last_text.len() + 1;
+        self.last_text.clone_from(&text);
+        if text.trim().is_empty() {
+            self.clear_card(cx);
+        } else if pasted {
+            self.begin(cx);
+        } else if !self.urls.is_empty() {
+            self.clear_card(cx);
         }
         cx.notify();
     }
 
-    fn rows(&self, cx: &App) -> Vec<Row> {
-        if self.empty {
-            return Vec::new();
-        }
-        let filter = Filter::parse(self.search.read(cx).text());
-        self.data
-            .rows
-            .iter()
-            .filter(|row| self.chip.matches(row.summary.status) && filter.matches(&row.summary))
-            .cloned()
-            .collect()
-    }
-
-    fn count(&self, chip: StatusChip) -> usize {
-        match self.empty {
-            true => 0,
-            false => self
-                .data
-                .rows
-                .iter()
-                .filter(|row| chip.matches(row.summary.status))
-                .count(),
+    fn probe_opts(&self, cx: &App) -> ProbeOpts {
+        let settings = self.app.settings.read(cx).get();
+        ProbeOpts {
+            timeout_s: None,
+            flat_playlist: true,
+            cookies: Some(settings.cookies.clone()),
+            proxy: settings.proxy.clone(),
         }
     }
 
-    /// Reads the intake and opens the card it calls for.
-    fn submit(&mut self, cx: &mut Context<Self>) {
+    /// Reads the field: every link is probed and the card follows the results.
+    pub(crate) fn begin(&mut self, cx: &mut Context<Self>) {
         let text = self.intake.read(cx).text().to_owned();
         let split = split_urls(&text);
-        self.card = match (split.urls.len(), split.invalid.is_empty()) {
-            (0, true) => Card::None,
-            (0, false) => Card::Failed("dl-err-network"),
-            (1, true) if text.contains("list=") => Card::Playlist,
-            (1, true) => Card::Result,
-            _ => Card::Batch,
-        };
+        self.release(cx);
+        self.skipped = split.invalid.into_iter().map(|(_, word)| word).collect();
+        self.urls = split.urls;
+        self.playlist_off.clear();
+        self.remembered = Preset::from_str(&self.app.settings.read(cx).get().last_preset)
+            .unwrap_or(Preset::DEFAULT);
+        self.preset = self.remembered;
+        let opts = self.probe_opts(cx);
+        for url in self.urls.clone() {
+            self.app
+                .probes
+                .update(cx, |p, cx| p.request(&url, opts.clone(), cx));
+        }
         cx.notify();
     }
 
-    fn intake_strip(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    /// Forgets the probes of the card's links.
+    fn release(&mut self, cx: &mut Context<Self>) {
+        for url in std::mem::take(&mut self.urls) {
+            self.app.probes.update(cx, |p, cx| p.remove(&url, cx));
+        }
+        self.enter_waits = false;
+    }
+
+    /// Closes the card (the field keeps its text unless the caller clears it).
+    pub(crate) fn clear_card(&mut self, cx: &mut Context<Self>) {
+        self.release(cx);
+        self.skipped.clear();
+        self.formats = None;
+        cx.notify();
+    }
+
+    /// The card for the current links and probe results.
+    pub(crate) fn card(&self, cx: &App) -> Card {
+        let probes = self.app.probes.read(cx);
+        match self.urls.as_slice() {
+            [] if self.skipped.is_empty() => Card::None,
+            [] => Card::NotLink,
+            [url] => match probes.get(url) {
+                None | Some(ProbeState::Loading) => Card::Probing,
+                Some(ProbeState::Failed(error)) => Card::Failed(error.clone()),
+                Some(ProbeState::Ready(p)) if p.is_playlist() => Card::Playlist(p.clone()),
+                Some(ProbeState::Ready(p)) => Card::Result(p.clone()),
+            },
+            _ => Card::Batch,
+        }
+    }
+
+    fn probes_changed(&mut self, cx: &mut Context<Self>) {
+        if self.enter_waits && matches!(self.card(cx), Card::Result(_)) {
+            self.enter_waits = false;
+            self.download(cx);
+        }
+        cx.notify();
+    }
+
+    /// Enter in the field and the Download button.
+    pub(crate) fn submit(&mut self, cx: &mut Context<Self>) {
+        match self.card(cx) {
+            Card::None | Card::NotLink => self.begin(cx),
+            Card::Probing => self.enter_waits = true,
+            Card::Failed(_) => {
+                // read the page again
+                let urls = self.urls.clone();
+                self.fill(&urls, cx);
+            }
+            Card::Result(_) | Card::Batch | Card::Playlist(_) => self.download(cx),
+        }
+    }
+
+    /// Whether `url` is already a row.
+    pub(crate) fn have(&self, url: &str, cx: &App) -> bool {
+        self.app
+            .downloads
+            .read(cx)
+            .rows()
+            .iter()
+            .any(|r| r.url == url)
+    }
+
+    /// Adds what the card shows with the chosen preset.
+    pub(crate) fn download(&mut self, cx: &mut Context<Self>) {
+        let preset = self.preset;
+        let added = match self.card(cx) {
+            Card::Result(p) => {
+                self.enqueue(&p.url, preset, "", None, Some(&p), cx);
+                1
+            }
+            Card::Batch => {
+                let ready: Vec<Arc<ProbeResult>> = self
+                    .urls
+                    .iter()
+                    .filter(|url| !self.have(url, cx))
+                    .filter_map(|url| match self.app.probes.read(cx).get(url) {
+                        Some(ProbeState::Ready(p)) if !p.is_playlist() => Some(p.clone()),
+                        _ => None,
+                    })
+                    .collect();
+                for p in &ready {
+                    self.enqueue(&p.url, preset, "", None, Some(p), cx);
+                }
+                ready.len()
+            }
+            Card::Playlist(p) => {
+                let page = p.webpage_url.clone().unwrap_or_else(|| p.url.clone());
+                let entries = p.entries.clone().unwrap_or_default();
+                let mut count = 0;
+                let off = self.playlist_off.clone();
+                for entry in entries.iter().filter(|e| !off.contains(&e.index)) {
+                    let stub = ProbeResult {
+                        url: entry.url.clone(),
+                        webpage_url: Some(entry.url.clone()),
+                        id: entry.id.clone(),
+                        title: entry.title.clone(),
+                        duration_s: entry.duration_s,
+                        thumbnail_url: entry.thumbnail_url.clone(),
+                        ..Default::default()
+                    };
+                    self.enqueue(&page, preset, "", Some(entry.index), Some(&stub), cx);
+                    count += 1;
+                }
+                count
+            }
+            _ => 0,
+        };
+        if added == 0 {
+            return;
+        }
+        if preset != Preset::Custom {
+            self.app.settings.update(cx, |s, cx| {
+                s.update(|s| s.last_preset = preset.to_string(), cx)
+            });
+        }
+        toast(
+            cx,
+            Kind::Success,
+            match added {
+                1 => t!("dl-toast-added-one"),
+                n => t!("dl-toast-added-many", count = n),
+            },
+            None,
+        );
+        self.intake.update(cx, |input, cx| input.set_text("", cx));
+        self.last_text.clear();
+        self.clear_card(cx);
+    }
+
+    /// Adds one download; `format_spec` is for the Custom preset.
+    pub(crate) fn enqueue(
+        &mut self,
+        url: &str,
+        preset: Preset,
+        format_spec: &str,
+        playlist_index: Option<u32>,
+        probe: Option<&ProbeResult>,
+        cx: &mut Context<Self>,
+    ) {
+        let spec = self
+            .app
+            .job_spec(url, preset, format_spec, playlist_index, cx);
+        let label = match preset {
+            Preset::Custom => self.formats_label(probe, format_spec),
+            other => format::preset_label(other),
+        };
+        let task = self
+            .app
+            .downloads
+            .update(cx, |d, cx| d.enqueue(spec, probe, Some(label), cx));
+        task.detach_and_log_err(cx);
+    }
+
+    // ---- row actions ---------------------------------------------------------------------
+
+    pub(crate) fn summary(&self, id: DownloadId, cx: &App) -> Option<DownloadSummary> {
+        self.app.downloads.read(cx).get(id).cloned()
+    }
+
+    pub(crate) fn pause(&mut self, id: DownloadId, cx: &mut Context<Self>) {
+        self.app.downloads.update(cx, |d, cx| d.pause(id, cx));
+    }
+
+    pub(crate) fn resume(&mut self, id: DownloadId, cx: &mut Context<Self>) {
+        self.app.downloads.update(cx, |d, cx| d.resume(id, cx));
+    }
+
+    pub(crate) fn cancel(&mut self, id: DownloadId, cx: &mut Context<Self>) {
+        self.app.downloads.update(cx, |d, cx| d.cancel(id, cx));
+    }
+
+    pub(crate) fn retry(&mut self, id: DownloadId, cx: &mut Context<Self>) {
+        self.app.downloads.update(cx, |d, cx| d.retry(id, cx));
+    }
+
+    /// Space on a row: pause what runs, resume what is paused.
+    fn toggle_pause(&mut self, cx: &mut Context<Self>) {
+        let Some(id) = self.selected else { return };
+        match self.summary(id, cx).map(|s| s.status) {
+            Some(DownloadStatus::Paused) => self.resume(id, cx),
+            Some(s) if !s.is_terminal() => self.pause(id, cx),
+            _ => {}
+        }
+    }
+
+    pub(crate) fn show_folder(&self, id: DownloadId, cx: &App) {
+        match self.summary(id, cx).and_then(|s| s.file_path) {
+            Some(path) => os::show_in_folder(Path::new(&path)),
+            None => os::show_in_folder(Path::new(&self.app.settings.read(cx).get().output_dir)),
+        }
+    }
+
+    pub(crate) fn open_file(&self, id: DownloadId, cx: &App) {
+        if let Some(path) = self.summary(id, cx).and_then(|s| s.file_path) {
+            os::open_path(Path::new(&path));
+        }
+    }
+
+    pub(crate) fn copy_title(&self, id: DownloadId, cx: &mut App) {
+        if let Some(title) = self.summary(id, cx).and_then(|s| s.title) {
+            cx.write_to_clipboard(ClipboardItem::new_string(title));
+        }
+    }
+
+    pub(crate) fn copy_link(&self, id: DownloadId, cx: &mut App) {
+        if let Some(s) = self.summary(id, cx) {
+            cx.write_to_clipboard(ClipboardItem::new_string(s.url));
+        }
+    }
+
+    /// Hides the entry and removes it for good when the undo toast runs out.
+    pub(crate) fn delete_entry(&mut self, id: DownloadId, cx: &mut Context<Self>) {
+        match self.summary(id, cx) {
+            Some(s) if !s.status.is_active() => {}
+            _ => return,
+        }
+        self.hidden.insert(id);
+        if self.selected == Some(id) {
+            self.selected = None;
+        }
+        let undo = cx.entity();
+        toast(
+            cx,
+            Kind::Info,
+            t!("dl-toast-deleted"),
+            Some((
+                t!("dl-undo"),
+                Rc::new(move |cx: &mut App| {
+                    undo.update(cx, |this, cx| {
+                        this.hidden.remove(&id);
+                        cx.notify();
+                    })
+                }),
+            )),
+        );
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(UNDO).await;
+            this.update(cx, |this, cx| {
+                if this.hidden.remove(&id) {
+                    this.app.downloads.update(cx, |d, cx| d.delete(id, cx));
+                }
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Asks before the file goes.
+    pub(crate) fn ask_delete_file(&mut self, id: DownloadId, cx: &mut Context<Self>) {
+        if self.summary(id, cx).is_some_and(|s| s.file_path.is_some()) {
+            self.confirm = Some(id);
+            cx.notify();
+        }
+    }
+
+    /// Deletes the file, then the entry.
+    pub(crate) fn delete_file(&mut self, id: DownloadId, cx: &mut Context<Self>) {
+        self.confirm = None;
+        let Some(summary) = self.summary(id, cx) else {
+            return;
+        };
+        if let Some(path) = &summary.file_path {
+            match std::fs::remove_file(path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    log::warn!("downloads: cannot delete {path}: {error}");
+                    toast(cx, Kind::Error, t!("dl-toast-delete-failed"), None);
+                    cx.notify();
+                    return;
+                }
+            }
+        }
+        if self.selected == Some(id) {
+            self.selected = None;
+        }
+        self.app.downloads.update(cx, |d, cx| d.delete(id, cx));
+        cx.notify();
+    }
+
+    /// Closes the detail panel.
+    pub(crate) fn deselect(&mut self, cx: &mut Context<Self>) {
+        self.selected = None;
+        cx.notify();
+    }
+
+    /// Down and Up move the selection through the list.
+    fn step(&mut self, by: isize, cx: &mut Context<Self>) {
+        if self.order.is_empty() {
+            return;
+        }
+        let at = self
+            .selected
+            .and_then(|id| self.order.iter().position(|x| *x == id));
+        let next = match at {
+            None => 0,
+            Some(i) => i.saturating_add_signed(by).min(self.order.len() - 1),
+        };
+        self.selected = Some(self.order[next]);
+        self.scroll.scroll_to_item(next, ScrollStrategy::Nearest);
+        cx.notify();
+    }
+
+    fn delete_selected(&mut self, with_file: bool, cx: &mut Context<Self>) {
+        let Some(id) = self.selected else { return };
+        match with_file {
+            true => self.ask_delete_file(id, cx),
+            false => self.delete_entry(id, cx),
+        }
+    }
+
+    /// Runs a keyboard action the Workspace forwards.
+    pub(crate) fn key(&mut self, key: Key, window: &mut Window, cx: &mut Context<Self>) {
+        match key {
+            Key::Next => self.step(1, cx),
+            Key::Previous => self.step(-1, cx),
+            Key::TogglePause => self.toggle_pause(cx),
+            Key::DeleteEntry => self.delete_selected(false, cx),
+            Key::DeleteFile => self.delete_selected(true, cx),
+            Key::Deselect => self.deselect(cx),
+            Key::Paste => {
+                if let Some(text) = cx.read_from_clipboard().and_then(|i| i.text()) {
+                    self.intake
+                        .update(cx, |input, cx| input.set_text(ui::single_line(&text), cx));
+                }
+                self.intake.update(cx, |input, cx| input.focus(window, cx));
+            }
+            Key::FocusIntake => self.intake.update(cx, |input, cx| input.focus(window, cx)),
+            Key::FocusSearch => self.search.update(cx, |input, cx| input.focus(window, cx)),
+        }
+    }
+
+    fn download_event(
+        &mut self,
+        _: &Entity<state::Downloads>,
+        event: &DownloadsEvent,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let name = |this: &Self, id, cx: &App| {
+            this.summary(id, cx)
+                .map(|s| s.title.unwrap_or(s.url))
+                .unwrap_or_default()
+        };
+        match event {
+            DownloadsEvent::Completed(id) => {
+                let id = *id;
+                let title = name(self, id, cx);
+                let this = cx.entity();
+                toast(
+                    cx,
+                    Kind::Success,
+                    t!("dl-toast-done", title = title.as_str()),
+                    Some((
+                        t!("dl-show-folder"),
+                        Rc::new(move |cx: &mut App| {
+                            this.update(cx, |this, cx| this.show_folder(id, cx))
+                        }),
+                    )),
+                );
+            }
+            DownloadsEvent::Failed(id, error) => {
+                let title = name(self, *id, cx);
+                toast(
+                    cx,
+                    Kind::Error,
+                    t!(
+                        "dl-toast-failed",
+                        title = title.as_str(),
+                        reason = error_text(error.code).to_string()
+                    ),
+                    None,
+                );
+            }
+            DownloadsEvent::Loaded => {}
+        }
+    }
+
+    // ---- list ----------------------------------------------------------------------------
+
+    /// The lines of the list: the "In progress" group on top, the history below, both filtered.
+    fn lines(&mut self, cx: &App) -> Vec<Line> {
+        let filter = Filter::parse(self.search.read(cx).text());
+        let rows = self.app.downloads.read(cx).rows();
+        let mut progress = Vec::new();
+        let mut history = Vec::new();
+        for (at, row) in rows.iter().enumerate() {
+            if self.hidden.contains(&row.id)
+                || !self.chip.matches(row.status)
+                || !filter.matches(row)
+            {
+                continue;
+            }
+            match row.status.is_terminal() {
+                false => progress.push(at),
+                true => history.push(at),
+            }
+        }
+        // the queue reads oldest first
+        progress.reverse();
+        // what runs first, then the waiting and paused
+        progress.sort_by_key(|at| !rows[*at].status.is_active());
+        let mut lines = Vec::with_capacity(progress.len() + history.len() + 2);
+        if !progress.is_empty() {
+            lines.push(Line::Header("dl-group-progress", progress.len()));
+            lines.extend(progress.into_iter().map(Line::Row));
+        }
+        if !history.is_empty() {
+            lines.push(Line::Header("dl-group-history", history.len()));
+            lines.extend(history.into_iter().map(Line::Row));
+        }
+        self.order = lines
+            .iter()
+            .filter_map(|line| match line {
+                Line::Row(at) => rows.get(*at).map(|r| r.id),
+                Line::Header(..) => None,
+            })
+            .collect();
+        lines
+    }
+
+    fn chips(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = *cx.theme();
+        let chips = [
+            (StatusChip::All, "dl-chip-all"),
+            (StatusChip::Active, "dl-chip-active"),
+            (StatusChip::Done, "dl-chip-done"),
+            (StatusChip::Failed, "dl-chip-failed"),
+        ];
+        let text = self.search.read(cx).text().to_owned();
+        let tokens = text
+            .split_whitespace()
+            .filter(|word| {
+                ["type:", "status:", "size:", "site:"]
+                    .iter()
+                    .any(|k| word.starts_with(k))
+            })
+            .map(|word| {
+                let valid = !matches!(Filter::parse(word).terms.first(), Some(Term::Invalid(_)));
+                (SharedString::from(word.to_owned()), valid)
+            })
+            .collect();
+        let downloads = self.app.downloads.read(cx);
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .h(px(36.))
+            .text_size(theme.text(Text::Label))
+            .child(div().flex().gap_2().children(chips.map(|(chip, key)| {
+                Chip::new(key, i18n::lookup(key, None))
+                    .count(downloads.count(|s| chip.matches(s)))
+                    .selected(self.chip == chip)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.chip = chip;
+                        cx.notify();
+                    }))
+            })))
+            .child(TokenInput::new(&self.search, tokens))
+            .into_any_element()
+    }
+
+    /// The banner for tools that went missing after the first run.
+    fn tools_banner(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let theme = *cx.theme();
+        let tools = self.app.tools.read(cx);
+        if !tools.detected() || tools.all_ready() {
+            return None;
+        }
+        let missing: Vec<SharedString> = tools
+            .all()
+            .iter()
+            .filter(|s| s.state != ToolState::Ready)
+            .map(|s| crate::welcome::tool_name(s.kind))
+            .collect();
+        let busy = tools
+            .all()
+            .iter()
+            .find(|s| matches!(s.state, ToolState::Downloading { .. }));
+        let message = match busy {
+            Some(tool) => {
+                let percent = match tool.state {
+                    ToolState::Downloading {
+                        done,
+                        total: Some(total),
+                    } => (done as f64 / total.max(1) as f64 * 100.) as u32,
+                    _ => 0,
+                };
+                t!(
+                    "dl-notice-tools-busy",
+                    tool = crate::welcome::tool_name(tool.kind).to_string(),
+                    percent = percent
+                )
+            }
+            None => t!("dl-notice-tools", tools = missing.join(", ")),
+        };
+        let failed = tools
+            .all()
+            .iter()
+            .any(|s| matches!(s.state, ToolState::Failed(_)));
+        let busy = busy.is_some();
+        let tools_entity = self.app.tools.clone();
+        Some(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_3()
+                .px_3()
+                .py_2()
+                .rounded(theme.radius)
+                .border_1()
+                .border_color(if failed { theme.danger } else { theme.border })
+                .bg(theme.secondary)
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .child(div().child(t!("dl-notice-tools-title")))
+                        .child(div().text_color(theme.muted_foreground).child(message)),
+                )
+                .child(
+                    Button::new("tools-fix")
+                        .primary()
+                        .small()
+                        .disabled(busy)
+                        .label(t!("dl-notice-tools-action"))
+                        .on_click(move |_, _, cx| {
+                            tools_entity.update(cx, |t, cx| t.ensure_missing(cx))
+                        }),
+                )
+                .into_any_element(),
+        )
+    }
+
+    fn status_bar(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = *cx.theme();
+        if self.free_at.is_none_or(|at| at.elapsed() > FREE_EVERY) {
+            let dir = self.app.settings.read(cx).get().output_dir.clone();
+            self.free = os::free_space(Path::new(&dir));
+            self.free_at = Some(Instant::now());
+        }
+        let downloads = self.app.downloads.read(cx);
+        let running = downloads.count(|s| s.is_active());
+        let paused = downloads.count(|s| s == DownloadStatus::Paused);
+        let queued = downloads.count(|s| s == DownloadStatus::Queued);
+        div()
+            .flex()
+            .flex_none()
+            .justify_between()
+            .items_center()
+            .h(px(28.))
+            .px(theme.metrics.pad)
+            .border_t_1()
+            .border_color(theme.border)
+            .text_size(theme.text(Text::Small))
+            .text_color(theme.muted_foreground)
+            .child(match queued {
+                0 => t!("dl-status-bar", running = running, paused = paused),
+                q => t!(
+                    "dl-status-bar-queued",
+                    running = running,
+                    paused = paused,
+                    queued = q
+                ),
+            })
+            .children(self.free.as_ref().map(|(free, drive)| {
+                let size = format::bytes(*free as i64);
+                t!(
+                    "dl-free-space",
+                    size = size.as_str(),
+                    drive = drive.as_str()
+                )
+            }))
+            .into_any_element()
+    }
+
+    fn intake_strip(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = *cx.theme();
         div()
             .flex()
@@ -172,508 +850,30 @@ impl Downloads {
                     .on_click(cx.listener(|this, _, _, cx| this.submit(cx))),
             )
             .text_size(theme.text(Text::Body))
-    }
-
-    fn preset_chip(&self, preset: Preset, label: SharedString, cx: &mut Context<Self>) -> Chip {
-        Chip::new(SharedString::from(format!("preset-{preset}")), label)
-            .selected(self.preset == preset)
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.preset = preset;
-                cx.notify();
-            }))
-    }
-
-    fn card_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let theme = *cx.theme();
-        let shell = || {
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .p_3()
-                .rounded(theme.radius)
-                .border_1()
-                .border_color(theme.border)
-                .bg(theme.secondary)
-        };
-        let muted = theme.muted_foreground;
-        let probe: &ProbeResult = &self.data.probe;
-        Some(match self.card {
-            Card::None => return None,
-            Card::Probing => shell()
-                .child(
-                    div()
-                        .flex()
-                        .gap_3()
-                        .child(Skeleton::new().w(px(320.)).h(px(180.)))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_2()
-                                .child(Skeleton::new().w(px(260.)).h(px(18.)))
-                                .child(Skeleton::new().w(px(140.)).h(px(12.)))
-                                .child(div().text_color(muted).child(t!("dl-probing"))),
-                        ),
-                )
-                .into_any_element(),
-            Card::Failed(key) => shell()
-                .flex_row()
-                .items_center()
-                .justify_between()
-                .child(
-                    Notice::new(t!("dl-probing"), i18n::lookup(key, None))
-                        .failed()
-                        .spoken("probe-failed"),
-                )
-                .child(
-                    Button::new("open-settings")
-                        .outline()
-                        .label(t!("dl-open-settings")),
-                )
-                .into_any_element(),
-            Card::Result => {
-                let video = [
-                    VideoQuality::Best,
-                    VideoQuality::P2160,
-                    VideoQuality::P1440,
-                    VideoQuality::P1080,
-                    VideoQuality::P720,
-                    VideoQuality::P480,
-                ];
-                let audio = [
-                    AudioFormat::Best,
-                    AudioFormat::Mp3,
-                    AudioFormat::M4a,
-                    AudioFormat::Opus,
-                ];
-                let name = |text: &str| -> AnyElement {
-                    div()
-                        .w(px(48.))
-                        .text_color(muted)
-                        .child(text.to_owned())
-                        .into_any_element()
-                };
-                shell()
-                    .child(
-                        div()
-                            .flex()
-                            .gap_3()
-                            .child(Thumbnail::new(None, px(320.)))
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .flex_1()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_size(theme.text(Text::Large))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .child(probe.title.clone().unwrap_or_default()),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .justify_between()
-                                            .text_color(muted)
-                                            .child(probe.uploader.clone().unwrap_or_default())
-                                            .child(div().font_features(tabular()).child(
-                                                format::duration(probe.duration_s.unwrap_or(0.)),
-                                            )),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap_2()
-                                            .mt_2()
-                                            .child(name(&t!("dl-card-video")))
-                                            .children(video.map(|q| {
-                                                let label = match q {
-                                                    VideoQuality::Best => t!("dl-preset-best"),
-                                                    q => SharedString::from(q.as_str()),
-                                                };
-                                                self.preset_chip(Preset::Video(q), label, cx)
-                                            })),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap_2()
-                                            .child(name(&t!("dl-card-audio")))
-                                            .children(audio.map(|a| {
-                                                let label = match a {
-                                                    AudioFormat::Best => t!("dl-preset-best"),
-                                                    a => SharedString::from(a.as_str()),
-                                                };
-                                                self.preset_chip(Preset::Audio(a), label, cx)
-                                            }))
-                                            .child(div().flex_1())
-                                            .child(
-                                                Button::new("choose-formats")
-                                                    .ghost()
-                                                    .label(t!("dl-choose-formats"))
-                                                    .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.formats_open = true;
-                                                        cx.notify();
-                                                    })),
-                                            )
-                                            .child(
-                                                Button::new("card-cancel")
-                                                    .ghost()
-                                                    .label(t!("dl-cancel"))
-                                                    .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.card = Card::None;
-                                                        cx.notify();
-                                                    })),
-                                            ),
-                                    ),
-                            ),
-                    )
-                    .into_any_element()
-            }
-            Card::Batch => {
-                let line = |url: &str, note: SharedString, dim: bool| {
-                    div()
-                        .flex()
-                        .gap_3()
-                        .h(px(32.))
-                        .items_center()
-                        .child(
-                            div()
-                                .w(px(120.))
-                                .font_family(MONO)
-                                .text_size(theme.text(Text::Small))
-                                .child(url.to_owned()),
-                        )
-                        .child(
-                            div()
-                                .text_color(if dim { muted } else { theme.foreground })
-                                .child(note),
-                        )
-                };
-                shell()
-                    .child(
-                        div()
-                            .flex()
-                            .justify_between()
-                            .items_center()
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(t!("dl-batch-title", count = 4)),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap_2()
-                                    .items_center()
-                                    .child(div().text_color(muted).child(t!("dl-batch-preset")))
-                                    .child(self.preset_chip(
-                                        Preset::Video(VideoQuality::P1080),
-                                        "1080".into(),
-                                        cx,
-                                    ))
-                                    .child(
-                                        Button::new("batch-download")
-                                            .primary()
-                                            .label(t!("dl-download-count", count = 3)),
-                                    ),
-                            ),
-                    )
-                    .child(line("youtu.be/aaaaaaaaaaa", "Intro to sets".into(), false))
-                    .child(line("youtu.be/bbbbbbbbbbb", t!("dl-probing"), true))
-                    .child(line("example.com/x", t!("dl-already"), true))
-                    .child(line("not a link", t!("dl-batch-skipped"), true))
-                    .into_any_element()
-            }
-            Card::Playlist => {
-                let entries = self.data.playlist.entries.clone().unwrap_or_default();
-                shell()
-                    .child(
-                        div()
-                            .flex()
-                            .justify_between()
-                            .items_center()
-                            .child(div().font_weight(FontWeight::MEDIUM).child(t!(
-                                "dl-playlist-title",
-                                count = 48,
-                                title = "Lecture series 2024"
-                            )))
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap_2()
-                                    .child(
-                                        Button::new("sel-all").ghost().label(t!("dl-select-all")),
-                                    )
-                                    .child(
-                                        Button::new("sel-none").ghost().label(t!("dl-select-none")),
-                                    ),
-                            ),
-                    )
-                    .children(entries.into_iter().map(|entry| {
-                        let have = entry.index == 3;
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .h(px(32.))
-                            .child(
-                                div()
-                                    .w(px(14.))
-                                    .h(px(14.))
-                                    .rounded(theme.radius)
-                                    .border_1()
-                                    .border_color(theme.border)
-                                    .when(!have, |this| this.bg(theme.table_active_border)),
-                            )
-                            .child(
-                                div()
-                                    .w(px(36.))
-                                    .font_family(MONO)
-                                    .text_color(muted)
-                                    .child(format!("{:03}", entry.index)),
-                            )
-                            .child(div().flex_1().child(entry.title.unwrap_or_default()))
-                            .child(
-                                div()
-                                    .font_features(tabular())
-                                    .child(format::duration(entry.duration_s.unwrap_or(0.))),
-                            )
-                            .when(have, |this| {
-                                this.child(div().text_color(muted).child(t!("dl-already")))
-                            })
-                    }))
-                    .child(
-                        div()
-                            .flex()
-                            .justify_between()
-                            .items_center()
-                            .child(div().text_color(muted).child(t!(
-                                "dl-playlist-apply",
-                                preset = "1080",
-                                count = 47
-                            )))
-                            .child(
-                                Button::new("playlist-download")
-                                    .primary()
-                                    .label(t!("dl-download-count", count = 47)),
-                            ),
-                    )
-                    .into_any_element()
-            }
-        })
-    }
-
-    fn chips(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = *cx.theme();
-        let chips = [
-            (StatusChip::All, "dl-chip-all"),
-            (StatusChip::Active, "dl-chip-active"),
-            (StatusChip::Done, "dl-chip-done"),
-            (StatusChip::Failed, "dl-chip-failed"),
-        ];
-        let tokens = Filter::parse(self.search.read(cx).text())
-            .terms
-            .iter()
-            .filter_map(|term| match term {
-                Term::Invalid(text) => Some((SharedString::from(text.clone()), false)),
-                Term::Type(_) | Term::Status(_) | Term::Size(..) | Term::Site(_) => None,
-                Term::Text(_) => None,
-            })
-            .chain(
-                self.search
-                    .read(cx)
-                    .text()
-                    .split_whitespace()
-                    .filter(|word| {
-                        ["type:", "status:", "size:", "site:"]
-                            .iter()
-                            .any(|k| word.starts_with(k))
-                    })
-                    .filter(|word| {
-                        !matches!(Filter::parse(word).terms.first(), Some(Term::Invalid(_)))
-                    })
-                    .map(|word| (SharedString::from(word.to_owned()), true)),
-            )
-            .collect();
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .h(px(36.))
-            .text_size(theme.text(Text::Label))
-            .child(div().flex().gap_2().children(chips.map(|(chip, key)| {
-                Chip::new(key, i18n::lookup(key, None))
-                    .count(self.count(chip))
-                    .selected(self.chip == chip)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.chip = chip;
-                        cx.notify();
-                    }))
-            })))
-            .child(TokenInput::new(&self.search, tokens))
-    }
-
-    fn row(&self, row: &Row, cx: &mut Context<Self>) -> AnyElement {
-        let theme = *cx.theme();
-        let s = &row.summary;
-        let id = s.id;
-        let selected = self.selected == Some(id);
-        let (status, tone) = status_text(row, &theme);
-        let rule = match s.status {
-            DownloadStatus::Downloading | DownloadStatus::Processing => {
-                Rule::Fill(s.progress as f32)
-            }
-            DownloadStatus::Completed => Rule::Solid,
-            DownloadStatus::Failed => Rule::Failed,
-            _ => Rule::Dotted,
-        };
-        let failed = s.status == DownloadStatus::Failed;
-        let active = matches!(
-            s.status,
-            DownloadStatus::Downloading | DownloadStatus::Processing
-        );
-        let size = s
-            .file_size
-            .or(s.bytes_total)
-            .map(format::bytes)
-            .unwrap_or_else(|| "-".into());
-        let third = match (row.speed, s.status) {
-            (Some(speed), _) => format!(
-                "{}  {}",
-                format::speed(speed),
-                format::duration(row.eta.unwrap_or(0.))
-            ),
-            (None, DownloadStatus::Completed) => "Yesterday".to_owned(),
-            _ => String::new(),
-        };
-        let second: SharedString = match (failed, &s.error_code) {
-            (true, Some(code)) => i18n::lookup(err_key(code), None),
-            _ => SharedString::from(s.domain.clone()),
-        };
-        div()
-            .id(("row", id.0 as usize))
-            .flex()
-            .flex_col()
-            .flex_none()
-            .h(px(54.))
-            .w_full()
-            .cursor_pointer()
-            .when(selected, |this| this.bg(theme.table_active))
-            .hover(|style| style.bg(theme.table_hover))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.selected = Some(id);
-                cx.notify();
-            }))
-            .child(
-                div()
-                    .flex()
-                    .flex_1()
-                    .items_center()
-                    .gap_3()
-                    .px(theme.metrics.pad)
-                    .child(CallNumber::new(id.0).selected(selected))
-                    .child(Thumbnail::new(None, px(80.)))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_size(theme.text(Text::Heading))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(s.title.clone().unwrap_or_else(|| s.url.clone())),
-                            )
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_size(theme.text(Text::Small))
-                                    .text_color(if failed {
-                                        theme.danger
-                                    } else {
-                                        theme.muted_foreground
-                                    })
-                                    .child(second),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .w(px(64.))
-                            .text_color(theme.muted_foreground)
-                            .child(s.format_label.clone().unwrap_or_else(|| "-".into())),
-                    )
-                    .child(div().w(px(72.)).font_features(tabular()).child(size))
-                    .child(
-                        div()
-                            .w(px(96.))
-                            .font_features(tabular())
-                            .text_color(theme.muted_foreground)
-                            .child(third),
-                    )
-                    .child(
-                        div()
-                            .w(px(180.))
-                            .flex()
-                            .justify_end()
-                            .gap_2()
-                            .text_color(tone)
-                            .child(status)
-                            .when(active, |this| {
-                                this.child(
-                                    div()
-                                        .w(px(40.))
-                                        .text_right()
-                                        .font_features(tabular())
-                                        .child(format!("{:.0}%", s.progress * 100.)),
-                                )
-                            })
-                            .when(failed, |this| {
-                                this.child(
-                                    Button::new(("retry", id.0 as usize))
-                                        .small()
-                                        .outline()
-                                        .label(t!("dl-try-again")),
-                                )
-                            }),
-                    ),
-            )
-            .child(ProgressRule::new(rule))
             .into_any_element()
     }
 }
 
-/// The status words of a row and the colour they take.
-fn status_text(row: &Row, theme: &ui::Theme) -> (SharedString, Hsla) {
-    let s = &row.summary;
-    let pencil = theme.muted_foreground;
-    match s.status {
-        DownloadStatus::Queued => (t!("dl-status-queued"), pencil),
-        DownloadStatus::Probing => (t!("dl-status-probing"), pencil),
-        DownloadStatus::Downloading => (t!("dl-status-downloading"), theme.progress_bar),
-        DownloadStatus::Processing => match s.kind {
-            MediaKind::Audio => (
-                t!("dl-status-converting", format = "mp3"),
-                theme.progress_bar,
-            ),
-            MediaKind::Video => (t!("dl-status-merging"), theme.progress_bar),
-        },
-        DownloadStatus::Paused => (t!("dl-status-paused"), pencil),
-        DownloadStatus::Completed if s.file_missing => (t!("dl-file-missing"), theme.danger),
-        DownloadStatus::Completed => (t!("dl-status-done"), pencil),
-        DownloadStatus::Failed => (t!("dl-status-failed"), theme.danger),
-        DownloadStatus::Cancelled => (t!("dl-status-cancelled"), pencil),
+/// The words for an error code: the shared `err-*` copy, else the short one of this page.
+pub fn error_text(code: ErrorCode) -> SharedString {
+    let key = code.message_key();
+    let text = i18n::translate(&key);
+    if text.as_ref() == key {
+        return i18n::lookup(short_key(code.as_str()), None);
+    }
+    text
+}
+
+/// The same for a code read from a stored row.
+pub fn error_text_of(code: &str) -> SharedString {
+    match ErrorCode::from_str(code) {
+        Ok(code) => error_text(code),
+        Err(_) => i18n::lookup("dl-err-unknown", None),
     }
 }
 
-/// The Fluent key of an error code's one-line cause.
-pub fn err_key(code: &str) -> &'static str {
+/// The Fluent key of a code's short cause, used until `err-*` ships.
+fn short_key(code: &str) -> &'static str {
     match code {
         "login" | "age_restricted" | "cookies_locked" => "dl-err-login",
         "private" => "dl-err-private",
@@ -689,21 +889,15 @@ pub fn err_key(code: &str) -> &'static str {
 impl Render for Downloads {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = *cx.theme();
-        let rows = Rc::new(self.rows(cx));
+        let (loaded, total) = {
+            let d = self.app.downloads.read(cx);
+            (d.loaded(), d.rows().len())
+        };
+        let lines = Rc::new(self.lines(cx));
         let filter_text = self.search.read(cx).text().to_owned();
-        let running = self
-            .data
-            .rows
-            .iter()
-            .filter(|r| r.summary.status == DownloadStatus::Downloading)
-            .count();
-        let paused = self
-            .data
-            .rows
-            .iter()
-            .filter(|r| r.summary.status == DownloadStatus::Paused)
-            .count();
-        let list = match (rows.is_empty(), self.empty) {
+        let thumbs = self.app.settings.read(cx).get().show_thumbnails;
+        let list = match (lines.is_empty(), total == 0) {
+            (true, _) if !loaded => div().into_any_element(),
             (true, true) => Vacancy::new(t!("dl-empty"))
                 .icon("icons/download.svg")
                 .detail(t!("dl-empty-detail"))
@@ -726,12 +920,14 @@ impl Render for Downloads {
                 .size_full()
                 .into_any_element(),
             _ => {
-                let items = rows.clone();
+                let items = lines.clone();
                 uniform_list(
                     "downloads-rows",
-                    rows.len(),
+                    lines.len(),
                     cx.processor(move |this, range: Range<usize>, _, cx| {
-                        range.map(|at| this.row(&items[at], cx)).collect::<Vec<_>>()
+                        range
+                            .filter_map(|at| items.get(at).map(|line| this.line(*line, thumbs, cx)))
+                            .collect::<Vec<_>>()
                     }),
                 )
                 .track_scroll(&self.scroll)
@@ -739,63 +935,55 @@ impl Render for Downloads {
                 .into_any_element()
             }
         };
-        let selected = self
-            .selected
-            .and_then(|id| self.data.rows.iter().find(|r| r.summary.id == id).cloned());
+        let selected = self.selected.and_then(|id| self.summary(id, cx));
         let card = self.card_view(cx);
+        let banner = self.tools_banner(cx);
+        let menu = self.row_menu(cx);
+        let confirm = self.confirm_view(cx);
+        let status = self.status_bar(cx);
 
         div()
             .size_full()
             .flex()
+            .flex_col()
             .child(
                 div()
                     .flex()
-                    .flex_col()
                     .flex_1()
-                    .min_w_0()
-                    .gap_2()
-                    .p(theme.metrics.pad)
-                    .child(self.intake_strip(cx))
-                    .children(card)
-                    .child(self.chips(cx))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_h_0()
-                            .border_t_1()
-                            .border_color(theme.border)
-                            .child(list),
-                    )
+                    .min_h_0()
                     .child(
                         div()
                             .flex()
-                            .flex_none()
-                            .justify_between()
-                            .items_center()
-                            .h(px(28.))
-                            .text_size(theme.text(Text::Small))
-                            .text_color(theme.muted_foreground)
-                            .child(t!("dl-status-bar", running = running, paused = paused))
-                            .child(t!("dl-free-space", size = "412 GB", drive = "D:")),
-                    ),
+                            .flex_col()
+                            .flex_1()
+                            .min_w_0()
+                            .gap_2()
+                            .p(theme.metrics.pad)
+                            .child(
+                                div()
+                                    .key_context(FORM_CONTEXT)
+                                    .on_action(cx.listener(|this, _: &Submit, _, cx| {
+                                        this.submit(cx)
+                                    }))
+                                    .child(self.intake_strip(cx)),
+                            )
+                            .children(card)
+                            .children(banner)
+                            .child(self.chips(cx))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_h_0()
+                                    .border_t_1()
+                                    .border_color(theme.border)
+                                    .child(list),
+                            ),
+                    )
+                    .children(selected.map(|row| self.detail_panel(&row, cx))),
             )
-            .children(selected.map(|row| crate::detail::panel(&row, &self.data, cx)))
-            .when(self.formats_open, |this| {
-                this.child(crate::formats::modal(&self.data.probe, cx))
-            })
-    }
-}
-
-impl Downloads {
-    /// Closes the detail panel.
-    pub(crate) fn deselect(&mut self, cx: &mut Context<Self>) {
-        self.selected = None;
-        cx.notify();
-    }
-
-    /// Closes the formats modal.
-    pub(crate) fn close_formats(&mut self, cx: &mut Context<Self>) {
-        self.formats_open = false;
-        cx.notify();
+            .child(status)
+            .children(menu)
+            .children(confirm)
+            .children(self.formats_modal(cx))
     }
 }
