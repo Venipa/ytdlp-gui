@@ -4,5 +4,29 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[dependencies]
+clap.workspace = true
+interprocess.workspace = true
+log.workspace = true
+percent-encoding = "2"
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+widestring.workspace = true
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_Threading",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc.workspace = true
+
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+dirs.workspace = true
+
 [lints]
 workspace = true

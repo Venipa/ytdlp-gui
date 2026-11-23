@@ -62,7 +62,7 @@ Exit checklist (G0):
 | Lane B: fixture server example + fixtures + generator script (<= 300 KB committed) | open | `crates/engine/examples/fixture_server.rs`, `tests/fixtures/` |
 | Lane D: `tools` skeleton: `Tool` enum, detect, fetch matrix, streaming download with sha256, unpack with zip-slip guard, `YTDLPD_TOOLS_MIRROR` override | open | `crates/tools` |
 | Lane D: `cargo run -p tools --example ensure` works for ffmpeg, ffprobe, deno on Windows | open | `crates/tools/examples/ensure.rs` |
-| Lane D: hidden flags `--demo`, `--self-test`, `--frame-stats` (debug), `scripts/screenshot.ps1` | open | `crates/ytdlpd`, `scripts/screenshot.ps1` |
+| Lane D: hidden flags `--demo`, `--self-test`, `--frame-stats` (debug), `scripts/screenshot.ps1` | in progress | review: `--demo` pass-through, `--frame-stats`, `scripts/screenshot.ps1` (`--self-test` is Lane B) |
 
 Exit checklist (G1):
 - [ ] migration 0001 applies on `sqlite::memory:` and a temp file; `PRAGMA journal_mode=wal`, `foreign_keys=1`, all 6 tables, CHECKs reject bad status/kind
@@ -158,8 +158,8 @@ Exit checklist: 500-entry playlist fixture expands lazily, UI above 30 fps, memo
 | Item | Status | Ref |
 |---|---|---|
 | Single instance + CLI `ytdlpd add <url>` over the `cli` wire; second process exits < 2 s | open | `crates/cli` |
-| Deep link `ytdlpd://add?url=` (parser table: double-encoded, missing url, `javascript:` and `file:` rejected) | open | - |
-| Tray + minimise to tray, OS notifications (trait-faked in tests) | open | - |
+| Deep link `ytdlpd://add?url=` (parser table: double-encoded, missing url, `javascript:` and `file:` rejected) | in progress | review (lane D): `crates/cli/src/deeplink.rs`, `ytdlpd/src/platform/register.rs` |
+| Tray + minimise to tray, OS notifications (trait-faked in tests) | in progress | review (lane D): `crates/ytdlpd/src/platform/{tray,notify}.rs` |
 | Clipboard watch on window activation (never writes; prompt, auto-add opt-in) | open | - |
 | maple JSON themes beyond dark/light | open | - |
 | a11y tree tests for new components; prune music-only `ui` leaf modules (visualizer, waves, level_meter, response_graph, response_sketch, lattice, rail, brand) | open | - |
