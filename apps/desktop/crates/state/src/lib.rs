@@ -3,6 +3,7 @@
 
 mod downloads;
 pub mod fake;
+mod hooks;
 mod intake;
 mod logs;
 mod probes;
@@ -15,6 +16,7 @@ mod tools;
 
 pub use downloads::{Downloads, DownloadsEvent, Live};
 pub use fake::{FakeBackend, FakeTools, Scene};
+pub use hooks::{Hooks, PreviewFn, StoreCookiesFn};
 pub use intake::{Intake, IntakeEvent};
 pub use logs::{LogEntry, Logs};
 pub use probes::{ProbeState, Probes};
