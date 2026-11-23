@@ -47,7 +47,15 @@ pub fn start(root: PathBuf, port: u16) -> Server {
         for s in l.incoming().flatten() {
             let (root, lg, ck) = (root.clone(), lg.clone(), ck.clone());
             std::thread::spawn(move || {
+                let keep = s.try_clone();
                 let _ = handle(s, &root, &lg, &ck);
+                // graceful close: on Windows dropping a socket with unread input sends RST, and a slow
+                // (rate-limited) client then loses data it has not read yet (os error 10054)
+                if let Ok(mut s) = keep {
+                    let _ = s.shutdown(std::net::Shutdown::Write);
+                    let _ = s.set_read_timeout(Some(Duration::from_secs(30)));
+                    let _ = std::io::copy(&mut s, &mut std::io::sink());
+                }
             });
         }
     });
