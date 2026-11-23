@@ -14,7 +14,7 @@ Decisions are in `decisions.md` (D-nnn). Product in `product.md`, look in `desig
 ## Gates
 | Gate | After | Passes when | Status | Ref |
 |---|---|---|---|---|
-| G0 | Phase 0a | `bun run dev` opens a window with real fonts and tokens; fmt, clippy, tests green; git initialised; stubs for every crate exist | open | - |
+| G0 | Phase 0a | `bun run dev` opens a window with real fonts and tokens; fmt, clippy, tests green; git initialised; stubs for every crate exist | in progress | review: g0.png `F:	mpytdlpd-rsshotsg0.png` |
 | G1 | Phase 0b | `domain` frozen as tag `contract-1`; engine spike (Windows): fixture file downloaded through the embedded interpreter in a `--engine-worker` child with progress and kill-tree cancel, time-boxed to 3 working days; `tools` ensure works. Failure on any of link/load, hook stability, kill-tree cancel, or worker start from a GUI-subsystem exe means switching to the worker.py fallback (D-007) and recording it | open | - |
 | G2 | Phase 2 | Vertical slice on real backends: paste, probe, download, open file; history survives restart | open | - |
 | G3 | Phase 4 | All "must" features work end to end on Windows; this is the 1.0-must line | open | - |
@@ -26,18 +26,18 @@ No phase starts before the previous gate passes, except lane work explicitly mar
 ## Phase 0a: skeleton (lead plus Lane A, about 1 to 2 sessions, mechanical copy)
 | Item | Status | Ref |
 |---|---|---|
-| `git init`, `.gitignore` (runtime/, target/, node_modules), LICENSE GPL-3.0-or-later, root `package.json` (bun workspaces `apps/*`, `packages/*`; scripts dev/build/check/setup/dev:hot forward to `@ytdlpd/desktop`) | open | `package.json` |
-| `packages/gpui` = copy of maple `packages/gpui` (sonorahq fork @17c64ae, own workspace + toolchain) | open | `packages/gpui` |
-| `apps/desktop/Cargo.toml`: resolver 3, edition 2024, members `crates/*`, ALL workspace deps pre-declared (architecture.md section 2), lints and profiles copied from maple, `rust-toolchain.toml` 1.98.1 | open | `apps/desktop/Cargo.toml` |
-| Copy clean crates verbatim: `ui`, `embed`, `icons`, `i18n`; keep `common.ftl`/`menus.ftl` and the keys `ui` reads; fix `ui/examples/icons.rs` font path and `ui` brand/shader id text | open | `crates/{ui,embed,icons,i18n}` |
-| `router`: keep `navigation.rs`, `link.rs`; rewrite `Destination` (Welcome, Downloads, Logs, Settings(SettingsPage::{General, Downloads, Formats, Network, Tools, Appearance, About})), frozen at end of 0a | open | `crates/router` |
-| `input`: keep text-input parts, rename action namespace to `ytdlpd`, replace action list and `shortcuts.rs` tables with the keyboard map in design.md | open | `crates/input` |
-| Empty stub crates so every lane starts from one tree: `domain`, `storage`, `state`, `engine`, `tools`, `cli`, `views`, `ytdlpd` (bin, window, assets, Plex fonts, env_logger, no tray) | open | `crates/*` |
-| `ytdlpd` bin: `--data-dir`, `--window-size` flags (D-049); `fn build_app(cx) -> Backend` hook exposed for lane C | open | `crates/ytdlpd/src/main.rs` |
-| `views`: Workspace shell with title-bar nav and three empty pages using `Vacancy` | open | `crates/views` |
-| `.github/workflows/ci.yml` adapted from maple: ubuntu fmt + clippy + nextest, windows nextest (primary platform), macos clippy | open | `.github/workflows/ci.yml` |
-| `apps/desktop/CLAUDE.md` (maple rules adapted, dep direction, lanes, handoff rule, commands), root `README.md`, `CHANGELOG.md` | open | `apps/desktop/CLAUDE.md` |
-| docs/*.md committed (these files) | open | `docs/` |
+| `git init`, `.gitignore` (runtime/, target/, node_modules), LICENSE GPL-3.0-or-later, root `package.json` (bun workspaces `apps/*`, `packages/*`; scripts dev/build/check/setup/dev:hot forward to `@ytdlpd/desktop`) | in progress | `package.json`, review |
+| `packages/gpui` = copy of maple `packages/gpui` (sonorahq fork @17c64ae, own workspace + toolchain) | in progress | `packages/gpui`, review |
+| `apps/desktop/Cargo.toml`: resolver 3, edition 2024, members `crates/*`, ALL workspace deps pre-declared (architecture.md section 2), lints and profiles copied from maple, `rust-toolchain.toml` 1.98.1 | in progress | `apps/desktop/Cargo.toml`, review |
+| Copy clean crates verbatim: `ui`, `embed`, `icons`, `i18n`; keep `common.ftl`/`menus.ftl` and the keys `ui` reads; fix `ui/examples/icons.rs` font path and `ui` brand/shader id text | in progress | `crates/{ui,embed,icons,i18n}`, review |
+| `router`: keep `navigation.rs`, `link.rs`; rewrite `Destination` (Welcome, Downloads, Logs, Settings(SettingsPage::{General, Downloads, Formats, Network, Tools, Appearance, About})), frozen at end of 0a | in progress | `crates/router`, review |
+| `input`: keep text-input parts, rename action namespace to `ytdlpd`, replace action list and `shortcuts.rs` tables with the keyboard map in design.md | in progress | `crates/input`, review |
+| Empty stub crates so every lane starts from one tree: `domain`, `storage`, `state`, `engine`, `tools`, `cli`, `views`, `ytdlpd` (bin, window, assets, Plex fonts, env_logger, no tray) | in progress | `crates/*`, review |
+| `ytdlpd` bin: `--data-dir`, `--window-size` flags (D-049); `fn build_app(cx) -> Backend` hook exposed for lane C | in progress | `crates/ytdlpd/src/main.rs`, review |
+| `views`: Workspace shell with title-bar nav and three empty pages using `Vacancy` | in progress | `crates/views`, review |
+| `.github/workflows/ci.yml` adapted from maple: ubuntu fmt + clippy + nextest, windows nextest (primary platform), macos clippy | in progress | `.github/workflows/ci.yml`, review |
+| `apps/desktop/CLAUDE.md` (maple rules adapted, dep direction, lanes, handoff rule, commands), root `README.md`, `CHANGELOG.md` | in progress | `apps/desktop/CLAUDE.md`, review |
+| docs/*.md committed (these files) | in progress | `docs/` d0c5c50, review |
 
 Exit checklist (G0):
 - [ ] `bun run check` clean; `cargo fmt --all --check`; `cargo clippy --workspace --all-targets --locked -- -D warnings`; `cargo nextest run --workspace --locked`
