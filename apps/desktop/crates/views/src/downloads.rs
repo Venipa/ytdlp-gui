@@ -100,6 +100,8 @@ pub struct Downloads {
     last_text: String,
     /// The open Choose formats modal.
     pub(crate) formats: Option<Draft>,
+    /// The scroll of the video and the audio list of the formats modal.
+    pub(crate) format_scroll: [gpui::ScrollHandle; 2],
     /// Playlist entries the user switched off.
     pub(crate) playlist_off: HashSet<u32>,
     /// A right-click menu: where, and for which row.
@@ -188,6 +190,7 @@ impl Downloads {
             enter_waits: false,
             last_text: String::new(),
             formats: None,
+            format_scroll: Default::default(),
             playlist_off: HashSet::new(),
             menu: None,
             confirm: None,
