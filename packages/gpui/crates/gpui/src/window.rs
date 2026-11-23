@@ -4050,7 +4050,22 @@ impl Window {
             tooltip_element = self.prepaint_tooltip(cx);
         }
 
-        self.mouse_hit_test = self.next_frame.hit_test(self.mouse_position);
+        // ytdlpd: a pointer that left the window lights nothing. These platforms send no move
+        // from outside, so the last position inside would keep a stale hover until the pointer
+        // came back. The leave flag also drops between the client area and the caption buttons,
+        // so the live cursor decides; a drag (files from outside included) keeps its hit test.
+        let left = cfg!(any(
+            target_os = "windows",
+            target_os = "linux",
+            target_os = "freebsd"
+        )) && !self.hovered.get()
+            && cx.active_drag.is_none()
+            && !Bounds::new(Point::default(), self.viewport_size())
+                .contains(&self.platform_window.mouse_position());
+        self.mouse_hit_test = match left {
+            true => HitTest::default(),
+            false => self.next_frame.hit_test(self.mouse_position),
+        };
 
         // Now actually paint the elements.
         #[cfg(feature = "profiler")]
