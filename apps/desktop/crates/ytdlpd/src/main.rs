@@ -37,9 +37,9 @@ struct Args {
     /// Debug: open on a named screen state, such as `card`, `logs` or `settings-network`.
     #[arg(long, value_name = "NAME")]
     screen: Option<String>,
-    /// Theme: `dark` (default) or `light`.
-    #[arg(long, default_value = "dark")]
-    theme: String,
+    /// Theme override: `dark`, `light` or `system` (default: the saved setting).
+    #[arg(long)]
+    theme: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -91,6 +91,8 @@ fn build_app(data_dir: Option<PathBuf>, demo: Option<&str>, cx: &mut App) -> sta
         };
         std::sync::Arc::new(engine::EngineBackend::new(config)) as _
     });
+    #[cfg(feature = "real-engine")]
+    cx.set_global(engine_hooks());
     #[cfg(not(feature = "real-engine"))]
     let backend = None;
     let args = state::InitArgs {
@@ -127,7 +129,7 @@ fn main() -> ExitCode {
             i18n::set(i18n::resolve(i18n::AUTO));
             ui::motion::apply(Default::default(), Default::default(), cx);
             let look = Look {
-                kind: if args.theme == "light" {
+                kind: if args.theme.as_deref() == Some("light") {
                     ThemeKind::Light
                 } else {
                     ThemeKind::Dark
@@ -152,6 +154,7 @@ fn main() -> ExitCode {
             .detach();
 
             let state = build_app(args.data_dir.clone(), args.launch.demo.as_deref(), cx);
+            views::apply_stored(args.theme.as_deref(), cx);
             wire_platform(&state, cx);
             router::init(Destination::Downloads, cx);
             let size = args.window_size.map(|size| size.0).unwrap_or(FIRST_SIZE);
@@ -239,8 +242,7 @@ fn open_window(scene: Option<String>, first: Size<Pixels>, frame_stats: bool, cx
             ..Default::default()
         },
         |window, cx| {
-            use ui::ActiveTheme as _;
-            window.set_rem_size(cx.theme().font_size);
+            views::apply_window(window, cx);
             platform::attach_window(window, cx);
             if frame_stats {
                 platform::stats::start(window);
@@ -249,6 +251,31 @@ fn open_window(scene: Option<String>, first: Size<Pixels>, frame_stats: bool, cx
         },
     )
     .expect("cannot open the window");
+}
+
+/// The engine services views call directly: filename preview and private cookie storage.
+#[cfg(feature = "real-engine")]
+fn engine_hooks() -> state::Hooks {
+    use std::sync::Arc;
+    let preview: state::PreviewFn = Arc::new(|spec| {
+        engine::runtime::init(engine::runtime::InitOptions {
+            home: None,
+            site_updates: None,
+            sink: engine::runtime::log_sink,
+        })
+        .map_err(|e| e.to_string())?;
+        let info = serde_json::json!({
+            "id": "dQw4w9WgXcQ", "title": "Never Gonna Give You Up", "ext": "mp4",
+            "uploader": "Rick Astley", "upload_date": "20091025",
+        });
+        engine::preview_filename(spec, &engine::spec::Env::default(), &info).map_err(|e| e.message)
+    });
+    let store_cookies: state::StoreCookiesFn =
+        Arc::new(|dir, text| engine::cookies::store_text(dir, text).map_err(|e| format!("{e:#}")));
+    state::Hooks {
+        preview: Some(preview),
+        store_cookies: Some(store_cookies),
+    }
 }
 
 #[cfg(test)]

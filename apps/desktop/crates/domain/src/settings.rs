@@ -81,7 +81,11 @@ pub struct WindowState {
 pub struct Settings {
     pub theme: String,
     pub language: String,
+    /// `solid`, `translucent` or `blur`.
+    pub background: String,
     pub compact_mode: bool,
+    /// Whether download rows show a thumbnail (ledger rows) instead of the compact style.
+    pub show_thumbnails: bool,
     pub font_size: f32,
     pub output_dir: String,
     pub outtmpl: String,
@@ -117,8 +121,10 @@ impl Default for Settings {
         Self {
             theme: "dark".into(),
             language: "en-US".into(),
+            background: "solid".into(),
             compact_mode: false,
-            font_size: 13.0,
+            show_thumbnails: false,
+            font_size: 12.0,
             output_dir: dirs::video_dir()
                 .or_else(dirs::home_dir)
                 .unwrap_or_default()
@@ -244,7 +250,7 @@ mod tests {
         let l = Settings::load(&p, &s);
         assert_eq!(
             (l.settings.theme.as_str(), l.settings.font_size, l.error),
-            ("x", 13.0, None)
+            ("x", 12.0, None)
         );
         assert_eq!(Settings::load(&dir.join("missing.json"), &s).settings, d);
         std::fs::remove_dir_all(dir).ok();
