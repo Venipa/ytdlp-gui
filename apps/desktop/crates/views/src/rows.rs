@@ -169,7 +169,7 @@ impl Downloads {
             .when(cols.format, |this| {
                 this.child(caption("dl-col-format", 88., false))
             })
-            .child(caption("dl-col-size-head", 72., true))
+            .child(caption("dl-col-size", 72., true))
             .when(cols.speed, |this| {
                 this.child(match speed {
                     true => caption("dl-col-speed", 112., true),
@@ -255,8 +255,9 @@ impl Downloads {
         (size, third)
     }
 
-    /// The icon buttons that appear over a hovered row, for what its state allows.
-    fn row_actions(&self, s: &DownloadSummary, cx: &mut Context<Self>) -> AnyElement {
+    /// The icon buttons that appear over a hovered row, for what its state allows. They cover
+    /// the whole status cell, `cover` wide, so no part of the state words peeks out beside them.
+    fn row_actions(&self, s: &DownloadSummary, cover: f32, cx: &mut Context<Self>) -> AnyElement {
         let theme = *cx.theme();
         let id = s.id;
         let button = |key: &'static str,
@@ -322,6 +323,8 @@ impl Downloads {
             .bottom_0()
             .flex()
             .items_center()
+            .justify_end()
+            .min_w(px(cover))
             .gap(px(2.))
             .px(px(4.))
             .bg(theme.background.blend(match self.selected == Some(id) {
@@ -354,7 +357,7 @@ impl Downloads {
             DownloadStatus::Downloading | DownloadStatus::Processing
         );
         let title = s.title.clone().unwrap_or_else(|| s.url.clone());
-        let actions = self.row_actions(s, cx);
+        let actions = self.row_actions(s, cols.status + 4., cx);
         let thumb = s
             .thumbnail_path
             .clone()

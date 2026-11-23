@@ -49,6 +49,7 @@ set-tool-check = Check for update
 set-tool-redownload = Re-download
 set-tool-choose = Choose file
 set-long-paths = Windows long paths are off. Long file names may fail.
+set-long-paths-title = Long file names
 set-theme = Theme
 set-theme-system = System
 set-theme-dark = Dark
