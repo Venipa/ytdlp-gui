@@ -93,6 +93,9 @@ pub struct EngineError {
     pub code: ErrorCode,
     pub message: String,
     pub retryable: bool,
+    /// Seconds the server asked to wait (`Retry-After` of a 429).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retry_after: Option<u64>,
 }
 
 impl EngineError {
@@ -102,6 +105,7 @@ impl EngineError {
             code,
             message: message.into(),
             retryable: code.retryable(),
+            retry_after: None,
         }
     }
 }
