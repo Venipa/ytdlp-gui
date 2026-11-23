@@ -1,0 +1,64 @@
+[package]
+name = "gpui_wgpu"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "Apache-2.0"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/gpui_wgpu.rs"
+doctest = false
+
+[features]
+default = []
+bench-support = ["gpui/bench-support", "dep:image"]
+font-kit = ["dep:font-kit"]
+test-support = ["gpui/test-support", "dep:image"]
+
+[dependencies]
+gpui.workspace = true
+anyhow.workspace = true
+bytemuck.workspace = true
+collections.workspace = true
+cosmic-text = "0.19.0"
+etagere.workspace = true
+itertools.workspace = true
+image = { workspace = true, optional = true }
+log.workspace = true
+parking_lot.workspace = true
+profiling.workspace = true
+raw-window-handle.workspace = true
+smallvec.workspace = true
+swash.workspace = true
+unicode-bidi.workspace = true
+unicode-segmentation.workspace = true
+gpui_util.workspace = true
+web-time.workspace = true
+
+# Optional: only needed on platforms with multiple font sources (e.g. Linux)
+# WARNING: If you change this, you must also publish a new version of zed-font-kit to crates.io
+font-kit = { workspace = true, optional = true }
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+wgpu = { workspace = true, features = ["std", "metal", "gles", "vulkan", "wgsl", "webgpu"] }
+
+[target.'cfg(not(any(target_os = "linux", target_os = "freebsd")))'.dependencies]
+wgpu = { workspace = true, default-features = true }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+web-sys = { workspace = true, features = ["HtmlCanvasElement"] }
+wgpu = { workspace = true, features = ["webgl"] }
+
+[dev-dependencies]
+criterion.workspace = true
+gpui = { workspace = true, features = ["bench-support"] }
+image.workspace = true
+# Validate shaders with the same Naga revision that wgpu uses at runtime.
+naga = { workspace = true, features = ["wgsl-in"] }
+
+[[bench]]
+name = "layout_line"
+harness = false

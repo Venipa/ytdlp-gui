@@ -1,0 +1,30 @@
+name: pr labels
+
+# pull_request_target so a pull request from a fork can still be labelled. Nothing here checks
+# out or runs the contributor's code.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: buddy
+        if: vars.SONORA_BUDDY_APP_ID != ''
+        with:
+          app-id: ${{ vars.SONORA_BUDDY_APP_ID }}
+          private-key: ${{ secrets.SONORA_BUDDY_KEY }}
+
+      - uses: actions/labeler@v7
+        with:
+          repo-token: ${{ steps.buddy.outputs.token || secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
+          sync-labels: true
+          dot: true

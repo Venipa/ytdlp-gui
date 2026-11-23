@@ -1,0 +1,51 @@
+# Labels for a pull request, derived from the paths it touches: the platform it changes, and
+# whether it touches text or rendering, the two places a change on one platform most often
+# breaks another.
+#
+# The workflow runs with sync-labels, so every label named here is owned by the machine and a
+# hand-added one survives only until the next push. Use a label that is not in this file, such
+# as `keep`, when a human needs to mark something.
+
+macos:
+  - changed-files:
+      - any-glob-to-any-file:
+          - crates/gpui_macos/**
+          - crates/gpui_apple/**
+
+linux:
+  - changed-files:
+      - any-glob-to-any-file:
+          - crates/gpui_linux/**
+
+windows:
+  - changed-files:
+      - any-glob-to-any-file:
+          - crates/gpui_windows/**
+
+text:
+  - changed-files:
+      - any-glob-to-any-file:
+          - crates/gpui/src/text_system.rs
+          - crates/gpui/src/text_system/**
+          - crates/gpui/src/elements/text.rs
+          - crates/gpui_apple/src/text_system.rs
+          - crates/gpui_apple/src/open_type.rs
+          - crates/gpui_wgpu/src/cosmic_text_system.rs
+          - crates/gpui_windows/src/direct_write.rs
+
+rendering:
+  - changed-files:
+      - any-glob-to-any-file:
+          - crates/gpui/src/scene.rs
+          - crates/gpui/src/shader.rs
+          - crates/gpui/src/shader/**
+          - crates/gpui_wgpu/**
+          - crates/gpui_apple/src/metal_*.rs
+          - crates/gpui_apple/src/shaders.metal
+          - crates/gpui_windows/src/directx_*.rs
+          - crates/gpui_windows/src/*.hlsl
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/**
