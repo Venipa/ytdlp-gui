@@ -96,30 +96,33 @@ impl ToolsApi for RealTools {
     }
 
     fn ensure(&self, kind: ToolKind) -> BoxStream<'static, ToolEvent> {
-        let (tx, rx) = futures::channel::mpsc::unbounded();
+        self.install(kind, false)
+    }
+
+    fn reinstall(&self, kind: ToolKind) -> BoxStream<'static, ToolEvent> {
+        self.install(kind, true)
+    }
+
+    fn check_update(
+        &self,
+        kind: ToolKind,
+        current: Option<String>,
+    ) -> BoxFuture<'static, Result<Option<String>, EngineError>> {
         let dirs = self.dirs.clone();
-        self.handle.spawn(async move {
-            let Some(tool) = tool_of(kind) else {
-                tx.unbounded_send(ToolEvent::Failed(EngineError::new(
-                    ErrorCode::Unknown,
-                    format!("{kind} is not managed"),
-                )))
-                .ok();
-                return;
-            };
-            let progress_tx = tx.clone();
-            let progress = move |done: u64, total: Option<u64>| {
-                progress_tx
-                    .unbounded_send(ToolEvent::Progress { done, total })
-                    .ok();
-            };
-            let event = match ::tools::ensure(tool, &dirs, None, &progress).await {
-                Ok(s) => ToolEvent::Done(status_of(s)),
-                Err(error) => ToolEvent::Failed(classify(&error)),
-            };
-            tx.unbounded_send(event).ok();
+        let job = self.handle.spawn(async move {
+            match kind {
+                ToolKind::YtDlp => ::tools::check_ytdlp_update(&dirs, current.as_deref())
+                    .await
+                    .map(|update| update.map(|u| u.ytdlp.version))
+                    .map_err(|e| classify(&e)),
+                _ => Ok(None),
+            }
         });
-        rx.boxed()
+        async move {
+            job.await
+                .unwrap_or_else(|e| Err(EngineError::new(ErrorCode::Unknown, e.to_string())))
+        }
+        .boxed()
     }
 
     fn set_custom_path(
@@ -146,5 +149,38 @@ impl ToolsApi for RealTools {
                 .unwrap_or_else(|e| Err(EngineError::new(ErrorCode::Unknown, e.to_string())))
         }
         .boxed()
+    }
+}
+
+impl RealTools {
+    fn install(&self, kind: ToolKind, force: bool) -> BoxStream<'static, ToolEvent> {
+        let (tx, rx) = futures::channel::mpsc::unbounded();
+        let dirs = self.dirs.clone();
+        self.handle.spawn(async move {
+            let Some(tool) = tool_of(kind) else {
+                tx.unbounded_send(ToolEvent::Failed(EngineError::new(
+                    ErrorCode::Unknown,
+                    format!("{kind} is not managed"),
+                )))
+                .ok();
+                return;
+            };
+            let progress_tx = tx.clone();
+            let progress = move |done: u64, total: Option<u64>| {
+                progress_tx
+                    .unbounded_send(ToolEvent::Progress { done, total })
+                    .ok();
+            };
+            let done = match force {
+                true => ::tools::reinstall(tool, &dirs, &progress).await,
+                false => ::tools::ensure(tool, &dirs, None, &progress).await,
+            };
+            let event = match done {
+                Ok(s) => ToolEvent::Done(status_of(s)),
+                Err(error) => ToolEvent::Failed(classify(&error)),
+            };
+            tx.unbounded_send(event).ok();
+        });
+        rx.boxed()
     }
 }

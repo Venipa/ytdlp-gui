@@ -11,11 +11,15 @@ pub type PreviewFn = Arc<dyn Fn(&JobSpec) -> Result<String, String> + Send + Syn
 /// Blocking: stores Netscape cookie text under the data dir (owner-only) and returns the file.
 pub type StoreCookiesFn = Arc<dyn Fn(&Path, &str) -> Result<PathBuf, String> + Send + Sync>;
 
+/// Blocking: the version of the yt-dlp the engine runs, when the engine is in this build.
+pub type VersionFn = Arc<dyn Fn() -> Option<String> + Send + Sync>;
+
 /// Optional engine services; every field is `None` in builds without the engine.
 #[derive(Clone, Default)]
 pub struct Hooks {
     pub preview: Option<PreviewFn>,
     pub store_cookies: Option<StoreCookiesFn>,
+    pub yt_dlp_version: Option<VersionFn>,
 }
 
 impl Global for Hooks {}

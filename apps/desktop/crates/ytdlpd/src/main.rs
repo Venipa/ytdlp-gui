@@ -274,9 +274,19 @@ fn engine_hooks() -> state::Hooks {
     });
     let store_cookies: state::StoreCookiesFn =
         Arc::new(|dir, text| engine::cookies::store_text(dir, text).map_err(|e| format!("{e:#}")));
+    let yt_dlp_version: state::VersionFn = Arc::new(|| {
+        engine::runtime::init(engine::runtime::InitOptions {
+            home: None,
+            site_updates: None,
+            sink: engine::runtime::log_sink,
+        })
+        .ok()?;
+        engine::runtime::yt_dlp_version()
+    });
     state::Hooks {
         preview: Some(preview),
         store_cookies: Some(store_cookies),
+        yt_dlp_version: Some(yt_dlp_version),
     }
 }
 

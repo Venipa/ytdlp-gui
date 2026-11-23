@@ -374,6 +374,17 @@ pub struct SelfTest {
     pub init_ms: u128,
 }
 
+/// The version of the yt-dlp the running interpreter imports; `None` before [`init`] or on failure.
+pub fn yt_dlp_version() -> Option<String> {
+    get()?;
+    with_python(|py| {
+        py.import("yt_dlp.version")
+            .and_then(|m| m.getattr("__version__"))
+            .and_then(|v| v.extract())
+            .ok()
+    })
+}
+
 /// Start the interpreter and import yt-dlp and yt-dlp-ejs. Backs `ytdlpd --self-test [--site <dir>]`.
 pub fn self_test(site_updates: Option<PathBuf>) -> Result<SelfTest, String> {
     if let Some(d) = &site_updates

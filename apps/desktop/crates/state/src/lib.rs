@@ -16,7 +16,7 @@ mod tools;
 
 pub use downloads::{Downloads, DownloadsEvent, Live};
 pub use fake::{FakeBackend, FakeTools, Scene};
-pub use hooks::{Hooks, PreviewFn, StoreCookiesFn};
+pub use hooks::{Hooks, PreviewFn, StoreCookiesFn, VersionFn};
 pub use intake::{Intake, IntakeEvent};
 pub use logs::{LogEntry, Logs};
 pub use probes::{ProbeState, Probes};
@@ -25,7 +25,7 @@ pub use scheduler::{Limits, Scheduler};
 pub use settings::AppSettings;
 pub use store::Store;
 pub use toast::{Toast, ToastKind, Toasts};
-pub use tools::Tools;
+pub use tools::{Tools, ToolsEvent};
 
 use std::future::Future;
 use std::path::PathBuf;
