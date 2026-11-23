@@ -281,6 +281,12 @@ pub struct Input {
     masked: bool,
     /// Whether the text keeps to the field's end rather than its start, as a column of numbers.
     end: bool,
+    /// With `end`: the text keeps to the middle instead, as the number of a stepper.
+    centered: bool,
+    /// Whether the field is the tall `field` height (the intake) rather than a `control`.
+    large: bool,
+    /// Whether the field draws no border, fill or ring of its own because a group around it does.
+    joined: bool,
     /// Whether the field holds something that was turned down, which its border shows in the
     /// danger colour until it is cleared.
     invalid: bool,
@@ -322,6 +328,9 @@ impl Input {
             clearable: false,
             masked: false,
             end: false,
+            centered: false,
+            large: false,
+            joined: false,
             invalid: false,
             suffix: None,
             shortcut: None,
@@ -393,6 +402,30 @@ impl Input {
     pub fn align_end(mut self) -> Self {
         self.end = true;
         self
+    }
+
+    /// Keeps short text in the middle of the field, as the number between a stepper's buttons.
+    pub fn align_center(mut self) -> Self {
+        self.end = true;
+        self.centered = true;
+        self
+    }
+
+    /// The tall `field` height instead of a `control`, for the one field a page is about.
+    pub fn large(mut self) -> Self {
+        self.large = true;
+        self
+    }
+
+    /// Draws no border, fill or ring: the group the field sits in (a `Stepper`) draws them.
+    pub fn joined(mut self) -> Self {
+        self.joined = true;
+        self
+    }
+
+    /// Whether the field holds the keyboard focus, for a group that draws the ring around it.
+    pub fn is_focused(&self, window: &Window) -> bool {
+        self.focus_handle.is_focused(window)
     }
 
     /// Draws the Fluent message `key` muted after the text inside the field, as a unit.

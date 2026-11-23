@@ -180,7 +180,12 @@ impl Element for Text {
         let left = match (overflow > Pixels::ZERO, input.end) {
             (true, _) => bounds.left() - scroll,
             (false, true) => {
-                bounds.left() + (bounds.size.width - line.width - CARET).max(Pixels::ZERO)
+                let room = (bounds.size.width - line.width - CARET).max(Pixels::ZERO);
+                bounds.left()
+                    + match input.centered {
+                        true => room / 2.,
+                        false => room,
+                    }
             }
             (false, false) => bounds.left(),
         };
@@ -273,10 +278,11 @@ impl Element for Text {
 impl Render for Input {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = *cx.theme();
-        let height = match (self.bare, self.compact) {
-            (true, _) => theme.metrics.list_row,
-            (false, true) => theme.metrics.control_small,
-            (false, false) => theme.metrics.field,
+        let height = match (self.bare, self.compact, self.large) {
+            (true, ..) => theme.metrics.list_row,
+            (false, true, _) => theme.metrics.control_small,
+            (false, false, true) => theme.metrics.field,
+            (false, false, false) => theme.metrics.control,
         };
         let radius = match self.tucked {
             true => crate::tucked(theme.radius, window),
@@ -302,18 +308,19 @@ impl Render for Input {
             }
             (false, None) => f32::from(u8::from(focused)),
         };
+        // focus is ink-blue everywhere (amber is for activity only)
         let edge = match self.invalid {
             true => theme.danger,
             false => mix(
                 theme.foreground.opacity(EDGE),
-                theme.muted_foreground,
+                theme.table_active_border,
                 shown,
             ),
         };
         let ring = (shown > 0.).then(|| BoxShadow {
             color: match self.invalid {
                 true => theme.danger.opacity(RING),
-                false => theme.muted_foreground.opacity(RING * shown),
+                false => theme.table_active_border.opacity(RING * shown),
             },
             offset: point(Pixels::ZERO, Pixels::ZERO),
             blur_radius: Pixels::ZERO,
@@ -404,17 +411,23 @@ impl Render for Input {
             .rounded(radius)
             // a field tucked into a frosted menu takes the menu's own translucent row fill, since
             // a flat one would sit on the frost as a solid slab
-            .map(
-                |this| match (self.bare, self.blurred, self.tucked, blurring(cx)) {
+            .map(|this| {
+                match (
+                    self.bare || self.joined,
+                    self.blurred,
+                    self.tucked,
+                    blurring(cx),
+                ) {
                     (true, ..) => this,
                     (false, true, _, true) => glass(this, cx),
                     (false, false, true, true) => this.bg(theme.secondary_hover),
                     _ => this.bg(theme.foreground.opacity(FILL)),
-                },
-            )
+                }
+            })
             .when(self.blurred, |this| this.shadow_sm())
+            .when(self.joined, |this| this.px_1())
             .when_else(
-                self.tucked || self.bare,
+                self.tucked || self.bare || self.joined,
                 |this| this.w_full(),
                 |this| {
                     this.border_1()

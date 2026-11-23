@@ -53,11 +53,17 @@ impl Rounding {
     }
 }
 
+/// Sizes on a 4px grid. The control system has three heights and every control in one row shares
+/// one of them: `control_small` (24 at the 12px base: icon buttons over rows, tags), `control`
+/// (28: buttons, chips, inputs, pickers, steppers, search) and `field` (36: the intake and its
+/// button). Pages keep `gutter` (16) to their sides; groups inside a page are `gutter` apart.
 #[derive(Clone, Copy)]
 pub struct Metrics {
     pub row: Pixels,
     pub header: Pixels,
     pub pad: Pixels,
+    /// The side margin of a page and the gap between its groups.
+    pub gutter: Pixels,
     pub inset: Pixels,
     pub control: Pixels,
     pub control_small: Pixels,
@@ -88,10 +94,11 @@ impl Metrics {
             row,
             header: px((row / px(1.) * HEADER).round()),
             pad: px(8.),
+            gutter: px(16.),
             inset: px(24.),
-            control: roomy(32., 2.),
-            control_small: roomy(26., 1.7),
-            field: roomy(36., 2.6),
+            control: roomy(28., 2.34),
+            control_small: roomy(24., 2.),
+            field: roomy(36., 3.),
             title_bar: roomy(36., 2.4),
             player_bar: roomy(76., 5.),
             list_row: roomy(52., 3.2),
@@ -118,8 +125,10 @@ pub enum Text {
 impl Text {
     pub(crate) fn ratio(self) -> f32 {
         match self {
-            Self::Tiny => 0.77,
-            Self::Small => 0.85,
+            // at the 12px base Tiny is 10 (pills, badges) and Small 11 (meta), the least that
+            // IBM Plex Sans stays readable at
+            Self::Tiny => 0.84,
+            Self::Small => 0.92,
             Self::Label => 0.92,
             Self::Body => 1.,
             Self::Heading => 1.15,
