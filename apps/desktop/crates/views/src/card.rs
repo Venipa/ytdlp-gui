@@ -637,7 +637,12 @@ impl Downloads {
                     }),
                 )
                 .w_full()
-                .h(px(32. * total.min(PLAYLIST_ROWS) as f32)),
+                // a longer list stops half way into a row, which shows there is more to scroll
+                .h(px(32.
+                    * match total > PLAYLIST_ROWS {
+                        true => PLAYLIST_ROWS as f32 - 0.5,
+                        false => total as f32,
+                    })),
             )
             .child(
                 div()

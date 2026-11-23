@@ -476,7 +476,7 @@ impl SettingsView {
             .collect();
         vec![
             section(None, rows, cx),
-            Notice::new(t!("set-page-tools"), t!("set-long-paths"))
+            Notice::new(t!("set-long-paths-title"), t!("set-long-paths"))
                 .icon("icons/triangle-alert.svg")
                 .max_w_full()
                 .into_any_element(),
