@@ -130,6 +130,8 @@ pub struct Downloads {
     pub(crate) fresh: std::collections::HashMap<DownloadId, Instant>,
     free: Option<(u64, String)>,
     free_at: Option<Instant>,
+    /// A `--screen` scene still waiting for rows or a probe (`detail`, `failed-detail`, `formats`).
+    scene: Option<&'static str>,
     _subs: Vec<Subscription>,
 }
 
@@ -201,6 +203,7 @@ impl Downloads {
             scroll,
             free: None,
             free_at: None,
+            scene: None,
             _subs: subs,
         };
         // links that arrived before the window (command line, deep link)
@@ -219,6 +222,67 @@ impl Downloads {
         self.last_text.clone_from(&text);
         self.intake.update(cx, |input, cx| input.set_text(text, cx));
         self.begin(cx);
+    }
+
+    /// Debug `--screen` states of this page for screenshots (pair with `--demo mixed`): `card`,
+    /// `probing`, `batch`, `playlist`, `error`, `formats`, `detail`, `failed-detail`, `filtered`.
+    pub fn show_scene(&mut self, name: &str, cx: &mut Context<Self>) {
+        let link = |s: &str| vec![s.to_string()];
+        match name {
+            "card" => self.fill(&link("https://www.youtube.com/watch?v=jNQXAC9IVRw"), cx),
+            "probing" => {
+                let url = "https://www.youtube.com/watch?v=jNQXAC9IVRw".to_string();
+                self.last_text.clone_from(&url);
+                self.intake
+                    .update(cx, |input, cx| input.set_text(url.clone(), cx));
+                // no probe is requested, so the card stays on its reading state
+                self.urls = vec![url];
+            }
+            "batch" => self.fill(
+                &[
+                    "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+                    "https://vimeo.com/76979871",
+                    "https://www.youtube.com/watch?v=demo00008",
+                    "https://example.com/probefail",
+                    "not-a-link",
+                ]
+                .map(String::from),
+                cx,
+            ),
+            "playlist" => self.fill(&link("https://www.youtube.com/playlist?list=PLdemo"), cx),
+            "error" => self.fill(&link("https://www.youtube.com/watch?v=private"), cx),
+            "formats" => {
+                self.scene = Some("formats");
+                self.fill(&link("https://www.youtube.com/watch?v=jNQXAC9IVRw"), cx);
+            }
+            "detail" => self.scene = Some("detail"),
+            "failed-detail" => self.scene = Some("failed-detail"),
+            "filtered" => self
+                .search
+                .update(cx, |input, cx| input.set_text("type:audio size:>5gb", cx)),
+            _ => {}
+        }
+        self.scene_rows(cx);
+    }
+
+    /// Selects the row a pending `detail` scene wants once the rows are in.
+    fn scene_rows(&mut self, cx: &mut Context<Self>) {
+        let want = match self.scene {
+            Some("detail") => DownloadStatus::Completed,
+            Some("failed-detail") => DownloadStatus::Failed,
+            _ => return,
+        };
+        let downloads = self.app.downloads.read(cx);
+        if !downloads.loaded() {
+            return;
+        }
+        self.selected = downloads
+            .rows()
+            .iter()
+            .find(|r| r.status == want)
+            .map(|r| r.id);
+        self.scene = None;
+        cx.notify();
     }
 
     fn intake_event(
@@ -340,6 +404,10 @@ impl Downloads {
         if self.enter_waits && matches!(self.card(cx), Card::Result(_)) {
             self.enter_waits = false;
             self.download(cx);
+        }
+        if self.scene == Some("formats") && matches!(self.card(cx), Card::Result(_)) {
+            self.scene = None;
+            self.open_formats(cx);
         }
         cx.notify();
     }
@@ -706,7 +774,7 @@ impl Downloads {
                     None,
                 );
             }
-            DownloadsEvent::Loaded => {}
+            DownloadsEvent::Loaded => self.scene_rows(cx),
         }
     }
 
