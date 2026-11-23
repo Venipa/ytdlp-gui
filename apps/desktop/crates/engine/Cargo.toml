@@ -3,6 +3,28 @@ name = "engine"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "yt-dlp engine: embedded CPython (PyO3), worker process, IPC, presets, error classification. No gpui."
 
 [lints]
 workspace = true
+
+[dependencies]
+anyhow.workspace = true
+domain.workspace = true
+futures.workspace = true
+log.workspace = true
+pyo3.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Threading",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
