@@ -101,6 +101,7 @@ impl ToolsApi for RealTools {
     fn status(&self) -> BoxFuture<'static, Vec<ToolStatus>> {
         let dirs = self.dirs.clone();
         let job = self.handle.spawn(async move {
+            ::tools::pair_ffmpeg(&dirs);
             let mut out = vec![];
             for kind in [ToolKind::Ffmpeg, ToolKind::Ffprobe, ToolKind::Deno] {
                 let tool = tool_of(kind).expect("managed kind");

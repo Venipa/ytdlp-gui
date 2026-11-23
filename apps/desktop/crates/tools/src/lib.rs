@@ -190,6 +190,29 @@ fn managed_candidates(tool: Tool, dirs: &Dirs) -> Vec<PathBuf> {
     v.into_iter().map(|(_, p)| p).collect()
 }
 
+/// yt-dlp looks for ffprobe only next to the ffmpeg it is given, but managed installs keep each tool
+/// in its own dir: link the newest of each into the other's dir. Also repairs older installs.
+pub fn pair_ffmpeg(dirs: &Dirs) {
+    let newest = |t| managed_candidates(t, dirs).into_iter().next();
+    let (Some(ff), Some(fp)) = (newest(Tool::Ffmpeg), newest(Tool::Ffprobe)) else {
+        return;
+    };
+    for (src, other) in [(&fp, &ff), (&ff, &fp)] {
+        let (Some(dir), Some(name)) = (other.parent(), src.file_name()) else {
+            continue;
+        };
+        let dest = dir.join(name);
+        let len = |p: &Path| std::fs::metadata(p).map(|m| m.len()).ok();
+        if len(&dest) == len(src) {
+            continue;
+        }
+        let _ = std::fs::remove_file(&dest);
+        if let Err(error) = std::fs::hard_link(src, &dest).or_else(|_| std::fs::copy(src, &dest).map(drop)) {
+            log::warn!("tools: cannot place {} next to {}: {error}", src.display(), other.display());
+        }
+    }
+}
+
 /// Find a usable `tool`: settings path, PATH, well-known dirs, then managed install. Every
 /// candidate must pass its version probe.
 pub async fn detect(tool: Tool, dirs: &Dirs, settings_path: Option<&Path>) -> Option<ToolStatus> {
@@ -445,6 +468,9 @@ async fn install(
                 version,
             });
         }
+    }
+    if matches!(tool, Tool::Ffmpeg | Tool::Ffprobe) {
+        pair_ffmpeg(dirs);
     }
     result.context("tool missing from plan")
 }

@@ -3,7 +3,7 @@ use crate::fetch::{Ctx, extract, hex};
 use crate::matrix::{Archive, Target};
 use crate::testutil::{Route, serve};
 use crate::ytdlp::{check_with, install_with};
-use crate::{Dirs, Tool, install};
+use crate::{Dirs, Tool, install, pair_ffmpeg};
 use sha2::{Digest, Sha256};
 use std::io::Write;
 use std::path::Path;
@@ -392,6 +392,25 @@ async fn pair_corrupt_cases_leave_pointer_unchanged() {
         .unwrap_err();
     assert!(format!("{e:#}").contains("boom"));
     assert_eq!(count(&site), 0);
+}
+
+#[test]
+fn pair_ffmpeg_puts_each_binary_next_to_the_other() {
+    let root = tempfile::tempdir().unwrap();
+    let d = dirs(root.path());
+    let tools = root.path().join("data/tools");
+    let place = |t: Tool, body: &[u8]| {
+        let dir = tools.join(t.id()).join("9.1");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(t.exe_name()), body).unwrap();
+        dir
+    };
+    let ff = place(Tool::Ffmpeg, b"FF");
+    let fp = place(Tool::Ffprobe, b"PROBE");
+    pair_ffmpeg(&d);
+    assert_eq!(std::fs::read(ff.join(Tool::Ffprobe.exe_name())).unwrap(), b"PROBE");
+    assert_eq!(std::fs::read(fp.join(Tool::Ffmpeg.exe_name())).unwrap(), b"FF");
+    pair_ffmpeg(&d); // idempotent
 }
 
 #[test]
