@@ -49,8 +49,46 @@ jobs:
         with:
           workspaces: apps/desktop
           key: release-${{ matrix.name }}
+      # macOS: Developer ID signing + notarisation when the secrets exist, else the build stays ad-hoc signed.
+      # CSC_LINK = base64 of the Developer ID Application .p12, CSC_PASSWORD = its password,
+      # APPLE_AUTH_KEY = App Store Connect API key (.p8 text or base64), APPLE_AUTH_KEY_ID, APPLE_AUTH_ISSUER_ID.
+      - name: apple signing
+        if: runner.os == 'macOS'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_PASSWORD: ${{ secrets.CSC_PASSWORD }}
+          APPLE_AUTH_KEY: ${{ secrets.APPLE_AUTH_KEY }}
+          APPLE_AUTH_KEY_ID: ${{ secrets.APPLE_AUTH_KEY_ID }}
+          APPLE_AUTH_ISSUER_ID: ${{ secrets.APPLE_AUTH_ISSUER_ID }}
+        run: |
+          if [ -z "$CSC_LINK" ]; then echo "no CSC_LINK secret: building ad-hoc signed"; exit 0; fi
+          kc="$RUNNER_TEMP/signing.keychain-db"; kcpw="$(openssl rand -hex 16)"
+          printf '%s' "$CSC_LINK" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$kcpw" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kcpw" "$kc"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CSC_PASSWORD" -A -t cert -f pkcs12 -k "$kc"
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kcpw" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          id="$(security find-identity -v -p codesigning "$kc" | grep -o '"Developer ID Application:[^"]*"' | head -1 | tr -d '"')"
+          [ -n "$id" ] || { echo "CSC_LINK has no Developer ID Application identity"; exit 1; }
+          echo "CODESIGN_IDENTITY=$id" >> "$GITHUB_ENV"
+          if [ -n "$APPLE_AUTH_KEY" ]; then
+            case "$APPLE_AUTH_KEY" in
+              -----BEGIN*) printf '%s\n' "$APPLE_AUTH_KEY" > "$RUNNER_TEMP/AuthKey.p8" ;;
+              *) printf '%s' "$APPLE_AUTH_KEY" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8" ;;
+            esac
+            chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+            { echo "APPLE_API_KEY=$RUNNER_TEMP/AuthKey.p8"; echo "APPLE_API_KEY_ID=$APPLE_AUTH_KEY_ID"; echo "APPLE_API_ISSUER=$APPLE_AUTH_ISSUER_ID"; } >> "$GITHUB_ENV"
+          fi
       # the script runs setup (runtime download pinned by runtime.lock.json), builds, packages and runs --self-test where it can
       - run: ${{ matrix.script }}
+      - name: apple signing cleanup
+        if: always() && runner.os == 'macOS'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/cert.p12"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}

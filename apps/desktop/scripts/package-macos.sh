@@ -3,6 +3,7 @@
 # Usage: scripts/package-macos.sh [out-dir]
 # Env: CODESIGN_IDENTITY (default "-" = ad-hoc; use "Developer ID Application: ..." for distribution),
 #      NOTARY_PROFILE (optional notarytool keychain profile; submits and staples the dmg when set).
+#      or APPLE_API_KEY (.p8 path) + APPLE_API_KEY_ID + APPLE_API_ISSUER (App Store Connect API key) to notarise.
 # Layout: Contents/MacOS/ytdlpd, Contents/Frameworks/libpython3.14.dylib (exe rpath @executable_path/../Frameworks),
 #         Contents/Resources/python/{lib/python3.14,site,...} (engine finds it via <exe>/../Resources/python).
 set -euo pipefail
@@ -54,7 +55,22 @@ PLIST
 opts=(--force --timestamp --options runtime --sign "$id")
 [ "$id" = "-" ] && opts=(--force --sign -)
 find "$app/Contents" -type f \( -name '*.so' -o -name '*.dylib' -o -path '*/python/bin/*' \) -print0 | xargs -0 -n1 codesign "${opts[@]}"
-codesign "${opts[@]}" "$app"
+if [ "$id" != "-" ]; then
+  # hardened runtime: embedded CPython (ctypes/libffi closures) needs executable memory
+  ent="$(mktemp)"
+  cat > "$ent" <<'ENT'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>com.apple.security.cs.allow-jit</key><true/>
+<key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+</dict></plist>
+ENT
+  codesign "${opts[@]}" --entitlements "$ent" "$app"
+  rm -f "$ent"
+else
+  codesign "${opts[@]}" "$app"
+fi
 codesign --verify --strict --verbose=2 "$app"
 
 dmg="$out/ytdlpd-$version-macos-$arch.dmg"
@@ -64,8 +80,13 @@ cp -R "$app" "$stage/"
 ln -s /Applications "$stage/Applications"
 hdiutil create -volname ytdlpd -srcfolder "$stage" -ov -format UDZO "$dmg"
 rm -rf "$stage"
+[ "$id" != "-" ] && codesign --force --timestamp --sign "$id" "$dmg"
 if [ -n "${NOTARY_PROFILE:-}" ]; then
   xcrun notarytool submit "$dmg" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$dmg"
+elif [ -n "${APPLE_API_KEY:-}" ] && [ -n "${APPLE_API_KEY_ID:-}" ] && [ -n "${APPLE_API_ISSUER:-}" ] && [ "$id" != "-" ]; then
+  # App Store Connect API key (.p8 file path, key id, issuer id), as used in CI
+  xcrun notarytool submit "$dmg" --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
   xcrun stapler staple "$dmg"
 fi
 # smoke: runs python from the bundle, prints versions
