@@ -241,3 +241,7 @@ cargo check -p <crate>                      # then cargo check --workspace for d
 
 ## Platform verification policy
 Windows is the dev box: every phase is verified on Windows. macOS and Linux get code paths and CI builds only; owner-run passes are required before a release candidate (D-059).
+
+## UI/UX layout (owner picks 2026-11-23, mockup F:\tmp\ytdlpd-rs\.superpowers\brainstorm\28102-1795400101\content\ui-layout.html)
+- Picks: 1A title-bar tabs; 2C paste shows result card with the remembered preset marked, Enter downloads with it, chips change it first; 3B compact single-line rows 32px, no thumbnail, site beside title, error text in status (ledger rows with thumbnails stay available as setting "Show thumbnails"); 4B "In progress" group pinned on top with header + count, history below; 5A right detail panel 360px; 6C Getting ready continues by itself when tools are ready, later missing tools show a banner on Downloads with a fix button; 7A settings side list of pages; 8A bottom status bar; 9 Ledger look confirmed.
+- Status: in progress (UI wiring lanes A2/A3).
