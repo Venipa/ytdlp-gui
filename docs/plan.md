@@ -274,3 +274,16 @@ Status values per item; Ref is review until the lead sets done. Shots F:\tmp\ytd
 | 16 | Detail panel slides open in 160 ms without a list jump | in progress | review (motion not capturable in a still) |
 | 25 | Motion 9B: page crossfade 120 ms, new rows fade in, card unfold, panel slide; off under reduce-motion | in progress | review; D-152 |
 | 26 | Focus ring (1px ink-blue) on Button, Chip, SideNav, list row; Tab/Shift+Tab walk; list Up/Down/Home/End/Enter/Space/Del; `/` focuses search | in progress | review; pa-focus5, pa-keys; D-153 |
+
+### P-B2 (lane/pb2, continues P-B; items 21-24, 27 and follow-ups)
+
+| # | Item | Status | Ref |
+|---|------|--------|-----|
+| 21 | Getting ready: centred 560 px column, tool icons, short versions with full string in tooltip, status icon/spinner, ruled progress with "41 MB of 88 MB", quiet "Use my own ffmpeg", reason beside disabled Continue; `--screen` bypasses first run | review | pb2-welcome, pb2-welcome-dl (progress bar with known total not captured: deno too fast) |
+| 22 | Logs: search (level, job, message), Follow toggle (wheel up pauses, end of list resumes), focus ring on search | review | pb2-logs, pb2-logs-search |
+| 23 | Toasts: 4 s (8 s with a button), hover holds the clock, max 3, fade in/out (instant under reduce-motion); clipboard toast shows the shortened link and is not offered twice per session | review | pb2-toasts-a/b |
+| 24 | Menus: Logs job menu already Popup+Menu with arrows/Esc (P-B); no ad-hoc dropdown change this lane | review | not re-driven by keyboard in this lane |
+| 27 | Spoken: `ProgressRule::spoken`, `Thumbnail::alt`, `TokenInput::spoken` (+ tests in ui/tests/a11y_tree.rs); SideNav Tab nodes are nested so manual-only | review | |
+| 5b | Formats modal lists scroll the arrow-picked row into view | review | pb2-fmt1 |
+| 7b | yt-dlp update: Check offers Install; `install_ytdlp_pair` + `--self-test --site` verify; pointer in app_state `ytdlp_site` (+`_previous`), engine follows via `Backend::set_site`; failure keeps old site | review | verified live against a local PyPI mirror (YTDLPD_TOOLS_MIRROR); D-170..172 |
+| 6 | Folder picker end to end; motion frame proof | open | pulse rule proven by pb2-motion-card-strip; panel slide / row fade / card unfold NOT captured; folder picker NOT re-verified |
