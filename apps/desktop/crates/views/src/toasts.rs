@@ -5,11 +5,18 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::prelude::*;
-use gpui::{App, Context, Entity, Global, SharedString, Window, div, px};
-use ui::Toast;
+use gpui::{
+    Animation, AnimationExt as _, App, Context, Entity, Global, SharedString, Window, div, px,
+};
+use ui::{Toast, motion};
 
-/// How long a toast stays when nobody dismisses it.
-const LIFETIME: Duration = Duration::from_secs(6);
+/// How long a toast stays when nobody dismisses it; a pointer over the stack holds the clock.
+const LIFETIME: Duration = Duration::from_secs(4);
+/// The most toasts on screen; a new one pushes the oldest out.
+const MAX: usize = 3;
+const TICK: Duration = Duration::from_millis(100);
+/// How long a leaving toast fades.
+const LEAVE: Duration = Duration::from_millis(120);
 
 /// What a toast reports.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,12 +33,16 @@ struct Item {
     kind: Kind,
     message: SharedString,
     action: Option<(SharedString, Act)>,
+    left: Duration,
+    leaving: bool,
 }
 
 /// The layer entity; one per window, registered as a global so any handler can push.
 pub struct ToastLayer {
     next: u64,
     items: Vec<Item>,
+    hovered: bool,
+    ticking: bool,
 }
 
 struct Handle(Entity<ToastLayer>);
@@ -44,14 +55,75 @@ impl ToastLayer {
         let layer = cx.new(|_| Self {
             next: 0,
             items: Vec::new(),
+            hovered: false,
+            ticking: false,
         });
         cx.set_global(Handle(layer.clone()));
         layer
     }
 
+    /// Fades the toast out, then drops it; with reduced motion it goes at once.
     fn dismiss(&mut self, id: u64, cx: &mut Context<Self>) {
-        self.items.retain(|item| item.id != id);
+        let Some(item) = self.items.iter_mut().find(|item| item.id == id) else {
+            return;
+        };
+        if item.leaving {
+            return;
+        }
+        if !motion::animates(cx) {
+            self.items.retain(|item| item.id != id);
+            cx.notify();
+            return;
+        }
+        item.leaving = true;
         cx.notify();
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(LEAVE).await;
+            this.update(cx, |layer, cx| {
+                layer.items.retain(|item| item.id != id);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Counts every toast down while the pointer is away, and dismisses the ones that ran out.
+    fn tick(&mut self, cx: &mut Context<Self>) {
+        if self.ticking {
+            return;
+        }
+        self.ticking = true;
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(TICK).await;
+                let go = this
+                    .update(cx, |layer, cx| {
+                        if !layer.hovered {
+                            let due: Vec<u64> = layer
+                                .items
+                                .iter_mut()
+                                .filter(|item| !item.leaving)
+                                .filter_map(|item| {
+                                    item.left = item.left.saturating_sub(TICK);
+                                    item.left.is_zero().then_some(item.id)
+                                })
+                                .collect();
+                            for id in due {
+                                layer.dismiss(id, cx);
+                            }
+                        }
+                        let live = !layer.items.is_empty();
+                        layer.ticking = live;
+                        live
+                    })
+                    .unwrap_or(false);
+                if !go {
+                    break;
+                }
+            }
+        })
+        .detach();
     }
 }
 
@@ -74,13 +146,14 @@ pub fn toast(
             kind,
             message,
             action,
+            left: LIFETIME,
+            leaving: false,
         });
+        while layer.items.len() > MAX {
+            layer.items.remove(0);
+        }
+        layer.tick(cx);
         cx.notify();
-        cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(LIFETIME).await;
-            this.update(cx, |layer, cx| layer.dismiss(id, cx)).ok();
-        })
-        .detach();
     });
 }
 
@@ -88,6 +161,7 @@ impl Render for ToastLayer {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let layer = cx.entity();
         div()
+            .id("toast-stack")
             .absolute()
             .bottom(px(40.))
             .right(px(16.))
@@ -95,6 +169,10 @@ impl Render for ToastLayer {
             .flex()
             .flex_col()
             .gap_2()
+            .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                this.hovered = *hovered;
+                cx.notify();
+            }))
             .children(self.items.iter().map(|item| {
                 let id = item.id;
                 let icon = match item.kind {
@@ -106,6 +184,7 @@ impl Render for ToastLayer {
                 let mut card = Toast::new(("toast", id as usize), item.message.clone())
                     .icon(icon)
                     .single_line()
+                    .when(item.leaving, |card| card.inert())
                     .on_dismiss(move |_, _, cx| {
                         dismissed.update(cx, |layer, cx| layer.dismiss(id, cx))
                     });
@@ -116,7 +195,12 @@ impl Render for ToastLayer {
                         acted.update(cx, |layer, cx| layer.dismiss(id, cx));
                     });
                 }
-                card
+                let fade = item.leaving;
+                div().child(card).with_animation(
+                    ("toast-fade", id as usize * 2 + usize::from(fade)),
+                    Animation::new(if fade { LEAVE } else { motion::dim_span() }),
+                    move |el, delta| el.opacity(if fade { 1. - delta } else { delta }),
+                )
             }))
     }
 }

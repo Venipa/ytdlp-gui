@@ -6,13 +6,14 @@ use std::rc::Rc;
 use domain::DownloadId;
 use gpui::prelude::*;
 use gpui::{
-    ClipboardItem, Context, ScrollStrategy, Subscription, UniformListScrollHandle, Window, div, px,
-    uniform_list,
+    ClipboardItem, Context, Entity, ScrollStrategy, ScrollWheelEvent, Subscription,
+    UniformListScrollHandle, Window, div, px, uniform_list,
 };
 use i18n::t;
 use state::{AppState, LogEntry};
 use ui::{
-    ActiveTheme as _, Button, Chip, MONO, Menu, MenuItem, Popup, Scrollbar, Scroller, Text, Vacancy,
+    ActiveTheme as _, Button, Chip, Input, MONO, Menu, MenuItem, Popup, Scrollbar, Scroller, Text,
+    Vacancy,
 };
 
 use crate::format;
@@ -38,7 +39,11 @@ pub struct LogsView {
     scroll: UniformListScrollHandle,
     bar: gpui::Entity<Scrollbar>,
     seen: usize,
-    _sub: Subscription,
+    search: Entity<Input>,
+    /// Whether new lines scroll into view; a wheel turn up pauses it until the end is reached again.
+    follow: bool,
+    resume_at_end: bool,
+    _subs: Vec<Subscription>,
 }
 
 impl LogsView {
@@ -49,7 +54,16 @@ impl LogsView {
         let bar = cx.new(|cx| {
             Scrollbar::new(scroll.0.borrow().base_handle.clone()).watching(cx.entity_id())
         });
-        let sub = cx.observe(&app.logs, |_, _, cx| cx.notify());
+        let search = cx.new(|cx| {
+            Input::new(t!("dl-logs-search-hint"), cx)
+                .name("dl-logs-search-name")
+                .compact()
+                .clearable()
+        });
+        let subs = vec![
+            cx.observe(&app.logs, |_, _, cx| cx.notify()),
+            cx.observe(&search, |_, _, cx| cx.notify()),
+        ];
         Self {
             app,
             least: 0,
@@ -58,16 +72,27 @@ impl LogsView {
             bar,
             scroll,
             seen: 0,
-            _sub: sub,
+            search,
+            follow: true,
+            resume_at_end: false,
+            _subs: subs,
         }
     }
 
     fn shown(&self, cx: &gpui::App) -> Vec<LogEntry> {
+        let needle = self.search.read(cx).text().trim().to_lowercase();
         self.app
             .logs
             .read(cx)
             .entries()
-            .filter(|e| rank(&e.level) >= self.least && (self.job.is_none() || e.job == self.job))
+            .filter(|e| {
+                rank(&e.level) >= self.least
+                    && (self.job.is_none() || e.job == self.job)
+                    && (needle.is_empty()
+                        || format!("{} {:04} {}", e.level, e.job.map_or(0, |j| j.0), e.message)
+                            .to_lowercase()
+                            .contains(&needle))
+            })
             .cloned()
             .collect()
     }
@@ -155,9 +180,13 @@ impl Render for LogsView {
         let theme = *cx.theme();
         let pencil = theme.muted_foreground;
         let entries = Rc::new(self.shown(cx));
+        if !self.follow && self.resume_at_end && self.scroll.is_scrolled_to_end() == Some(true) {
+            self.follow = true;
+            self.resume_at_end = false;
+        }
         if entries.len() != self.seen {
             self.seen = entries.len();
-            if !entries.is_empty() {
+            if self.follow && !entries.is_empty() {
                 self.scroll
                     .scroll_to_item(entries.len() - 1, ScrollStrategy::Bottom);
             }
@@ -173,10 +202,13 @@ impl Render for LogsView {
             ("dl-logs-error", 3),
         ];
         let body = match entries.is_empty() {
-            true => Vacancy::new(t!("dl-logs-empty"))
-                .spoken("logs-empty")
-                .size_full()
-                .into_any_element(),
+            true => Vacancy::new(match self.search.read(cx).text().is_empty() {
+                true => t!("dl-logs-empty"),
+                false => t!("dl-logs-no-match"),
+            })
+            .spoken("logs-empty")
+            .size_full()
+            .into_any_element(),
             false => {
                 let items = entries.clone();
                 Scroller::listing("logs-scroll", &self.bar)
@@ -284,6 +316,7 @@ impl Render for LogsView {
                             .flex()
                             .gap_2()
                             .items_center()
+                            .child(div().w(px(200.)).child(self.search.clone()))
                             .child(div().text_color(pencil).child(t!("dl-logs-job")))
                             .child(
                                 Button::new("logs-job")
@@ -298,8 +331,26 @@ impl Render for LogsView {
                                     )),
                             )
                             .child(
+                                Button::new("logs-follow")
+                                    .ghost()
+                                    .small()
+                                    .icon("icons/arrow-up-down.svg")
+                                    .label(t!("dl-logs-follow"))
+                                    .toggled(self.follow)
+                                    .selected(self.follow)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.follow = !this.follow;
+                                        this.resume_at_end = false;
+                                        if this.follow {
+                                            this.seen = 0;
+                                        }
+                                        cx.notify();
+                                    })),
+                            )
+                            .child(
                                 Button::new("logs-copy")
                                     .ghost()
+                                    .small()
                                     .label(t!("dl-logs-copy"))
                                     .on_click(cx.listener(|this, _, _, cx| this.copy_all(cx))),
                             ),
@@ -311,6 +362,13 @@ impl Render for LogsView {
                     .min_h_0()
                     .border_t_1()
                     .border_color(theme.border)
+                    .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, cx| {
+                        if event.delta.pixel_delta(px(20.)).y > px(0.) && this.follow {
+                            this.follow = false;
+                            this.resume_at_end = true;
+                            cx.notify();
+                        }
+                    }))
                     .child(body),
             )
             .children(picker)

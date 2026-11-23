@@ -6,7 +6,9 @@ use gpui::{AnyElement, App, FontWeight, PathPromptOptions, SharedString, div, px
 use i18n::t;
 use router::Destination;
 use state::AppState;
-use ui::{ActiveTheme as _, Button, Perch, ProgressRule, Rule, Spinner, Text, Tipped as _, tabular};
+use ui::{
+    ActiveTheme as _, Button, Perch, ProgressRule, Rule, Spinner, Text, Tipped as _, tabular,
+};
 
 use crate::downloads::error_text;
 use crate::format;
