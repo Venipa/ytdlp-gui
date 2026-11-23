@@ -250,7 +250,7 @@ mod tests {
         let l = Settings::load(&p, &s);
         assert_eq!(
             (l.settings.theme.as_str(), l.settings.font_size, l.error),
-            ("x", 13.0, None)
+            ("x", 12.0, None)
         );
         assert_eq!(Settings::load(&dir.join("missing.json"), &s).settings, d);
         std::fs::remove_dir_all(dir).ok();
