@@ -57,9 +57,9 @@ Exit checklist (G0):
 | Lane A: verify gpui dashed border support for the ledger rule; if absent, build the rule as a custom element | open | spike note in `docs/design.md` |
 | Lane A: new `ui` parts: `ProgressRule`, `Thumbnail`, `Chip`, `TokenInput`, `SideNav`, `CallNumber`, `MONO` const | open | `crates/ui` |
 | Lane A: Getting ready screen against `FakeBackend` | open | `crates/views/src/screens/welcome` |
-| Lane B: engine spike (G1): `scripts/setup.ts`, `runtime.lock.json`, PyO3 embed, `--engine-worker`, kill-tree, `cargo run -p engine --example fetch -- <url>` on the fixture server | open | `crates/engine`, `scripts/setup.ts` |
-| Lane B: `engine::Backend` trait, `engine::spec` (presets to yt-dlp opts, pure), `engine::classify` with `errors.tsv` seed | open | `crates/engine` |
-| Lane B: fixture server example + fixtures + generator script (<= 300 KB committed) | open | `crates/engine/examples/fixture_server.rs`, `tests/fixtures/` |
+| Lane B: engine spike (G1): `scripts/setup.ts`, `runtime.lock.json`, PyO3 embed, `--engine-worker`, kill-tree, `cargo run -p engine --example fetch -- <url>` on the fixture server | in progress | review: `crates/engine`, `scripts/setup.ts` |
+| Lane B: `engine::Backend` trait, `engine::spec` (presets to yt-dlp opts, pure), `engine::classify` with `errors.tsv` seed | in progress | review: `crates/engine` |
+| Lane B: fixture server example + fixtures + generator script (<= 300 KB committed) | in progress | review: `crates/engine/examples/fixture_server.rs`, `tests/fixtures/` |
 | Lane D: `tools` skeleton: `Tool` enum, detect, fetch matrix, streaming download with sha256, unpack with zip-slip guard, `YTDLPD_TOOLS_MIRROR` override | open | `crates/tools` |
 | Lane D: `cargo run -p tools --example ensure` works for ffmpeg, ffprobe, deno on Windows | open | `crates/tools/examples/ensure.rs` |
 | Lane D: hidden flags `--demo`, `--self-test`, `--frame-stats` (debug), `scripts/screenshot.ps1` | open | `crates/ytdlpd`, `scripts/screenshot.ps1` |
@@ -76,14 +76,14 @@ Exit checklist (G1):
 ## Phase 1: engine and tools headless
 | Item | Status | Ref |
 |---|---|---|
-| Lane B: `engine::runtime::init` (home exe-relative, isolated, no signal handlers, sys.path order, stdout/stderr to `LogWriter`), second call returns same handle, typed failure | open | `crates/engine/src/runtime.rs` |
-| Lane B: in-process `probe` with timeout, abandoned-probe counter; `ProbeResult` typed; flat playlist probe | open | `crates/engine/src/probe.rs` |
-| Lane B: `--engine-worker` mode, JSON-lines IPC (architecture.md section 4), progress throttled to 4/s, `files` events, kill-tree (Job Object, process group, PDEATHSIG, stdin EOF) | open | `crates/engine/src/worker.rs` |
+| Lane B: `engine::runtime::init` (home exe-relative, isolated, no signal handlers, sys.path order, stdout/stderr to `LogWriter`), second call returns same handle, typed failure | in progress | review: `crates/engine/src/runtime.rs` |
+| Lane B: in-process `probe` with timeout, abandoned-probe counter; `ProbeResult` typed; flat playlist probe | in progress | review: `crates/engine/src/probe.rs` |
+| Lane B: `--engine-worker` mode, JSON-lines IPC (architecture.md section 4), progress throttled to 4/s, `files` events, kill-tree (Job Object, process group, PDEATHSIG, stdin EOF) | in progress | review: `crates/engine/src/worker.rs` |
 | Lane B: fallback `worker.py` with same protocol, behind the same trait; built out only if G1 failed or a target OS fails to link | open | `crates/engine/worker/worker.py` |
-| Lane B: cleanup of partials on cancel by known basenames; keep on pause | open | `crates/engine/src/partials.rs` |
-| Lane B: error classification golden table >= 30 real messages | open | `crates/engine/tests/errors.tsv` |
-| Lane B: runtime prune list + import-every-needed-module test; measure and record real runtime size per OS | open | `scripts/setup.ts` |
-| Lane B: `ytdlpd --self-test [--site <dir>]` (init Python, import yt_dlp + yt_dlp_ejs, print versions, exit 0) | open | `crates/ytdlpd/src/selftest.rs` |
+| Lane B: cleanup of partials on cancel by known basenames; keep on pause | in progress | review: `crates/engine/src/partials.rs` |
+| Lane B: error classification golden table >= 30 real messages | in progress | review: `crates/engine/tests/errors.tsv` |
+| Lane B: runtime prune list + import-every-needed-module test; measure and record real runtime size per OS | in progress | review: `scripts/setup.ts` |
+| Lane B: `ytdlpd --self-test [--site <dir>]` (init Python, import yt_dlp + yt_dlp_ejs, print versions, exit 0) | in progress | review: `crates/ytdlpd/src/selftest.rs` |
 | Lane D: `tools` full: detect order, per-OS matrix, checksum fail closed, atomic rename, exec bit, quarantine strip, Defender retry (5 x 200 ms), version probe | open | `crates/tools` |
 | Lane D: yt-dlp + yt-dlp-ejs pair update: PyPI JSON, METADATA `Requires-Dist` pin, unzip to `python-site/<ver>.tmp`, `--self-test --site` in a throwaway process, then pointer switch in `app_state`; rollback tests | open | `crates/tools/src/ytdlp.rs` |
 | Lane C: `state::{Tools, Probes}` wrappers over real `tools` and `engine`; `Downloads` skeleton on `FakeBackend` | open | `crates/state` |
