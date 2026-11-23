@@ -7,6 +7,8 @@
     "build": "cargo build -p ytdlpd --release",
     "check": "cargo check --workspace",
     "setup": "bun scripts/setup.ts",
-    "dev:hot": "dx serve --hot-patch --package ytdlpd"
+    "dev:hot": "dx serve --hot-patch --package ytdlpd",
+    "release:win": "pwsh -NoProfile -File scripts/package-windows.ps1 -Arch x64",
+    "release:mac": "bash scripts/package-macos.sh"
   }
 }

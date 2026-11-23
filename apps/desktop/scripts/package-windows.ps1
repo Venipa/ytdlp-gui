@@ -29,7 +29,8 @@ try {
 $target = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $desktop 'target' }
 $rel = Join-Path $target "$triple\release"
 if (-not (Test-Path (Join-Path $rel 'ytdlpd.exe'))) { $rel = Join-Path $target 'release' } # host build without --target
-Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+# a stale or half-removed stage would mix old files into the installer: fail loudly instead
+if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage | Out-Null
 Copy-Item (Join-Path $rel 'ytdlpd.exe') $stage
 Get-ChildItem $rel -Filter '*.dll' | Where-Object { $_.Name -match '^(python|vcruntime)' } | Copy-Item -Destination $stage
@@ -38,8 +39,9 @@ Remove-Item (Join-Path $stage 'python\libs') -Recurse -Force -ErrorAction Silent
 Copy-Item (Join-Path $repo 'THIRD-PARTY.md'), (Join-Path $repo 'LICENSE') $stage
 
 # the staged tree must run on its own (no python on PATH needed)
-& (Join-Path $stage 'ytdlpd.exe') --self-test
-if ($LASTEXITCODE) { throw 'self-test of the staged tree failed' }
+# the release exe is a GUI-subsystem app, so `&` may not wait for it: wait explicitly for the exit code
+$selftest = Start-Process -FilePath (Join-Path $stage 'ytdlpd.exe') -ArgumentList '--self-test' -NoNewWindow -Wait -PassThru
+if ($selftest.ExitCode -ne 0) { throw "self-test of the staged tree failed (exit $($selftest.ExitCode))" }
 
 if (-not $Iscc) {
   $Iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source

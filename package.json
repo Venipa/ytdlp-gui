@@ -11,6 +11,8 @@
     "build": "bun run --filter @ytdlpd/desktop build",
     "check": "bun run --filter @ytdlpd/desktop check",
     "setup": "bun run --filter @ytdlpd/desktop setup",
-    "dev:hot": "bun run --filter @ytdlpd/desktop dev:hot"
+    "dev:hot": "bun run --filter @ytdlpd/desktop dev:hot",
+    "release:win": "bun run --filter @ytdlpd/desktop release:win",
+    "release:mac": "bun run --filter @ytdlpd/desktop release:mac"
   }
 }

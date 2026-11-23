@@ -47,5 +47,10 @@ cargo run -p ytdlpd -- --frame-stats           # frame time log
 - Build without Python (fake backend, no setup needed, no real downloads): `cargo run -p ytdlpd --no-default-features`; the `engine` crate itself always needs the runtime, so use `-p ytdlpd` (and `-p state` etc.) instead of `--workspace` without setup.
 - Linux `libxkbcommon` / `vulkan` link errors: install the packages above.
 
+### Local release builds
+From the repo root (output in `apps/desktop/dist/`):
+- Windows x64: `bun run release:win` builds the release exe, stages it with the Python runtime, runs `--self-test` on the staged tree and writes `ytdlpd-<version>-windows-x64-setup.exe`. Needs Inno Setup 6 (`winget install JRSoftware.InnoSetup`). On the dev box set `CARGO_TARGET_DIR`, `TMP` and `TEMP` to a non-C: drive first.
+- macOS arm64 (run on an Apple Silicon Mac): `bun run release:mac` builds `ytdlpd.app` and `ytdlpd-<version>-macos-arm64.dmg`, ad-hoc signed, and runs `--self-test`. Needs Xcode (command line tools) and bun. Set `CODESIGN_IDENTITY` / `NOTARY_PROFILE` for a signed, notarised build.
+
 ### Packaging
 Per OS, producing the installer in `apps/desktop/dist/`: `pwsh scripts/package-windows.ps1` (needs Inno Setup 6), `bash scripts/package-macos.sh` (`.app` + dmg, ad-hoc signed; set `CODESIGN_IDENTITY` and `NOTARY_PROFILE` to ship), `bash scripts/package-linux.sh` (AppImage). A `v*` tag builds all six in `.github/workflows/release.yml`. Third-party licenses: `THIRD-PARTY.md` (regenerate with `python scripts/gen-third-party.py`).
