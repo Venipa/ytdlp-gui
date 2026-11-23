@@ -33,8 +33,9 @@ fn main() {
                 .expect("quality: best, 2160, 1440, 1080, 720, 480"),
         ),
     };
-    let out =
-        opt("--out").map(PathBuf::from).unwrap_or_else(|| std::env::temp_dir().join("ytdlpd-fetch-out"));
+    let out = opt("--out")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("ytdlpd-fetch-out"));
     std::fs::create_dir_all(&out).unwrap();
     let mut job = engine::spec::simple_job(url.clone(), preset, &out);
     job.ffmpeg_location = opt("--ffmpeg");
