@@ -111,6 +111,7 @@ pub struct Modal {
     trailing: Option<AnyElement>,
     dismiss: Option<Dismiss>,
     close_button: bool,
+    wide: bool,
 }
 
 impl Modal {
@@ -126,6 +127,7 @@ impl Modal {
             trailing: None,
             dismiss: None,
             close_button: false,
+            wide: false,
         }
     }
 
@@ -156,6 +158,12 @@ impl Modal {
     /// Draws a cross in the top corner, which dismisses the modal the same way clicking
     /// outside it does. For a modal the user is meant to be able to walk away from without
     /// reading the buttons.
+    /// A modal one and a half times as wide, for tables.
+    pub fn wide(mut self) -> Self {
+        self.wide = true;
+        self
+    }
+
     pub fn close_button(mut self) -> Self {
         self.close_button = true;
         self
@@ -201,6 +209,7 @@ impl RenderOnce for Modal {
             trailing,
             dismiss,
             close_button,
+            wide,
         } = self;
         let outside = dismiss.clone();
         let mark = LATEST.with(|latest| {
@@ -279,7 +288,7 @@ impl RenderOnce for Modal {
                     .when_some(about, |this, detail| this.aria_description(detail))
                     .relative()
                     .occlude()
-                    .w(theme.metrics.cover * WIDTH)
+                    .w(theme.metrics.cover * WIDTH * if wide { 1.5 } else { 1. })
                     .max_w_full()
                     .max_h_full()
                     .flex()
