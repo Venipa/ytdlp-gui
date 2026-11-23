@@ -13,6 +13,7 @@ use crate::input::Input;
 use crate::metrics::Text;
 use crate::theme::ActiveTheme as _;
 use crate::time::tabular;
+use crate::tooltip::Tipped as _;
 
 /// The family of call numbers, ids, format codes, logs and the intake text.
 pub const MONO: &str = "IBM Plex Mono";
@@ -27,6 +28,17 @@ static PULSE_EPOCH: std::sync::LazyLock<std::time::Instant> =
     std::sync::LazyLock::new(std::time::Instant::now);
 /// Thickness of the amber fill over the track.
 const FILL: f32 = 2.;
+/// How strong the dots of a track are, as an alpha of pencil: a quiet ruled line under the text.
+const DOTS: f32 = 0.35;
+/// A chip's side padding and the gap between its label and count.
+const CHIP_INSET: Pixels = px(10.);
+const CHIP_GAP: Pixels = px(6.);
+/// The search field's width range: it gives way to the chips beside it in a narrow window.
+const SEARCH_MIN: f32 = 140.;
+const SEARCH_MAX: f32 = 280.;
+/// The side list's width, and its width when it shows icons only.
+const NAV_WIDTH: f32 = 184.;
+const NAV_NARROW: f32 = 48.;
 
 type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
 type SelectHandler = std::rc::Rc<dyn Fn(usize, &mut Window, &mut App)>;
@@ -147,7 +159,7 @@ impl RenderOnce for ProgressRule {
                         while x < end {
                             window.paint_quad(fill(
                                 at(x, px(DOT), px(DOT)),
-                                theme.muted_foreground.opacity(0.5),
+                                theme.muted_foreground.opacity(DOTS),
                             ));
                             x += px(DOT_PITCH);
                         }
@@ -353,13 +365,15 @@ impl RenderOnce for Chip {
             .role(Role::Button)
             .aria_label(name)
             .flex()
+            .flex_none()
             .items_center()
-            .gap_1()
-            .h(theme.metrics.control_small)
-            .px_2()
+            .gap(CHIP_GAP)
+            .h(theme.metrics.control)
+            .px(CHIP_INSET)
             .rounded(theme.radius)
             .border_1()
             .cursor_pointer()
+            .whitespace_nowrap()
             .text_size(theme.text(Text::Label))
             .border_color(match selected {
                 true => theme.table_active_border,
@@ -369,7 +383,10 @@ impl RenderOnce for Chip {
                 true => theme.table_active,
                 false => gpui::transparent_black(),
             })
-            .hover(|style| style.bg(theme.table_hover))
+            .when(!selected, |this| {
+                this.hover(|style| style.bg(theme.secondary_hover))
+                    .active(|style| style.bg(theme.secondary_active))
+            })
             .child(self.label)
             .when_some(self.count, |this, count| {
                 this.child(
@@ -395,6 +412,7 @@ pub struct SideNav {
     items: Vec<SideNavItem>,
     icons: Vec<&'static str>,
     selected: usize,
+    narrow: bool,
     on_select: SelectHandler,
 }
 
@@ -409,6 +427,7 @@ impl SideNav {
             items,
             icons: Vec::new(),
             selected,
+            narrow: false,
             on_select: std::rc::Rc::new(on_select),
         }
     }
@@ -418,18 +437,25 @@ impl SideNav {
         self.icons = icons.into_iter().collect();
         self
     }
+
+    /// Shows the icons only, each naming its page in a tooltip, for a narrow window.
+    pub fn narrow(mut self, narrow: bool) -> Self {
+        self.narrow = narrow;
+        self
+    }
 }
 
 impl RenderOnce for SideNav {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = *cx.theme();
+        let narrow = self.narrow;
         div()
             .flex()
             .flex_col()
             .flex_none()
-            .w(px(168.))
-            .gap_px()
-            .p_2()
+            .w(px(if narrow { NAV_NARROW } else { NAV_WIDTH }))
+            .gap(px(2.))
+            .p(theme.metrics.pad)
             .border_r_1()
             .border_color(theme.sidebar_border)
             .children(self.items.into_iter().enumerate().map(|(index, item)| {
@@ -441,19 +467,40 @@ impl RenderOnce for SideNav {
                     .role(Role::Tab)
                     .aria_label(item.label.clone())
                     .aria_selected(on)
-                    .h(px(32.))
+                    .relative()
+                    .h(theme.metrics.control + px(4.))
                     .flex()
+                    .flex_none()
                     .items_center()
-                    .gap_2()
-                    .px_2()
+                    .gap(px(10.))
+                    .px(theme.metrics.pad)
                     .rounded(theme.radius)
                     .cursor_pointer()
                     .text_size(theme.text(Text::Body))
                     .when(on, |this| {
                         this.bg(theme.sidebar_accent)
-                            .text_color(theme.table_active_border)
+                            .text_color(theme.foreground)
+                            // the open page carries an ink edge, the same mark the title bar uses
+                            .child(
+                                div()
+                                    .absolute()
+                                    .left_0()
+                                    .top(px(8.))
+                                    .bottom(px(8.))
+                                    .w(px(2.))
+                                    .rounded_full()
+                                    .bg(theme.table_active_border),
+                            )
                     })
-                    .when(!on, |this| this.hover(|style| style.bg(theme.table_hover)))
+                    .when(!on, |this| {
+                        this.text_color(theme.muted_foreground).hover(|style| {
+                            style.bg(theme.secondary_hover).text_color(theme.foreground)
+                        })
+                    })
+                    .when(narrow, |this| {
+                        this.justify_center()
+                            .tip_label(item.label.clone(), crate::Perch::Trailing)
+                    })
                     .on_click(move |_, window, cx| select(index, window, cx))
                     .when_some(icon, |this, path| {
                         this.child(
@@ -467,7 +514,9 @@ impl RenderOnce for SideNav {
                                 }),
                         )
                     })
-                    .child(item.label)
+                    .when(!narrow, |this| {
+                        this.child(div().truncate().child(item.label))
+                    })
             }))
     }
 }
@@ -511,14 +560,17 @@ impl RenderOnce for TokenInput {
                 this.role(Role::Search).aria_label(name)
             })
             .flex()
+            .flex_1()
+            .min_w_0()
+            .justify_end()
             .items_center()
-            .gap_2()
+            .gap(px(6.))
             .children(self.tokens.into_iter().map(|(text, valid)| {
                 div()
                     .px_1()
                     .rounded(theme.radius)
                     .font_family(MONO)
-                    .text_size(theme.text(Text::Tiny))
+                    .text_size(theme.text(Text::Small))
                     .text_color(match valid {
                         true => theme.table_active_border,
                         false => theme.danger,
@@ -529,6 +581,12 @@ impl RenderOnce for TokenInput {
                     })
                     .child(text)
             }))
-            .child(div().w(px(240.)).child(self.input))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(SEARCH_MIN))
+                    .max_w(px(SEARCH_MAX))
+                    .child(self.input),
+            )
     }
 }
