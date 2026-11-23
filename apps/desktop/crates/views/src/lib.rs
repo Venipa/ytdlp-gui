@@ -8,6 +8,7 @@ mod formats;
 mod pages;
 mod root;
 mod sample;
+mod screens;
 mod workspace;
 
 pub use root::{Root, UI_FONT};

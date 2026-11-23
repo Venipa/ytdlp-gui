@@ -5,14 +5,14 @@ use gpui::{
     AnyElement, Context, Entity, FocusHandle, MouseButton, MouseDownEvent, MouseMoveEvent,
     MouseUpEvent, Window, WindowControlArea, div,
 };
-use i18n::t;
 use input::{OpenSettings, ShowDownloads, ShowLogs, ShowSettings, WORKSPACE_CONTEXT};
 use router::{Destination, Navigation, NavigationEvent, SettingsPage};
-use ui::{ActiveTheme as _, Button, Input, WindowControls};
+use ui::{ActiveTheme as _, Button, WindowControls};
 
 use crate::downloads::Downloads;
 use crate::pages;
 use crate::sample::Data;
+use crate::screens::settings::SettingsView;
 
 /// The shell: a title bar with the page navigation over the current page.
 pub struct Workspace {
@@ -20,7 +20,7 @@ pub struct Workspace {
     focus: FocusHandle,
     data: Rc<Data>,
     downloads: Entity<Downloads>,
-    cookies: Entity<Input>,
+    settings: Entity<SettingsView>,
     /// Whether the left button went down on the bar and has not moved the window yet.
     grabbed: bool,
 }
@@ -37,7 +37,7 @@ impl Workspace {
             .detach();
         let data = Rc::new(Data::sample());
         let downloads = cx.new(|cx| Downloads::new(data.clone(), cx));
-        let cookies = cx.new(|cx| Input::new(t!("set-cookies-paste-hint"), cx));
+        let settings = cx.new(SettingsView::new);
         match scene.unwrap_or("downloads") {
             "welcome" => router::navigate(Destination::Welcome, cx),
             "logs" => router::navigate(Destination::Logs, cx),
@@ -56,7 +56,7 @@ impl Workspace {
             focus: cx.focus_handle(),
             data,
             downloads,
-            cookies,
+            settings,
             grabbed: false,
         }
     }
@@ -75,25 +75,18 @@ impl Workspace {
             .on_click(move |_, _, cx| router::navigate(to, cx))
     }
 
-    fn page(
-        &self,
-        current: Destination,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn page(&self, current: Destination, cx: &mut Context<Self>) -> AnyElement {
         match current {
             Destination::Welcome => pages::welcome(&self.data, cx),
             Destination::Downloads => self.downloads.clone().into_any_element(),
             Destination::Logs => pages::logs(&self.data, cx),
-            Destination::Settings(page) => {
-                pages::settings(page, &self.data, &self.cookies, window, cx)
-            }
+            Destination::Settings(_) => self.settings.clone().into_any_element(),
         }
     }
 }
 
 impl Render for Workspace {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = *cx.theme();
         let current = self.navigation.read(cx).current();
         let settings = Destination::Settings(SettingsPage::General);
@@ -168,11 +161,6 @@ impl Render for Workspace {
                             .child(WindowControls::new(false)),
                     ),
             )
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .child(self.page(current, window, cx)),
-            )
+            .child(div().flex_1().min_h_0().child(self.page(current, cx)))
     }
 }
