@@ -38,6 +38,8 @@ const UNDO: Duration = Duration::from_secs(6);
 pub(crate) const FADE: Duration = Duration::from_millis(160);
 /// How often the free space of the output drive is read again.
 const FREE_EVERY: Duration = Duration::from_secs(5);
+/// The narrowest window that docks the detail panel beside the list; narrower ones lay it over.
+const DOCK_AT: f32 = 1100.;
 
 /// What the result card under the intake shows.
 #[derive(Clone)]
@@ -143,12 +145,13 @@ impl Downloads {
             Input::new(t!("dl-intake-hint"), cx)
                 .name("dl-intake-name")
                 .icon("icons/link.svg")
+                .large()
                 .clearable()
         });
         let search = cx.new(|cx| {
             Input::new(t!("dl-search-hint"), cx)
                 .name("dl-search-name")
-                .compact()
+                .icon("icons/search.svg")
                 .clearable()
         });
         let subs = vec![
@@ -866,9 +869,9 @@ impl Downloads {
             .flex()
             .items_center()
             .justify_between()
-            .h(px(36.))
+            .gap(theme.metrics.pad)
             .text_size(theme.text(Text::Label))
-            .child(div().flex().gap_2().children(chips.map(|(chip, key)| {
+            .child(div().flex().gap(px(6.)).children(chips.map(|(chip, key)| {
                 Chip::new(key, i18n::lookup(key, None))
                     .count(downloads.count(|s| chip.matches(s)))
                     .selected(self.chip == chip)
@@ -929,9 +932,9 @@ impl Downloads {
                 .flex()
                 .items_center()
                 .justify_between()
-                .gap_3()
-                .px_3()
-                .py_2()
+                .gap(px(12.))
+                .px(px(12.))
+                .py(px(10.))
                 .rounded(theme.radius)
                 .border_1()
                 .border_color(if failed { theme.danger } else { theme.border })
@@ -939,14 +942,36 @@ impl Downloads {
                 .child(
                     div()
                         .flex()
-                        .flex_col()
-                        .child(div().child(t!("dl-notice-tools-title")))
-                        .child(div().text_color(theme.muted_foreground).child(message)),
+                        .items_start()
+                        .gap(px(10.))
+                        .child(
+                            gpui::svg()
+                                .path(icons::path("icons/triangle-alert.svg"))
+                                .size(px(16.))
+                                .mt(px(1.))
+                                .flex_none()
+                                .text_color(if failed {
+                                    theme.danger
+                                } else {
+                                    theme.progress_bar
+                                }),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap(px(2.))
+                                .child(
+                                    div()
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .child(t!("dl-notice-tools-title")),
+                                )
+                                .child(div().text_color(theme.muted_foreground).child(message)),
+                        ),
                 )
                 .child(
                     Button::new("tools-fix")
                         .primary()
-                        .small()
                         .disabled(busy)
                         .label(t!("dl-notice-tools-action"))
                         .on_click(move |_, _, cx| {
@@ -973,12 +998,13 @@ impl Downloads {
             .flex_none()
             .justify_between()
             .items_center()
-            .h(px(28.))
-            .px(theme.metrics.pad)
+            .h(theme.metrics.control)
+            .px(theme.metrics.gutter)
             .border_t_1()
             .border_color(theme.border)
             .text_size(theme.text(Text::Small))
             .text_color(theme.muted_foreground)
+            .font_features(ui::tabular())
             .child(match queued {
                 0 => t!("dl-status-bar", running = running, paused = paused),
                 q => t!(
@@ -1004,12 +1030,23 @@ impl Downloads {
         let text = self.intake.read(cx).text().trim().to_owned();
         let valid = !split_urls(&text).urls.is_empty();
         let invalid = !text.is_empty() && !valid;
+        // the card has its own Download once it can download; one primary action at a time
+        let own = matches!(
+            self.card(cx),
+            Card::Result(_) | Card::Batch | Card::Playlist(_) | Card::Failed(_)
+        );
         div()
             .flex()
             .items_center()
-            .gap_2()
+            .gap(theme.metrics.pad)
             .h(theme.metrics.field)
-            .child(div().flex_1().font_family(MONO).child(self.intake.clone()))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .font_family(MONO)
+                    .child(self.intake.clone()),
+            )
             .when(invalid, |this| {
                 this.child(
                     div()
@@ -1019,14 +1056,17 @@ impl Downloads {
                         .child(t!("dl-intake-invalid")),
                 )
             })
-            .child(
-                Button::new("intake-download")
-                    .outline()
-                    .icon("icons/download.svg")
-                    .label(t!("dl-download"))
-                    .disabled(!valid)
-                    .on_click(cx.listener(|this, _, _, cx| this.submit(cx))),
-            )
+            .when(!own, |this| {
+                this.child(
+                    Button::new("intake-download")
+                        .outline()
+                        .large()
+                        .icon("icons/download.svg")
+                        .label(t!("dl-download"))
+                        .disabled(!valid)
+                        .on_click(cx.listener(|this, _, _, cx| this.submit(cx))),
+                )
+            })
             .text_size(theme.text(Text::Body))
             .into_any_element()
     }
@@ -1111,6 +1151,14 @@ impl Render for Downloads {
             self.intake.update(cx, |input, cx| input.focus(window, cx));
         }
         let ring = self.list_focus.is_focused(window) && window.last_input_was_keyboard();
+        // a wide window docks the detail panel beside the list, a narrow one lays it over the list
+        let width = window.viewport_size().width;
+        let docked = width >= px(DOCK_AT);
+        let list_width = match (self.selected.is_some(), docked) {
+            (true, true) => width - px(crate::detail::PANEL),
+            _ => width,
+        };
+        let cols = crate::rows::Columns::for_width(list_width);
         let lines = Rc::new(self.lines(cx));
         let filter_text = self.search.read(cx).text().to_owned();
         let thumbs = self.app.settings.read(cx).get().show_thumbnails;
@@ -1157,7 +1205,9 @@ impl Render for Downloads {
                             cx.processor(move |this, range: Range<usize>, _, cx| {
                                 range
                                     .filter_map(|at| {
-                                        items.get(at).map(|line| this.line(*line, thumbs, ring, cx))
+                                        items
+                                            .get(at)
+                                            .map(|line| this.line(*line, thumbs, ring, cols, cx))
                                     })
                                     .collect::<Vec<_>>()
                             }),
@@ -1190,6 +1240,7 @@ impl Render for Downloads {
             .drag_over::<ExternalPaths>(move |style, _, _, _| style.bg(theme.table_active))
             .child(
                 div()
+                    .relative()
                     .flex()
                     .flex_1()
                     .min_h_0()
@@ -1199,19 +1250,27 @@ impl Render for Downloads {
                             .flex_col()
                             .flex_1()
                             .min_w_0()
-                            .gap_2()
-                            .p(theme.metrics.pad)
                             .child(
                                 div()
-                                    .key_context(FORM_CONTEXT)
-                                    .on_action(
-                                        cx.listener(|this, _: &Submit, _, cx| this.submit(cx)),
+                                    .flex()
+                                    .flex_col()
+                                    .flex_none()
+                                    .gap(px(12.))
+                                    .px(theme.metrics.gutter)
+                                    .pt(px(12.))
+                                    .pb(px(12.))
+                                    .child(
+                                        div()
+                                            .key_context(FORM_CONTEXT)
+                                            .on_action(cx.listener(|this, _: &Submit, _, cx| {
+                                                this.submit(cx)
+                                            }))
+                                            .child(self.intake_strip(cx)),
                                     )
-                                    .child(self.intake_strip(cx)),
+                                    .children(card)
+                                    .children(banner)
+                                    .child(self.chips(cx)),
                             )
-                            .children(card)
-                            .children(banner)
-                            .child(self.chips(cx))
                             .child(
                                 div()
                                     .flex_1()
@@ -1221,7 +1280,7 @@ impl Render for Downloads {
                                     .child(list),
                             ),
                     )
-                    .children(selected.map(|row| self.detail_panel(&row, cx))),
+                    .children(selected.map(|row| self.detail_panel(&row, !docked, cx))),
             )
             .child(status)
             .children(menu)

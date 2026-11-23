@@ -172,10 +172,10 @@ impl Render for ToastLayer {
             .absolute()
             .bottom(px(40.))
             .right(px(16.))
-            .w(px(360.))
+            .w(px(400.))
             .flex()
             .flex_col()
-            .gap_2()
+            .gap(px(8.))
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                 this.hovered = *hovered;
                 cx.notify();
@@ -190,7 +190,6 @@ impl Render for ToastLayer {
                 let dismissed = layer.clone();
                 let mut card = Toast::new(("toast", id as usize), item.message.clone())
                     .icon(icon)
-                    .single_line()
                     .when(item.leaving, |card| card.inert())
                     .on_dismiss(move |_, _, cx| {
                         dismissed.update(cx, |layer, cx| layer.dismiss(id, cx))

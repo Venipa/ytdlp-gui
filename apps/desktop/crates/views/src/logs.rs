@@ -57,7 +57,7 @@ impl LogsView {
         let search = cx.new(|cx| {
             Input::new(t!("dl-logs-search-hint"), cx)
                 .name("dl-logs-search-name")
-                .compact()
+                .icon("icons/search.svg")
                 .clearable()
         });
         let subs = vec![
@@ -235,8 +235,9 @@ impl Render for LogsView {
                                         div()
                                             .id(("log-line", at))
                                             .flex()
-                                            .gap_3()
+                                            .gap(px(12.))
                                             .h(px(24.))
+                                            .px(theme.metrics.gutter)
                                             .items_center()
                                             .cursor_pointer()
                                             .hover(|style| style.bg(theme.table_hover))
@@ -256,11 +257,11 @@ impl Render for LogsView {
                                             )
                                             .child(
                                                 div()
-                                                    .w(px(52.))
+                                                    .w(px(56.))
                                                     .flex_none()
                                                     .flex()
                                                     .items_center()
-                                                    .gap_1p5()
+                                                    .gap(px(6.))
                                                     .text_color(tone)
                                                     .child(
                                                         div().size(px(6.)).rounded_full().bg(tone),
@@ -296,14 +297,16 @@ impl Render for LogsView {
             .flex()
             .flex_col()
             .size_full()
-            .gap_2()
-            .p(theme.metrics.pad)
             .child(
                 div()
                     .flex()
+                    .flex_none()
                     .items_center()
                     .justify_between()
-                    .child(div().flex().gap_2().children(chips.map(|(key, least)| {
+                    .gap(theme.metrics.pad)
+                    .px(theme.metrics.gutter)
+                    .py(px(12.))
+                    .child(div().flex().gap(px(6.)).children(chips.map(|(key, least)| {
                         Chip::new(key, i18n::lookup(key, None))
                             .selected(self.least == least)
                             .on_click(cx.listener(move |this, _, _, cx| {
@@ -314,14 +317,14 @@ impl Render for LogsView {
                     .child(
                         div()
                             .flex()
-                            .gap_2()
+                            .gap(px(8.))
                             .items_center()
-                            .child(div().w(px(200.)).child(self.search.clone()))
+                            .child(div().w(px(220.)).child(self.search.clone()))
                             .child(div().text_color(pencil).child(t!("dl-logs-job")))
                             .child(
                                 Button::new("logs-job")
                                     .outline()
-                                    .small()
+                                    .icon("icons/chevrons-up-down.svg")
                                     .label(job_label)
                                     .on_click(cx.listener(
                                         |this, event: &gpui::ClickEvent, _, cx| {
@@ -333,7 +336,6 @@ impl Render for LogsView {
                             .child(
                                 Button::new("logs-follow")
                                     .ghost()
-                                    .small()
                                     .icon("icons/arrow-up-down.svg")
                                     .label(t!("dl-logs-follow"))
                                     .toggled(self.follow)
@@ -350,7 +352,7 @@ impl Render for LogsView {
                             .child(
                                 Button::new("logs-copy")
                                     .ghost()
-                                    .small()
+                                    .icon("icons/copy.svg")
                                     .label(t!("dl-logs-copy"))
                                     .on_click(cx.listener(|this, _, _, cx| this.copy_all(cx))),
                             ),

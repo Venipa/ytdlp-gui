@@ -22,8 +22,8 @@ use i18n::t;
 use router::{Destination, Navigation, NavigationEvent, SettingsPage};
 use state::{AppSettings, AppState, Hooks, Tools, ToolsEvent};
 use ui::{
-    ActiveTheme as _, Button, Chip, Input, Look, MONO, Notice, Popovers, Scrollbar, Scroller,
-    SideNav, SideNavItem, SwitchRow, Text,
+    ActiveTheme as _, Chip, Input, Look, MONO, Notice, Popovers, Scrollbar, Scroller, SideNav,
+    SideNavItem, Stepper, SwitchRow, Text,
 };
 
 use crate::toasts::{Kind, toast};
@@ -47,6 +47,9 @@ const BROWSERS: [(&str, &str); 3] = [
 ];
 
 type Edit = Rc<dyn Fn(&mut Settings)>;
+
+/// Below this window width the side list shows icons only.
+const NARROW: f32 = 900.;
 
 struct FieldState {
     field: Field,
@@ -118,7 +121,7 @@ impl SettingsView {
                 let input = cx.new(|cx| {
                     let mut input = Input::new(hint, cx);
                     if numeric {
-                        input = input.align_end();
+                        input = input.joined().align_center();
                     }
                     input
                 });
@@ -318,13 +321,13 @@ impl SettingsView {
         div()
             .flex()
             .flex_col()
-            .gap_1()
+            .gap(px(4.))
             .w(px(width))
             .child(state.input.clone())
             .when_some(state.error, |this, key| {
                 this.child(
                     div()
-                        .text_size(theme.text(Text::Label))
+                        .text_size(theme.text(Text::Small))
                         .text_color(theme.danger)
                         .child(i18n::lookup(key, None)),
                 )
@@ -332,30 +335,43 @@ impl SettingsView {
             .into_any_element()
     }
 
-    /// A number field with minus and plus buttons around it.
+    /// A number field between minus and plus buttons, one bordered group, its error under it.
     fn stepper(&self, field: Field, cx: &App) -> AnyElement {
-        let step = |id: String, label: &'static str, delta: i32| {
-            Button::new(SharedString::from(id))
-                .outline()
-                .small()
-                .label(label)
-                .on_click(self.edit(move |s| field.bump(delta, s)))
-        };
+        let state = self.field(field);
+        let theme = *cx.theme();
+        let settings = self.settings();
         div()
             .flex()
-            .items_start()
-            .gap_1()
-            .child(step(format!("{field:?}-minus"), "\u{2212}", -1))
-            .child(self.input(field, 64., cx))
-            .child(step(format!("{field:?}-plus"), "+", 1))
+            .flex_col()
+            .items_end()
+            .gap(px(4.))
+            .child(
+                Stepper::new(
+                    SharedString::from(format!("{field:?}-step")),
+                    &state.input,
+                    px(48.),
+                )
+                .invalid(state.error.is_some())
+                .on_step(move |delta, _, cx| {
+                    settings.update(cx, |s, cx| s.update(|s| field.bump(delta, s), cx))
+                }),
+            )
+            .when_some(state.error, |this, key| {
+                this.child(
+                    div()
+                        .text_size(theme.text(Text::Small))
+                        .text_color(theme.danger)
+                        .child(i18n::lookup(key, None)),
+                )
+            })
             .into_any_element()
     }
 
     fn value_box(&self, text: impl Into<SharedString>, cx: &App) -> AnyElement {
         let theme = *cx.theme();
         div()
-            .px_2()
-            .h(theme.metrics.field)
+            .px(px(10.))
+            .h(theme.metrics.control)
             .flex()
             .items_center()
             .min_w(px(260.))
@@ -563,6 +579,19 @@ fn tool_toast(event: &ToolsEvent, cx: &mut App) {
     toast(cx, kind, message, None);
 }
 
+/// The icon of a settings page in the side list.
+fn page_icon(page: SettingsPage) -> &'static str {
+    match page {
+        SettingsPage::General => "icons/sliders-horizontal.svg",
+        SettingsPage::Downloads => "icons/download.svg",
+        SettingsPage::Formats => "icons/film.svg",
+        SettingsPage::Network => "icons/radio.svg",
+        SettingsPage::Tools => "icons/settings.svg",
+        SettingsPage::Appearance => "icons/palette.svg",
+        SettingsPage::About => "icons/info.svg",
+    }
+}
+
 fn tool_key(kind: ToolKind) -> &'static str {
     match kind {
         ToolKind::YtDlp => "welcome-tool-yt-dlp",
@@ -576,6 +605,7 @@ fn tool_key(kind: ToolKind) -> &'static str {
 
 impl Render for SettingsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let narrow = window.viewport_size().width < px(NARROW);
         if self.window_look != Some(self.applied) {
             self.window_look = Some(self.applied);
             look::apply_window(window, cx);
@@ -598,7 +628,9 @@ impl Render for SettingsView {
                 .position(|p| *p == page)
                 .unwrap_or(0),
             |index, _, cx| router::navigate(Destination::Settings(SettingsPage::ALL[index]), cx),
-        );
+        )
+        .icons(SettingsPage::ALL.map(page_icon))
+        .narrow(narrow);
         let sections = match page {
             SettingsPage::General => self.page_general(&s, cx),
             SettingsPage::Downloads => self.page_downloads(&s, cx),

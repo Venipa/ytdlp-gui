@@ -19,6 +19,8 @@ use crate::format;
 
 /// How long the panel takes to open.
 const SLIDE: Duration = Duration::from_millis(160);
+/// The panel's width.
+pub(crate) const PANEL: f32 = 360.;
 /// The widest the panel may be dragged, which is also what its slide opens to.
 const WIDEST: f32 = 560.;
 /// The log lines the tail keeps.
@@ -38,11 +40,14 @@ impl Downloads {
         let theme = *cx.theme();
         div()
             .flex()
-            .gap_3()
+            .items_baseline()
+            .gap(px(12.))
+            .min_h(px(20.))
             .child(
                 div()
                     .w(px(64.))
                     .flex_none()
+                    .text_size(theme.text(Text::Small))
                     .text_color(theme.muted_foreground)
                     .child(label),
             )
@@ -61,8 +66,13 @@ impl Downloads {
             .into_any_element()
     }
 
-    /// The 360 px right panel for `s`.
-    pub(crate) fn detail_panel(&self, s: &DownloadSummary, cx: &mut Context<Self>) -> AnyElement {
+    /// The 360 px right panel for `s`; `overlay` lays it over the list for a narrow window.
+    pub(crate) fn detail_panel(
+        &self,
+        s: &DownloadSummary,
+        overlay: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let theme = *cx.theme();
         let pencil = theme.muted_foreground;
         let id = s.id;
@@ -76,7 +86,7 @@ impl Downloads {
             .map(SharedString::from);
 
         let action = |key: &'static str, icon: &'static str, label: SharedString| {
-            Button::new(key).outline().small().icon(icon).label(label)
+            Button::new(key).outline().icon(icon).label(label)
         };
         let primary = match status {
             DownloadStatus::Paused => Some(
@@ -111,38 +121,33 @@ impl Downloads {
                         .on_click(cx.listener(move |this, _, _, cx| this.show_folder(id, cx))),
                 )
             })
-            .child(
-                action("detail-copy", "icons/copy.svg", t!("dl-copy-link"))
-                    .on_click(cx.listener(move |this, _, _, cx| this.copy_link(id, cx))),
-            )
             .when(!status.is_terminal(), |this| {
                 this.child(
                     Button::new("detail-cancel")
                         .ghost()
-                        .small()
                         .icon("icons/x.svg")
                         .label(t!("dl-cancel-download"))
                         .on_click(cx.listener(move |this, _, _, cx| this.cancel(id, cx))),
                 )
             })
-            .when(!status.is_active(), |this| {
-                this.child(
+            .child({
+                // copy, delete and the rest live in the same menu a right-click opens
+                {
                     Button::new("detail-more")
                         .ghost()
-                        .small()
                         .icon("icons/ellipsis.svg")
                         .tooltip("dl-more")
                         .on_click(cx.listener(move |this, event: &gpui::ClickEvent, _, cx| {
                             this.menu = Some((event.position(), id));
                             cx.notify();
-                        })),
-                )
+                        }))
+                }
             });
 
         let (status_label, tone) = crate::rows::status_text(s, &theme);
         let header = div()
             .flex()
-            .gap_3()
+            .gap(px(12.))
             .items_start()
             .child(
                 Thumbnail::new(thumb, px(112.))
@@ -155,7 +160,7 @@ impl Downloads {
                     .flex_col()
                     .flex_1()
                     .min_w_0()
-                    .gap_1()
+                    .gap(px(6.))
                     .child(
                         div()
                             .id("detail-title")
@@ -169,7 +174,7 @@ impl Downloads {
                         div()
                             .flex()
                             .items_center()
-                            .gap_2()
+                            .gap(px(8.))
                             .text_size(theme.text(Text::Small))
                             .child(CallNumber::new(id.0).selected(true))
                             .child(div().truncate().text_color(tone).child(status_label)),
@@ -201,8 +206,11 @@ impl Downloads {
         let details = div()
             .flex()
             .flex_col()
-            .gap_2()
-            .child(div().flex().child(details_head))
+            .gap(px(6.))
+            .pt(px(12.))
+            .border_t_1()
+            .border_color(theme.border)
+            .child(div().flex().ml(px(-8.)).child(details_head))
             .when(open, |this| {
                 this.child(self.fact("d-url", t!("dl-detail-url"), s.url.clone(), true, cx))
                     .children(
@@ -237,17 +245,33 @@ impl Downloads {
             div()
                 .flex()
                 .flex_col()
-                .gap_1()
-                .p_2()
+                .gap(px(4.))
+                .px(px(10.))
+                .py(px(8.))
                 .rounded(theme.radius)
                 .border_1()
                 .border_color(theme.danger.opacity(0.5))
-                .child(div().text_color(theme.danger).child(error_text_of(code)))
+                .bg(theme.danger.opacity(0.08))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .text_color(theme.danger)
+                        .child(
+                            svg()
+                                .path(icons::path("icons/circle-alert.svg"))
+                                .size(px(14.))
+                                .flex_none()
+                                .text_color(theme.danger),
+                        )
+                        .child(error_text_of(code)),
+                )
                 .children(s.error_message.clone().map(|m| {
                     div()
                         .line_clamp(4)
                         .font_family(MONO)
-                        .text_size(theme.text(Text::Tiny))
+                        .text_size(theme.text(Text::Small))
                         .text_color(pencil)
                         .child(m)
                 }))
@@ -274,7 +298,7 @@ impl Downloads {
                             .flex()
                             .gap_2()
                             .font_family(MONO)
-                            .text_size(theme.text(Text::Tiny))
+                            .text_size(theme.text(Text::Small))
                             .child(div().flex_none().text_color(pencil).child(time))
                             .child(div().min_w_0().flex_1().child(text))
                     })),
@@ -287,8 +311,7 @@ impl Downloads {
                 div()
                     .flex()
                     .items_center()
-                    .gap_1()
-                    .px_2()
+                    .gap(px(6.))
                     .h(theme.metrics.control_small)
                     .text_color(pencil)
                     .child(
@@ -305,7 +328,8 @@ impl Downloads {
                     .rounded(theme.radius)
                     .border_1()
                     .border_color(theme.border)
-                    .p_2()
+                    .bg(theme.secondary.opacity(0.5))
+                    .p(px(8.))
                     .map(|this| match empty {
                         true => this.text_color(pencil).child(t!("dl-detail-nolog")),
                         false => this.child(tail),
@@ -316,8 +340,8 @@ impl Downloads {
             div()
                 .flex()
                 .flex_col()
-                .gap_4()
-                .p(theme.metrics.pad)
+                .gap(px(16.))
+                .p(theme.metrics.gutter)
                 .font_features(tabular())
                 .child(header)
                 .child(actions)
@@ -325,8 +349,10 @@ impl Downloads {
                 .child(details)
                 .child(log),
         );
-        let panel = Panel::new("detail-panel", Side::Right, px(360.))
+        let panel = Panel::new("detail-panel", Side::Right, px(PANEL))
             .limits(px(280.), px(WIDEST))
+            .border_color(theme.border)
+            .bg(theme.background)
             .child(div().size_full().child(body));
         // the panel opens by growing out of the window's edge; at rest the cap is the widest it
         // can be dragged to, so resizing is untouched
@@ -339,6 +365,10 @@ impl Downloads {
             .flex_none()
             .h_full()
             .overflow_hidden()
+            .when(overlay, |this| {
+                // laid over the list: pinned to the right edge with a shadow to lift it
+                this.absolute().top_0().right_0().bottom_0().shadow_lg()
+            })
             .child(panel)
             .with_animation(
                 "detail-slide",

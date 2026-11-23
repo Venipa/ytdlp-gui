@@ -287,3 +287,8 @@ Status values per item; Ref is review until the lead sets done. Shots F:\tmp\ytd
 | 5b | Formats modal lists scroll the arrow-picked row into view | review | pb2-fmt1 |
 | 7b | yt-dlp update: Check offers Install; `install_ytdlp_pair` + `--self-test --site` verify; pointer in app_state `ytdlp_site` (+`_previous`), engine follows via `Backend::set_site`; failure keeps old site | review | verified live against a local PyPI mirror (YTDLPD_TOOLS_MIRROR); D-170..172 |
 | 6 | Folder picker end to end; motion frame proof | open | pulse rule proven by pb2-motion-card-strip; panel slide / row fade / card unfold NOT captured; folder picker NOT re-verified |
+
+## UI refine (lane refine, designer loop; changelog F:\tmp\ytdlpd-rs\screenshots\changes.md)
+| Round | Item | Status | Ref |
+|---|---|---|---|
+| 1 | Control system (24/28/36, text floor 10/11), `ui::Stepper`, ink focus, title-bar tabs, page gutters, rows with responsive columns, card states, detail overlay, settings side list icons + narrow, logs toolbar, toasts wrap | review | D-180..184; shots F:\tmp\ytdlpd-rs\screenshots\after-round-1 |
