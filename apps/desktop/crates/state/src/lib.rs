@@ -13,8 +13,9 @@ mod settings;
 mod store;
 mod toast;
 mod tools;
+pub mod updates;
 
-pub use downloads::{Downloads, DownloadsEvent, Live};
+pub use downloads::{Downloads, DownloadsEvent, Live, UPDATE_REASON};
 pub use fake::{FakeBackend, FakeTools, Scene};
 pub use hooks::{Hooks, PreviewFn, StoreCookiesFn, VersionFn};
 pub use intake::{Intake, IntakeEvent};
@@ -26,6 +27,7 @@ pub use settings::AppSettings;
 pub use store::Store;
 pub use toast::{Toast, ToastKind, Toasts};
 pub use tools::{Tools, ToolsEvent};
+pub use updates::{Release, UpdateError, UpdateState, Updates};
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -123,6 +125,7 @@ pub struct AppState {
     pub logs: Entity<Logs>,
     pub toasts: Entity<Toasts>,
     pub intake: Entity<Intake>,
+    pub updates: Entity<Updates>,
     pub store: Store,
     /// `Some` for `--demo <scene>`.
     pub scene: Option<Scene>,
@@ -284,6 +287,24 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
     };
     downloads.update(cx, |d, cx| d.load(cx));
     tools.update(cx, |t, cx| t.refresh(cx));
+    let updates = {
+        let (settings, downloads, store, io) =
+            (settings.clone(), downloads.clone(), store.clone(), io.clone());
+        let folder = paths.cache.join("updates");
+        let poll = scene.is_none();
+        cx.new(|cx| {
+            Updates::new(
+                settings,
+                downloads,
+                store,
+                io,
+                folder,
+                updates::api_base(),
+                poll,
+                cx,
+            )
+        })
+    };
 
     let state = AppState {
         io,
@@ -295,6 +316,7 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
         logs,
         toasts,
         intake,
+        updates,
         store,
         scene,
     };

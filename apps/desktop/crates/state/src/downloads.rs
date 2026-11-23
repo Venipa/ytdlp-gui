@@ -66,6 +66,8 @@ pub struct Downloads {
     limits: Limits,
     max_attempts: u32,
     resume_on_start: bool,
+    /// Set while the updater pauses rows: their reason becomes `update`, so the next start resumes them.
+    pausing_for_update: bool,
     scheduler: Scheduler,
     rng: XorShift,
     dirty: bool,
@@ -74,6 +76,9 @@ pub struct Downloads {
 }
 
 impl EventEmitter<DownloadsEvent> for Downloads {}
+
+/// `status_reason` of a row the updater paused before relaunching.
+pub const UPDATE_REASON: &str = "update";
 
 fn limits_from(s: &domain::Settings) -> Limits {
     Limits {
@@ -115,6 +120,7 @@ impl Downloads {
             limits: limits_from(&current),
             max_attempts: current.max_attempts,
             resume_on_start: current.resume_on_start,
+            pausing_for_update: false,
             scheduler: Scheduler::default(),
             rng: XorShift(seed ^ 0x9E37_79B9_7F4A_7C15),
             dirty: false,
@@ -204,19 +210,23 @@ impl Downloads {
                 self.rows = rows;
                 self.loaded = true;
                 self.load_error = None;
-                if self.resume_on_start {
-                    let ids: Vec<_> = self
-                        .rows
-                        .iter()
-                        .filter(|r| {
-                            r.status == DownloadStatus::Paused
-                                && r.status_reason.as_deref() == Some("interrupted")
-                        })
-                        .map(|r| r.id)
-                        .collect();
-                    for id in ids {
-                        self.apply(id, StateEvent::Resume, cx);
-                    }
+                // rows an update paused always come back; interrupted ones when settings ask
+                let resume = self.resume_on_start;
+                let ids: Vec<_> = self
+                    .rows
+                    .iter()
+                    .filter(|r| {
+                        r.status == DownloadStatus::Paused
+                            && match r.status_reason.as_deref() {
+                                Some(UPDATE_REASON) => true,
+                                Some("interrupted") => resume,
+                                _ => false,
+                            }
+                    })
+                    .map(|r| r.id)
+                    .collect();
+                for id in ids {
+                    self.apply(id, StateEvent::Resume, cx);
                 }
                 cx.emit(DownloadsEvent::Loaded);
                 self.pump(cx);
@@ -357,6 +367,15 @@ impl Downloads {
         cx.spawn(async move |_, _| close.await)
     }
 
+    /// Like `shutdown`, but the paused rows carry the reason `update` and resume on the next start
+    /// whatever `resume_on_start` says (the updater relaunches the app).
+    pub fn pause_for_update(&mut self, cx: &mut Context<Self>) -> Task<()> {
+        self.pausing_for_update = true;
+        let done = self.shutdown(cx);
+        self.pausing_for_update = false;
+        done
+    }
+
     // ---- lifecycle core ----
 
     /// Applies a state event to a row and performs its effects. `None` when illegal or unknown.
@@ -378,7 +397,11 @@ impl Downloads {
         let was = row.status;
         row.status = to;
         row.updated_at = now;
-        row.status_reason = (event == StateEvent::Interrupted).then(|| "interrupted".to_string());
+        row.status_reason = match event {
+            StateEvent::Interrupted => Some("interrupted".to_string()),
+            StateEvent::Pause if self.pausing_for_update => Some(UPDATE_REASON.to_string()),
+            _ => None,
+        };
         if to == DownloadStatus::Probing {
             row.started_at.get_or_insert(now);
             row.error_code = None;
