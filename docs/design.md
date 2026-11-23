@@ -60,7 +60,7 @@ Built on maple `Metrics::new(14)`. Radius 2px via `ThemeOverrides.radius` (rows,
 |---|---|---|
 | queued, paused | dotted 1px in `border` colour | pencil status ("Waiting", "Paused") |
 | probing | dotted, tail dots pulse (reduced-motion: static) | "Reading the page" |
-| downloading, processing | dotted track with a 2px amber fill from the left to the progress point | amber percent, tabular |
+| downloading, processing | faint amber track the row wide with a solid 3px amber fill from the left to the progress point (D-185) | amber percent, tabular |
 | completed | solid 1px in `border` colour | quiet; ink-blue only when selected |
 | failed | solid 1px `danger` | danger text and icon, plus a one-line cause and one action |
 | cancelled | dotted | pencil "Cancelled" |
