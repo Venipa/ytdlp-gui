@@ -25,7 +25,9 @@ input.workspace = true
 log.workspace = true
 notify-rust.workspace = true
 router.workspace = true
+domain.workspace = true
 storage.workspace = true
+state.workspace = true
 ui.workspace = true
 views.workspace = true
 

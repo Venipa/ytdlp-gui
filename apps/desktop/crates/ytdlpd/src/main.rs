@@ -27,6 +27,9 @@ struct Args {
     /// Where the database, settings and logs live instead of the platform default.
     #[arg(long, value_name = "DIR")]
     data_dir: Option<PathBuf>,
+    /// Run against fake data: an in-memory database, a fake engine and fake tools.
+    #[arg(long, value_name = "SCENE", value_parser = clap::builder::PossibleValuesParser::new(state::Scene::NAMES))]
+    demo: Option<String>,
     /// The first window size, as WIDTHxHEIGHT.
     #[arg(long, value_name = "WxH")]
     window_size: Option<WindowSize>,
@@ -63,14 +66,18 @@ impl FromStr for WindowSize {
     }
 }
 
-/// What the state layer builds at start-up and the views read. Lane C replaces this with the
-/// real handle (fake or engine-backed) inside `build_app`.
-// shortcut: empty placeholder until `state` exists, replace in Phase 0b (lane C).
-struct Backend;
-
-/// The one place state is wired up, so Lane C can plug the backend in without touching `main`.
-fn build_app(_data_dir: Option<PathBuf>, _cx: &mut App) -> Backend {
-    Backend
+/// The one place state is wired up: runtime, storage (opened in the background, honours
+/// `--data-dir`), fake or real engine, and every entity.
+fn build_app(data_dir: Option<PathBuf>, demo: Option<&str>, cx: &mut App) -> state::AppState {
+    let args = state::InitArgs {
+        data_dir,
+        demo: demo.and_then(state::Scene::parse),
+        // TODO(real-engine): construct the engine `Backend` here once the engine crate lands;
+        // until then both builds run on `FakeBackend`.
+        backend: None,
+        ..Default::default()
+    };
+    state::init(args, cx).expect("cannot start the application state")
 }
 
 fn main() -> ExitCode {
@@ -122,7 +129,7 @@ fn main() -> ExitCode {
             })
             .detach();
 
-            let _backend = build_app(args.data_dir.clone(), cx);
+            let _state = build_app(args.data_dir.clone(), args.demo.as_deref(), cx);
             router::init(Destination::Downloads, cx);
             let size = args.window_size.map(|size| size.0).unwrap_or(FIRST_SIZE);
             let frame_stats = args.launch.frame_stats;

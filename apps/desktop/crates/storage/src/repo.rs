@@ -159,6 +159,21 @@ impl NewDownload {
     }
 }
 
+/// A row with explicit state for `Db::seed_downloads`.
+#[derive(Debug, Clone)]
+pub struct SeedRow {
+    pub new: NewDownload,
+    pub status: DownloadStatus,
+    pub reason: Option<String>,
+    pub progress: f64,
+    pub file_path: Option<String>,
+    pub file_size: Option<i64>,
+    pub error: Option<(ErrorCode, String)>,
+    pub attempts: u32,
+    pub next_attempt_at: Option<i64>,
+    pub created_at: i64,
+}
+
 /// Full row for the detail panel / retry.
 #[derive(Debug, Clone)]
 pub struct DownloadDetail {
@@ -469,6 +484,58 @@ impl Db {
         .await
         .context("cannot recover interrupted downloads")?;
         Ok(r.rows_affected())
+    }
+
+    /// Bulk-inserts finished-looking rows in one transaction (demo scenes, tests, `seed` example).
+    pub async fn seed_downloads(&self, rows: &[SeedRow]) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+        for (i, r) in rows.iter().enumerate() {
+            let d = &r.new;
+            let domain = if d.domain.is_empty() {
+                domain_of(&d.url)
+            } else {
+                d.domain.clone()
+            };
+            let id: i64 = sqlx::query_scalar(
+                "INSERT INTO downloads (url, extractor, video_id, domain, title, uploader, duration_s, kind, preset,                  format_spec, format_label, options_json, status, status_reason, progress, bytes_total, file_path, file_size,                  error_code, error_message, attempts, next_attempt_at, position, created_at, finished_at, updated_at)                  VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,                  CASE WHEN ?13 IN ('completed','failed','cancelled') THEN ?24 END, ?24) RETURNING id",
+            )
+            .bind(&d.url)
+            .bind(&d.extractor)
+            .bind(&d.video_id)
+            .bind(domain)
+            .bind(&d.title)
+            .bind(&d.uploader)
+            .bind(d.duration_s)
+            .bind(d.kind.as_str())
+            .bind(&d.preset)
+            .bind(&d.format_spec)
+            .bind(&d.format_label)
+            .bind(&d.options_json)
+            .bind(r.status.as_str())
+            .bind(&r.reason)
+            .bind(r.progress)
+            .bind(r.file_size)
+            .bind(&r.file_path)
+            .bind(r.file_size)
+            .bind(r.error.as_ref().map(|e| e.0.as_str()))
+            .bind(r.error.as_ref().map(|e| e.1.as_str()))
+            .bind(r.attempts as i64)
+            .bind(r.next_attempt_at)
+            .bind(i as f64 + 1.0)
+            .bind(r.created_at)
+            .fetch_one(&mut *tx)
+            .await
+            .context("cannot seed download")?;
+            if let Some(info) = &d.info_json {
+                sqlx::query("INSERT INTO download_meta (download_id, info_json) VALUES (?1, ?2)")
+                    .bind(id)
+                    .bind(info)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+        }
+        tx.commit().await?;
+        Ok(())
     }
 
     // ---- logs ----
