@@ -52,7 +52,10 @@ fn status_text(s: &DownloadSummary, theme: &ui::Theme) -> (SharedString, Hsla) {
                 .as_deref()
                 .map(error_text_of)
                 .unwrap_or_else(|| t!("dl-err-unknown"));
-            (t!("dl-status-failed-why", reason = why.as_ref()), theme.danger)
+            (
+                t!("dl-status-failed-why", reason = why.as_ref()),
+                theme.danger,
+            )
         }
         DownloadStatus::Cancelled => (t!("dl-status-cancelled"), pencil),
     }
@@ -113,7 +116,12 @@ impl Downloads {
     }
 
     /// What the row is when clicked, right-clicked, hovered.
-    fn shell(&self, s: &DownloadSummary, thumbs: bool, cx: &mut Context<Self>) -> gpui::Stateful<gpui::Div> {
+    fn shell(
+        &self,
+        s: &DownloadSummary,
+        thumbs: bool,
+        cx: &mut Context<Self>,
+    ) -> gpui::Stateful<gpui::Div> {
         let theme = *cx.theme();
         let id = s.id;
         let selected = self.selected == Some(id);
@@ -189,7 +197,6 @@ impl Downloads {
                             .child(
                                 div()
                                     .truncate()
-
                                     .child(s.title.clone().unwrap_or_else(|| s.url.clone())),
                             )
                             .child(
@@ -272,7 +279,10 @@ impl Downloads {
                     .px(theme.metrics.pad)
                     .child(CallNumber::new(id.0).selected(selected))
                     .child(Thumbnail::new(
-                        s.thumbnail_path.clone().map(SharedString::from),
+                        s.thumbnail_path
+                            .clone()
+                            .or_else(|| s.thumbnail_url.clone())
+                            .map(SharedString::from),
                         px(80.),
                     ))
                     .child(
@@ -333,9 +343,9 @@ impl Downloads {
                                         .small()
                                         .outline()
                                         .label(t!("dl-try-again"))
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.retry(id, cx)
-                                        })),
+                                        .on_click(
+                                            cx.listener(move |this, _, _, cx| this.retry(id, cx)),
+                                        ),
                                 )
                             }),
                     ),

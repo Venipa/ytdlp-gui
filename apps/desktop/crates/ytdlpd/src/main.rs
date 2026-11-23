@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod assets;
+mod http;
 mod platform;
 mod selftest;
 
@@ -154,6 +155,7 @@ fn main() -> ExitCode {
             .detach();
 
             let state = build_app(args.data_dir.clone(), args.launch.demo.as_deref(), cx);
+            cx.set_http_client(std::sync::Arc::new(http::Client::new(state.io.handle())));
             views::apply_stored(args.theme.as_deref(), cx);
             wire_platform(&state, cx);
             router::init(Destination::Downloads, cx);

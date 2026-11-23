@@ -111,7 +111,12 @@ impl Workspace {
         if !self.routed {
             log::info!(
                 "views: tools detected, ready={ready}, first run done={first_run_done}, tools={:?}",
-                tools.read(cx).all().iter().map(|s| (s.kind, s.state.clone())).collect::<Vec<_>>()
+                tools
+                    .read(cx)
+                    .all()
+                    .iter()
+                    .map(|s| (s.kind, s.state.clone()))
+                    .collect::<Vec<_>>()
             );
         }
         if !std::mem::replace(&mut self.routed, true) {
@@ -147,16 +152,12 @@ impl Workspace {
             .on_click(move |_, _, cx| router::navigate(to, cx))
     }
 
-    fn page(
-        &self,
-        current: Destination,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn page(&self, current: Destination, cx: &mut Context<Self>) -> AnyElement {
         match current {
             Destination::Welcome => welcome::welcome(cx),
             Destination::Downloads => self.downloads.clone().into_any_element(),
             Destination::Logs => self.logs.clone().into_any_element(),
-            Destination::Settings(_) => self.settings.clone().into_any_element()
+            Destination::Settings(_) => self.settings.clone().into_any_element(),
         }
     }
 
@@ -169,7 +170,7 @@ impl Workspace {
 }
 
 impl Render for Workspace {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = *cx.theme();
         let current = self.navigation.read(cx).current();
         let settings = Destination::Settings(SettingsPage::General);
@@ -264,12 +265,7 @@ impl Render for Workspace {
                             .child(WindowControls::new(false)),
                     ),
             )
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .child(self.page(current, cx)),
-            )
+            .child(div().flex_1().min_h_0().child(self.page(current, cx)))
             .child(self.toasts.clone())
     }
 }

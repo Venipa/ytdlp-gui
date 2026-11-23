@@ -125,7 +125,10 @@ impl Downloads {
                                     ),
                             )
                             .child(Thumbnail::new(
-                                s.thumbnail_path.clone().map(SharedString::from),
+                                s.thumbnail_path
+                                    .clone()
+                                    .or_else(|| s.thumbnail_url.clone())
+                                    .map(SharedString::from),
                                 px(328.),
                             ))
                             .child(
@@ -151,9 +154,11 @@ impl Downloads {
                                             })),
                                     ),
                             )
-                            .children(s.file_path.clone().map(|path| {
-                                line(t!("dl-detail-file"), mono(path))
-                            }))
+                            .children(
+                                s.file_path
+                                    .clone()
+                                    .map(|path| line(t!("dl-detail-file"), mono(path))),
+                            )
                             .child(
                                 div()
                                     .flex()
@@ -170,20 +175,17 @@ impl Downloads {
                                                 })),
                                         )
                                     })
-                                    .when(
-                                        has_file && status == DownloadStatus::Completed,
-                                        |this| {
-                                            this.child(
-                                                Button::new("open-file")
-                                                    .outline()
-                                                    .small()
-                                                    .label(t!("dl-open"))
-                                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                                        this.open_file(id, cx)
-                                                    })),
-                                            )
-                                        },
-                                    )
+                                    .when(has_file && status == DownloadStatus::Completed, |this| {
+                                        this.child(
+                                            Button::new("open-file")
+                                                .outline()
+                                                .small()
+                                                .label(t!("dl-open"))
+                                                .on_click(cx.listener(move |this, _, _, cx| {
+                                                    this.open_file(id, cx)
+                                                })),
+                                        )
+                                    })
                                     .when(!status.is_terminal(), |this| {
                                         this.child(
                                             Button::new("detail-cancel")

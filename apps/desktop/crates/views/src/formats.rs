@@ -256,3 +256,37 @@ impl Downloads {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fmt(id: &str, v: Option<&str>, a: Option<&str>) -> FormatInfo {
+        FormatInfo {
+            id: id.into(),
+            vcodec: v.map(Into::into),
+            acodec: a.map(Into::into),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn spec_joins_video_and_audio_unless_the_video_has_sound() {
+        let probe = ProbeResult {
+            formats: vec![
+                fmt("140", Some("none"), Some("mp4a")),
+                fmt("137", Some("avc1"), Some("none")),
+                fmt("18", Some("avc1"), Some("mp4a")),
+            ],
+            ..Default::default()
+        };
+        let draft = defaults(&probe);
+        assert_eq!(spec(&draft, &probe), "18");
+        let video_only = Draft {
+            video: Some("137".into()),
+            audio: Some("140".into()),
+        };
+        assert_eq!(spec(&video_only, &probe), "137+140");
+        assert_eq!(spec(&Draft::default(), &probe), "");
+    }
+}
