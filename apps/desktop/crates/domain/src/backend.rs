@@ -82,6 +82,20 @@ pub trait ToolsApi: Send + Sync {
     fn status(&self) -> BoxFuture<'static, Vec<ToolStatus>>;
     /// Downloads/installs `tool` if missing, streaming progress; the stream ends with `Done` or `Failed`.
     fn ensure(&self, tool: ToolKind) -> BoxStream<'static, ToolEvent>;
+    /// Downloads and installs `tool` again even when one is detected (Tools page "Re-download").
+    /// Defaults to `ensure` for implementations that cannot tell the difference.
+    fn reinstall(&self, tool: ToolKind) -> BoxStream<'static, ToolEvent> {
+        self.ensure(tool)
+    }
+    /// The newest version of `tool` newer than `current`, `None` when `current` is the latest or
+    /// the tool has no update channel.
+    fn check_update(
+        &self,
+        _tool: ToolKind,
+        _current: Option<String>,
+    ) -> BoxFuture<'static, Result<Option<String>, EngineError>> {
+        Box::pin(async { Ok(None) })
+    }
     /// Points `tool` at a user binary; rejects executables that are not that tool.
     fn set_custom_path(
         &self,

@@ -5,12 +5,24 @@ use std::time::Duration;
 
 use domain::{EngineError, ErrorCode, ToolEvent, ToolKind, ToolState, ToolStatus, ToolsApi};
 use futures::StreamExt as _;
-use gpui::{Context, Task};
+use gpui::{Context, EventEmitter, Task};
 
 /// Attempts per `ensure` (a connection reset was seen live on the first try).
 const TRIES: u32 = 3;
 /// Base wait between tries (multiplied by the try number).
 const RETRY_DELAY: Duration = Duration::from_secs(1);
+
+/// What the Tools page is told after an action it started.
+#[derive(Clone, Debug)]
+pub enum ToolsEvent {
+    /// A check for a newer version ended: the newer version, or `None` when this is the latest.
+    UpdateChecked {
+        kind: ToolKind,
+        latest: Result<Option<String>, EngineError>,
+    },
+    /// A tool was downloaded again.
+    Reinstalled(ToolKind),
+}
 
 /// Tool statuses for the Welcome and Tools screens.
 pub struct Tools {
@@ -21,6 +33,8 @@ pub struct Tools {
     detect: Option<Task<()>>,
     retry_delay: Duration,
 }
+
+impl EventEmitter<ToolsEvent> for Tools {}
 
 impl Tools {
     /// Creates the entity state; call `refresh` to detect.
@@ -96,6 +110,34 @@ impl Tools {
 
     /// Installs `kind` if missing, with progress; transient failures retry up to three times.
     pub fn ensure(&mut self, kind: ToolKind, cx: &mut Context<Self>) {
+        self.run(kind, false, cx)
+    }
+
+    /// Downloads `kind` again although one is installed.
+    pub fn reinstall(&mut self, kind: ToolKind, cx: &mut Context<Self>) {
+        self.run(kind, true, cx)
+    }
+
+    /// Asks whether a newer `kind` exists (`current` is what is installed); the answer comes as
+    /// [`ToolsEvent::UpdateChecked`].
+    pub fn check_update(
+        &mut self,
+        kind: ToolKind,
+        current: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let check = self.api.check_update(kind, current);
+        cx.spawn(async move |this, cx| {
+            let latest = check.await;
+            this.update(cx, |_, cx| {
+                cx.emit(ToolsEvent::UpdateChecked { kind, latest })
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn run(&mut self, kind: ToolKind, force: bool, cx: &mut Context<Self>) {
         if self.jobs.contains_key(&kind) {
             return;
         }
@@ -113,7 +155,10 @@ impl Tools {
                 "the install ended early",
             ));
             for attempt in 1..=TRIES {
-                let mut events = api.ensure(kind);
+                let mut events = match force {
+                    true => api.reinstall(kind),
+                    false => api.ensure(kind),
+                };
                 let mut failure = None;
                 let mut finished = None;
                 while let Some(event) = events.next().await {
@@ -133,6 +178,9 @@ impl Tools {
                     this.update(cx, |this, cx| {
                         this.set(status);
                         this.jobs.remove(&kind);
+                        if force {
+                            cx.emit(ToolsEvent::Reinstalled(kind));
+                        }
                         cx.notify();
                     })
                     .ok();
