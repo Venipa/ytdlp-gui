@@ -190,7 +190,10 @@ pub(crate) fn update_line(
     let state = app.updates.read(cx).state().clone();
     let channel = app.settings.read(cx).get().update_channel;
     let running = app.downloads.read(cx).count(|s| s.is_active());
-    let (title, detail) = words(&state, channel, running)?;
+    let Some((title, detail)) = words(&state, channel, running) else {
+        let show = !rail && app.updates.read(cx).updated();
+        return show.then(|| updated_line(&app.updates, &theme));
+    };
     let failed = matches!(state, UpdateState::Failed { .. });
     if rail {
         let dot = match state {
@@ -286,4 +289,58 @@ pub(crate) fn update_line(
             })
             .into_any_element(),
     )
+}
+
+/// "Updated to" with the release notes, on the first run of a newer version.
+fn updated_line(updates: &Entity<Updates>, theme: &ui::Theme) -> AnyElement {
+    let version = state::updates::current_version();
+    let title = t!("update-updated", version = version);
+    let page = format!(
+        "https://github.com/{}/releases/tag/v{version}",
+        state::updates::REPO
+    );
+    let updates = updates.clone();
+    div()
+        .id("update-line")
+        .role(Role::Group)
+        .aria_label(t!("update-line-label", state = title.to_string()))
+        .flex()
+        .flex_col()
+        .flex_none()
+        .items_start()
+        .gap(px(6.))
+        .p(px(8.))
+        .mb(px(6.))
+        .rounded(theme.radius)
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.secondary)
+        .text_size(theme.text(ui::Text::Small))
+        .child(
+            div()
+                .flex()
+                .w_full()
+                .items_center()
+                .justify_between()
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .child(title)
+                .child(
+                    Button::new("update-line-dismiss")
+                        .small()
+                        .ghost()
+                        .icon("icons/x.svg")
+                        .name(t!("update-dismiss"))
+                        .on_click(move |_, _, cx| {
+                            updates.update(cx, |u, cx| u.dismiss_updated(cx))
+                        }),
+                ),
+        )
+        .child(
+            Button::new("update-line-notes")
+                .small()
+                .outline()
+                .label(t!("update-notes"))
+                .on_click(move |_, _, cx| cx.open_url(&page)),
+        )
+        .into_any_element()
 }

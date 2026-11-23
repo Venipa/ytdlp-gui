@@ -1,9 +1,9 @@
 //! Putting a verified update in place (ported from maple `updates/install.rs`). Every install
 //! waits for this process to exit before it touches the running copy, then optionally starts the
-//! new one: Windows runs the Inno installer silently, macOS swaps the `.app` taken off the dmg,
+//! new one: Windows starts the update card (`apply.rs`), which runs the Inno installer, macOS swaps the `.app` taken off the dmg,
 //! Linux swaps the AppImage.
 use std::path::{Path, PathBuf};
-#[cfg(any(windows, unix))]
+#[cfg(unix)]
 use std::process::Command;
 use std::sync::OnceLock;
 
@@ -135,59 +135,31 @@ fn detect() -> Install {
 }
 
 #[cfg(any(windows, unix))]
-fn writable(folder: &Path) -> bool {
+pub(super) fn writable(folder: &Path) -> bool {
     let probe = folder.join(format!(".ytdlpd-write-{}", std::process::id()));
     let ok = std::fs::File::create(&probe).is_ok();
     std::fs::remove_file(&probe).ok();
     ok
 }
 
-/// Quotes for a PowerShell single-quoted string.
-#[cfg(windows)]
-fn ps_quote(path: &Path) -> String {
-    format!("'{}'", path.to_string_lossy().replace('\'', "''"))
-}
-
-/// The installer's switches. A folder this user cannot write (an all-users install in Program
-/// Files) needs `/ALLUSERS`, where Setup asks for admin rights; otherwise Setup keeps the mode of
-/// the earlier install (its `UsePreviousPrivileges` default).
-#[cfg(windows)]
-fn setup_args(dir: &Path, writable: bool) -> String {
-    let mode = if writable { "" } else { "'/ALLUSERS'," };
-    let dir = dir.to_string_lossy().replace('\'', "''");
-    format!("'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',{mode}'/DIR=\"{dir}\"'")
-}
-
-/// A hidden PowerShell waits for this process, runs the installer silently into the same folder, then starts ytdlpd again (the old copy too when the installer failed, so a
-/// relaunch never leaves nothing running).
+/// Starts the update card, which waits for this process, runs the installer silently into the same
+/// folder and opens ytdlpd again.
 #[cfg(windows)]
 fn setup(installer: &Path, exe: &Path, relaunch: bool) -> Result<()> {
-    use std::os::windows::process::CommandExt as _;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let dir = exe.parent().context("the exe has no folder")?;
-    let mut script = format!(
-        "Wait-Process -Id {pid} -ErrorAction SilentlyContinue; \
-         Start-Process -FilePath {installer} -ArgumentList {args} -Wait; ",
-        pid = std::process::id(),
-        installer = ps_quote(installer),
-        args = setup_args(dir, writable(dir)),
-    );
-    if relaunch {
-        script.push_str(&format!("Start-Process -FilePath {}", ps_quote(exe)));
-    }
-    Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-WindowStyle",
-            "Hidden",
-            "-Command",
-        ])
-        .arg(script)
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn()
-        .context("cannot start the installer")?;
-    Ok(())
+    // the asset is named `ytdlpd-<version>-windows-<arch>-setup.exe`
+    let to = installer
+        .file_name()
+        .and_then(|n| n.to_str()?.strip_prefix("ytdlpd-")?.split_once("-windows-"))
+        .map_or("", |(version, _)| version);
+    let plan = super::apply::Plan {
+        installer: installer.to_path_buf(),
+        dir: exe.parent().context("the exe has no folder")?.to_path_buf(),
+        pid: std::process::id(),
+        from: super::current_version().into(),
+        to: to.into(),
+        relaunch,
+    };
+    plan.start(exe)
 }
 
 /// Runs `script` (`$1` prepared, `$2` target, `$3` relaunch) from a shell that first waits for
@@ -264,18 +236,6 @@ fn stage_image(download: &Path, staged: &Path) -> Result<PathBuf> {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
-
-    #[test]
-    fn setup_elevates_only_for_a_folder_it_cannot_write() {
-        assert_eq!(
-            setup_args(Path::new(r"C:\Program Files\ytdlpd"), false),
-            r#"'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/ALLUSERS','/DIR="C:\Program Files\ytdlpd"'"#
-        );
-        assert_eq!(
-            setup_args(Path::new(r"D:\it's\ytdlpd"), true),
-            r#"'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/DIR="D:\it''s\ytdlpd"'"#
-        );
-    }
 
     #[test]
     fn writable_tells_folders_apart() {

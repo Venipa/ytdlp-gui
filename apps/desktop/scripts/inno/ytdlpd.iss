@@ -24,7 +24,20 @@ Compression=lzma2/max
 SolidCompression=yes
 OutputDir={#Out}
 OutputBaseFilename=ytdlpd-{#Version}-windows-{#Arch}-setup
+; Ledger ground colours in light and dark (docs/design.md, Tokens); they need Inno Setup 6.7
+#if Ver >= EncodeVer(6,7,0)
+WizardStyle=modern dynamic hidebevels
+WizardBackColor=#f2ede3
+WizardBackColorDynamicDark=#15130f
+WizardSmallImageBackColor=#f2ede3
+WizardSmallImageBackColorDynamicDark=#15130f
+WizardImageFile=
+WizardSmallImageFileDynamicDark=..\..\..\..\icons\ytdlpd\linux\hicolor\256x256\apps\ytdlpd.png
+#else
 WizardStyle=modern
+#endif
+WizardSmallImageFile=..\..\..\..\icons\ytdlpd\linux\hicolor\256x256\apps\ytdlpd.png
+SetupIconFile=..\..\assets\windows\ytdlpd.ico
 ; the running app can hold the exe and python DLLs; ask the user to close it
 CloseApplications=yes
 
@@ -53,3 +66,24 @@ Root: HKCU; Subkey: "Software\Classes\ytdlpd\shell\open\command"; ValueType: str
 Filename: "{app}\ytdlpd.exe"; Description: "Launch ytdlpd"; Flags: nowait postinstall skipifsilent
 
 ; user data lives under %APPDATA%\ytdlpd and is kept on uninstall
+
+; the update card (crates/state/src/updates/apply.rs) reads the percentage from the /PROGRESS file
+[Code]
+var
+  LastPercent: Integer;
+
+procedure CurInstallProgressChanged(CurProgress, MaxProgress: Integer);
+var
+  Path: String;
+  Percent: Integer;
+begin
+  Path := ExpandConstant('{param:PROGRESS|}');
+  if (Path = '') or (MaxProgress <= 0) then
+    exit;
+  Percent := Round(CurProgress * 100.0 / MaxProgress);
+  if Percent <> LastPercent then
+  begin
+    LastPercent := Percent;
+    SaveStringToFile(Path, IntToStr(Percent) + #10, True);
+  end;
+end;

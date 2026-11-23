@@ -31,9 +31,28 @@ struct Rig {
 }
 
 fn rig(cx: &mut TestAppContext, api: &str, mode: UpdateMode, channel: UpdateChannel) -> Rig {
+    rig_after(cx, api, mode, channel, None)
+}
+
+/// A rig whose database was last used by version `last`.
+fn rig_after(
+    cx: &mut TestAppContext,
+    api: &str,
+    mode: UpdateMode,
+    channel: UpdateChannel,
+    last: Option<&str>,
+) -> Rig {
     cx.executor().allow_parking();
     let io = Io::new().unwrap();
     let db = io.handle().block_on(Db::memory()).unwrap();
+    if let Some(last) = last {
+        io.handle()
+            .block_on(db.state_set("updates_last_version", last))
+            .unwrap();
+        io.handle()
+            .block_on(db.state_set("updates_last_checked", "5"))
+            .unwrap();
+    }
     let store = Store::with_db(&io, db);
     let settings = Settings {
         update_mode: mode,
@@ -265,4 +284,22 @@ fn prereleases_only_on_beta_and_a_channel_switch_checks_again(cx: &mut TestAppCo
         "beta offers it",
         |cx| matches!(state(cx, &r), UpdateState::Available(ref rel) if rel.version == version),
     );
+}
+
+#[gpui::test]
+fn the_first_run_of_a_newer_version_says_so_until_dismissed(cx: &mut TestAppContext) {
+    let (mode, channel) = (UpdateMode::Manual, UpdateChannel::Stable);
+    for (last, says) in [
+        ("0.0.1", true),
+        (current_version(), false),
+        ("999.0.0", false),
+    ] {
+        let r = rig_after(cx, "", mode, channel, Some(last));
+        settle(cx, "read", |cx| {
+            r.updates.read_with(cx, |u, _| u.last_checked().is_some())
+        });
+        assert_eq!(r.updates.read_with(cx, |u, _| u.updated()), says, "{last}");
+        r.updates.update(cx, |u, cx| u.dismiss_updated(cx));
+        assert!(!r.updates.read_with(cx, |u, _| u.updated()));
+    }
 }

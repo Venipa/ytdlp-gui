@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(windows)]
+mod apply;
 mod assets;
 mod http;
 mod platform;
@@ -111,6 +113,10 @@ fn main() -> ExitCode {
     }
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("ytdlpd=info"))
         .init();
+    #[cfg(windows)]
+    if let Some(code) = apply::dispatch() {
+        return code;
+    }
     let args = Args::parse();
     // single instance: a second launch forwards its links to the running app and exits
     let Some(platform) = platform::start(

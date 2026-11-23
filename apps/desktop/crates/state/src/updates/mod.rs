@@ -2,6 +2,8 @@
 //! channel, downloads the package for this platform while hashing it, keeps it only when it
 //! matches `SHA256SUMS.txt`, and installs it on Relaunch or when the app quits.
 //! States: idle → checking → available → downloading → ready → installing, or failed (with Try again).
+#[cfg(windows)]
+pub mod apply;
 mod install;
 mod release;
 #[doc(hidden)]
@@ -32,6 +34,8 @@ const API: &str = "https://api.github.com";
 const POLL: Duration = Duration::from_secs(6 * 60 * 60);
 /// `app_state` key of the last finished check (unix ms).
 const LAST_CHECKED: &str = "updates_last_checked";
+/// `app_state` key of the version that ran last, to tell when an update went in.
+const LAST_VERSION: &str = "updates_last_version";
 const AGENT: &str = concat!("ytdlpd/", env!("CARGO_PKG_VERSION"));
 
 /// The running version.
@@ -120,6 +124,7 @@ pub struct Updates {
     staged: Option<PathBuf>,
     install_on_quit: bool,
     last_checked: Option<i64>,
+    updated: bool,
     updates_itself: bool,
     launch: LaunchFn,
     wishes: (UpdateChannel, UpdateMode),
@@ -183,11 +188,26 @@ impl Updates {
                 }
             })
         });
-        let read = store.read(|db| async move { db.state_get(LAST_CHECKED).await });
+        #[cfg(windows)]
+        if poll {
+            // the copy the update card ran from; a card still open keeps its files locked
+            std::fs::remove_dir_all(folder.join(apply::RUN_DIR)).ok();
+        }
+        let read = store.read(|db| async move {
+            let checked = db.state_get(LAST_CHECKED).await?;
+            let version = db.state_get(LAST_VERSION).await?;
+            if version.as_deref() != Some(current_version()) {
+                db.state_set(LAST_VERSION, current_version()).await?;
+            }
+            Ok((checked, version))
+        });
         cx.spawn(async move |this, cx| {
-            if let Ok(Some(at)) = read.await {
+            if let Ok((checked, version)) = read.await {
                 this.update(cx, |this, cx| {
-                    this.last_checked = this.last_checked.or_else(|| at.parse().ok());
+                    this.last_checked = this
+                        .last_checked
+                        .or_else(|| checked.and_then(|at| at.parse().ok()));
+                    this.updated = version.is_some_and(|v| newer(current_version(), &v));
                     cx.notify();
                 })
                 .ok();
@@ -208,6 +228,7 @@ impl Updates {
             staged: None,
             install_on_quit: false,
             last_checked: None,
+            updated: false,
             updates_itself: install.updates_itself(),
             launch: Arc::new(|path, relaunch| Install::current().launch(path, relaunch)),
             task: None,
@@ -239,6 +260,17 @@ impl Updates {
     /// When the last check finished (unix ms).
     pub fn last_checked(&self) -> Option<i64> {
         self.last_checked
+    }
+
+    /// Whether this is the first run of a newer version, until dismissed.
+    pub fn updated(&self) -> bool {
+        self.updated
+    }
+
+    /// Hides "Updated to".
+    pub fn dismiss_updated(&mut self, cx: &mut Context<Self>) {
+        self.updated = false;
+        cx.notify();
     }
 
     /// Whether the ready update goes in when the app quits.
@@ -461,6 +493,10 @@ async fn prepared(path: PathBuf) -> Result<PathBuf, UpdateError> {
             log::warn!("updates: cannot prepare the update: {error:#}");
             UpdateError::Install
         })
+}
+
+fn newer(a: &str, b: &str) -> bool {
+    matches!((Version::parse(a), Version::parse(b)), (Some(a), Some(b)) if a > b)
 }
 
 fn failed(error: UpdateError, release: Option<Release>) -> UpdateState {

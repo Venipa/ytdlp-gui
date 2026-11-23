@@ -10,7 +10,7 @@ mod pages;
 mod rules;
 mod themes;
 
-pub use look::{apply_stored, apply_window};
+pub use look::{apply_stored, apply_window, look_of, overrides_of};
 
 use std::path::PathBuf;
 use std::rc::Rc;

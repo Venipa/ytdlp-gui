@@ -17,7 +17,7 @@ mod welcome;
 mod workspace;
 
 pub use root::{Root, UI_FONT};
-pub use screens::settings::{apply_stored, apply_window};
+pub use screens::settings::{apply_stored, apply_window, look_of, overrides_of};
 
 /// The ink-blue used for selection, focus and links (a solid field of the theme).
 pub fn ink(cx: &gpui::App) -> gpui::Hsla {

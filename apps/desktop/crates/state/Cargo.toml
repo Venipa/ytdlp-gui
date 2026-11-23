@@ -20,6 +20,9 @@ rustls.workspace = true
 serde.workspace = true
 sha2.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Threading"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 tempfile.workspace = true
 
