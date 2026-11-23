@@ -117,3 +117,11 @@ dl-notice-tools-busy = Downloading { $tool }, { $percent }%
 dl-notice-tools-action = Download them
 dl-status-bar-queued = { $running } running, { $paused } paused, { $queued } waiting
 dl-logs-copied = Log copied
+
+# UI polish (lane P-A)
+dl-intake-invalid = Needs a full link
+dl-drop-none = No links in the dropped files
+dl-empty-paste = Paste from clipboard
+dl-detail-section = Details
+dl-detail-url = Link
+dl-more = More

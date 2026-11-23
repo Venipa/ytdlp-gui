@@ -1,15 +1,15 @@
 use gpui::prelude::*;
 use gpui::{
     AnyElement, Context, Entity, FocusHandle, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, Window, WindowControlArea, div,
+    MouseUpEvent, Window, WindowControlArea, div, px, svg,
 };
 use input::{
-    DeleteEntry, DeleteFile, FocusIntake, FocusSearch, OpenSettings, PasteIntake, ShowDownloads,
+    DeleteEntry, DeleteFile, FirstRow, FocusIntake, FocusSearch, LastRow, OpenSettings, PasteIntake, ShowDownloads,
     ShowLogs, ShowSettings, TogglePause, WORKSPACE_CONTEXT,
 };
 use router::{Destination, Navigation, NavigationEvent, SettingsPage};
 use state::AppState;
-use ui::{ActiveTheme as _, Button, Deselect, SelectNext, SelectPrevious, WindowControls};
+use ui::{ActiveTheme as _, Activate, Button, Deselect, SelectNext, SelectPrevious, WindowControls};
 
 use crate::downloads::{Downloads, Key};
 use crate::logs::LogsView;
@@ -66,6 +66,7 @@ impl Workspace {
         }
         cx.observe(&app.tools, |this, _, cx| this.route(cx))
             .detach();
+        cx.observe(&app.downloads, |_, _, cx| cx.notify()).detach();
         let read = app
             .store
             .read(|db| async move { db.state_get("first_run_done").await });
@@ -138,18 +139,69 @@ impl Workspace {
         cx.notify();
     }
 
+    /// One page button of the bar: an icon and label, the open page lit with a rule under it, and
+    /// an amber count of the unfinished downloads on Downloads.
     fn entry(
         &self,
-        id: &'static str,
         key: &'static str,
+        icon: &'static str,
         to: Destination,
         current: Destination,
-    ) -> Button {
-        Button::new(id)
-            .ghost()
-            .label(i18n::lookup(key, None))
-            .selected(to.same_section(&current))
-            .on_click(move |_, _, cx| router::navigate(to, cx))
+        count: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = *cx.theme();
+        let on = to.same_section(&current);
+        div()
+            .relative()
+            .flex_none()
+            .child(
+                Button::new(key)
+                    .ghost()
+                    .icon(icon)
+                    .label(i18n::lookup(key, None))
+                    .tooltip(match key {
+                        "nav-downloads" => "nav-downloads-tip",
+                        "nav-logs" => "nav-logs-tip",
+                        _ => "nav-settings-tip",
+                    })
+                    .selected(on)
+                    .when(on, |this| this.tint(theme.table_active_border))
+                    .on_click(move |_, _, cx| router::navigate(to, cx)),
+            )
+            .when(count > 0, |this| {
+                this.child(
+                    div()
+                        .absolute()
+                        .top(px(-1.))
+                        .right(px(-4.))
+                        .min_w(px(14.))
+                        .h(px(14.))
+                        .px(px(3.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded_full()
+                        .bg(theme.progress_bar)
+                        .text_color(theme.background)
+                        .text_size(theme.text(ui::Text::Tiny))
+                        .font_features(ui::tabular())
+                        .child(count.to_string()),
+                )
+            })
+            .when(on, |this| {
+                this.child(
+                    div()
+                        .absolute()
+                        .left_2()
+                        .right_2()
+                        .bottom(px(-1.))
+                        .h(px(2.))
+                        .rounded_full()
+                        .bg(theme.table_active_border),
+                )
+            })
+            .into_any_element()
     }
 
     fn page(&self, current: Destination, cx: &mut Context<Self>) -> AnyElement {
@@ -174,6 +226,11 @@ impl Render for Workspace {
         let theme = *cx.theme();
         let current = self.navigation.read(cx).current();
         let settings = Destination::Settings(SettingsPage::General);
+        let unfinished = self
+            .app
+            .downloads
+            .read(cx)
+            .count(|status| !status.is_terminal());
 
         div()
             .id("workspace")
@@ -200,6 +257,9 @@ impl Render for Workspace {
             )
             .on_action(cx.listener(|this, _: &DeleteFile, w, cx| this.key(Key::DeleteFile, w, cx)))
             .on_action(cx.listener(|this, _: &Deselect, w, cx| this.key(Key::Deselect, w, cx)))
+            .on_action(cx.listener(|this, _: &FirstRow, w, cx| this.key(Key::First, w, cx)))
+            .on_action(cx.listener(|this, _: &LastRow, w, cx| this.key(Key::Last, w, cx)))
+            .on_action(cx.listener(|this, _: &Activate, w, cx| this.key(Key::Open, w, cx)))
             .on_action(cx.listener(|this, _: &PasteIntake, w, cx| this.key(Key::Paste, w, cx)))
             .on_action(
                 cx.listener(|this, _: &FocusIntake, w, cx| this.key(Key::FocusIntake, w, cx)),
@@ -248,14 +308,61 @@ impl Render for Workspace {
                             .items_center()
                             .gap_1()
                             .px_3()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_none()
+                                    .items_center()
+                                    .gap_2()
+                                    .mr_3()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .size(px(20.))
+                                            .rounded(theme.radius)
+                                            .bg(theme.primary)
+                                            .text_color(theme.primary_foreground)
+                                            .child(
+                                                svg()
+                                                    .path(icons::path("icons/download.svg"))
+                                                    .size(px(12.))
+                                                    .text_color(theme.primary_foreground),
+                                            ),
+                                    )
+                                    .child(
+                                        div()
+                                            .font_family(ui::MONO)
+                                            .text_size(theme.text(ui::Text::Label))
+                                            .text_color(theme.muted_foreground)
+                                            .child(i18n::lookup("app-wordmark", None)),
+                                    ),
+                            )
                             .child(self.entry(
                                 "nav-downloads",
-                                "nav-downloads",
+                                "icons/download.svg",
                                 Destination::Downloads,
                                 current,
+                                unfinished,
+                                cx,
                             ))
-                            .child(self.entry("nav-logs", "nav-logs", Destination::Logs, current))
-                            .child(self.entry("nav-settings", "nav-settings", settings, current)),
+                            .child(self.entry(
+                                "nav-logs",
+                                "icons/list.svg",
+                                Destination::Logs,
+                                current,
+                                0,
+                                cx,
+                            ))
+                            .child(self.entry(
+                                "nav-settings",
+                                "icons/settings.svg",
+                                settings,
+                                current,
+                                0,
+                                cx,
+                            )),
                     )
                     .child(
                         div()
