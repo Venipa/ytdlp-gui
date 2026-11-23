@@ -21,7 +21,8 @@ use gpui::{
 use i18n::t;
 use state::{AppState, DownloadsEvent, IntakeEvent, ProbeState};
 use ui::{
-    ActiveTheme as _, Button, Chip, FORM_CONTEXT, Input, Submit, Text, TokenInput, Vacancy,
+    ActiveTheme as _, Button, Chip, FORM_CONTEXT, Input, Scrollbar, Scroller, Submit, Text,
+    TokenInput, Vacancy,
 };
 
 use crate::format;
@@ -103,6 +104,7 @@ pub struct Downloads {
     /// The ids in list order, for the arrow keys.
     order: Vec<DownloadId>,
     pub(crate) scroll: UniformListScrollHandle,
+    bar: Entity<Scrollbar>,
     free: Option<(u64, String)>,
     free_at: Option<Instant>,
     _subs: Vec<Subscription>,
@@ -129,8 +131,12 @@ impl Downloads {
             cx.subscribe_in(&app.downloads, window, Self::download_event),
             cx.subscribe_in(&app.intake, window, Self::intake_event),
         ];
-        let remembered = Preset::from_str(&app.settings.read(cx).get().last_preset)
-            .unwrap_or(Preset::DEFAULT);
+        let remembered =
+            Preset::from_str(&app.settings.read(cx).get().last_preset).unwrap_or(Preset::DEFAULT);
+        let scroll = UniformListScrollHandle::new();
+        let bar = cx.new(|cx| {
+            Scrollbar::new(scroll.0.borrow().base_handle.clone()).watching(cx.entity_id())
+        });
         let mut this = Self {
             app,
             intake,
@@ -149,7 +155,8 @@ impl Downloads {
             confirm: None,
             hidden: HashSet::new(),
             order: Vec::new(),
-            scroll: UniformListScrollHandle::new(),
+            bar,
+            scroll,
             free: None,
             free_at: None,
             _subs: subs,
@@ -921,18 +928,23 @@ impl Render for Downloads {
                 .into_any_element(),
             _ => {
                 let items = lines.clone();
-                uniform_list(
-                    "downloads-rows",
-                    lines.len(),
-                    cx.processor(move |this, range: Range<usize>, _, cx| {
-                        range
-                            .filter_map(|at| items.get(at).map(|line| this.line(*line, thumbs, cx)))
-                            .collect::<Vec<_>>()
-                    }),
-                )
-                .track_scroll(&self.scroll)
-                .size_full()
-                .into_any_element()
+                Scroller::listing("downloads-scroll", &self.bar)
+                    .child(
+                        uniform_list(
+                            "downloads-rows",
+                            lines.len(),
+                            cx.processor(move |this, range: Range<usize>, _, cx| {
+                                range
+                                    .filter_map(|at| {
+                                        items.get(at).map(|line| this.line(*line, thumbs, cx))
+                                    })
+                                    .collect::<Vec<_>>()
+                            }),
+                        )
+                        .track_scroll(&self.scroll)
+                        .size_full(),
+                    )
+                    .into_any_element()
             }
         };
         let selected = self.selected.and_then(|id| self.summary(id, cx));
@@ -962,9 +974,9 @@ impl Render for Downloads {
                             .child(
                                 div()
                                     .key_context(FORM_CONTEXT)
-                                    .on_action(cx.listener(|this, _: &Submit, _, cx| {
-                                        this.submit(cx)
-                                    }))
+                                    .on_action(
+                                        cx.listener(|this, _: &Submit, _, cx| this.submit(cx)),
+                                    )
                                     .child(self.intake_strip(cx)),
                             )
                             .children(card)

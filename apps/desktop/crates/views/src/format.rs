@@ -30,7 +30,6 @@ pub fn duration(seconds: f64) -> String {
     }
 }
 
-
 /// `1080p`, `best`, `mp3`: the short label of a preset, as stored in a row's format column.
 pub fn preset_label(preset: domain::Preset) -> String {
     use domain::{Preset, VideoQuality};
@@ -45,7 +44,11 @@ pub fn preset_label(preset: domain::Preset) -> String {
 /// `14:03:09` in the local time zone from unix milliseconds.
 pub fn clock(at_ms: i64) -> String {
     jiff::Timestamp::from_millisecond(at_ms)
-        .map(|t| t.to_zoned(jiff::tz::TimeZone::system()).strftime("%H:%M:%S").to_string())
+        .map(|t| {
+            t.to_zoned(jiff::tz::TimeZone::system())
+                .strftime("%H:%M:%S")
+                .to_string()
+        })
         .unwrap_or_default()
 }
 

@@ -244,7 +244,7 @@ Windows is the dev box: every phase is verified on Windows. macOS and Linux get 
 
 ## UI/UX layout (owner picks 2026-11-23, mockup F:\tmp\ytdlpd-rs\.superpowers\brainstorm\28102-1795400101\content\ui-layout.html)
 - Picks: 1A title-bar tabs; 2C paste shows result card with the remembered preset marked, Enter downloads with it, chips change it first; 3B compact single-line rows 32px, no thumbnail, site beside title, error text in status (ledger rows with thumbnails stay available as setting "Show thumbnails"); 4B "In progress" group pinned on top with header + count, history below; 5A right detail panel 360px; 6C Getting ready continues by itself when tools are ready, later missing tools show a banner on Downloads with a fix button; 7A settings side list of pages; 8A bottom status bar; 9 Ledger look confirmed.
-- Status: in progress (UI wiring lanes A2/A3).
+- Status: in progress. Lane A2 (lane/a2): Downloads flow on real state done (2C card, 3B rows, 4B groups, 5A panel, 6C Getting ready, 8A status bar, row menu, logs, toasts, thumbnails via http shim, Scroller/Scrollbar on lists), ref review; screenshots F:	mpytdlpd-rsshots2-*.png. Open: drag-drop of URLs, intake mono font, focus ring, ledger-row visual check, disk cache for thumbnails.
 
 ## UI style (owner picks 2026-11-23, mockup F:\tmp\ytdlpd-rs\.superpowers\brainstorm\28102-1795400101\content\ui-style.html)
 - Picks: 1A Ledger palette; 2A IBM Plex Sans + Mono; 3A radius 2 flat hairlines; 4A ruled progress line; 5A amber only for activity; 6A Lucide line icons; 7A solid window background by default; 8C 12px dense base; 9B subtle motion (detail panel slide 160 ms, new rows fade in, result card unfolds, reduced motion respected); 10 Ledger light confirmed.

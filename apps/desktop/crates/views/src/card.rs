@@ -174,7 +174,7 @@ impl Downloads {
                         .font_family(MONO)
                         .text_size(theme.text(Text::Tiny))
                         .text_color(muted)
-                        .child(error.message.clone()),
+                        .child(error.message),
                 )
                 .into_any_element(),
             Card::Result(probe) => {
@@ -185,7 +185,10 @@ impl Downloads {
                         div()
                             .flex()
                             .gap_3()
-                            .child(Thumbnail::new(None, px(240.)))
+                            .child(Thumbnail::new(
+                                probe.thumbnail_url.clone().map(SharedString::from),
+                                px(240.),
+                            ))
                             .child(
                                 div()
                                     .flex()
@@ -209,15 +212,19 @@ impl Downloads {
                                                 format::duration(probe.duration_s.unwrap_or(0.)),
                                             )),
                                     )
-                                    .child(div().mt_2().child(self.preset_rows(
-                                        Button::new("choose-formats")
-                                            .ghost()
-                                            .label(t!("dl-choose-formats"))
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.open_formats(cx)
-                                            })),
-                                        cx,
-                                    ))),
+                                    .child(
+                                        div().mt_2().child(
+                                            self.preset_rows(
+                                                Button::new("choose-formats")
+                                                    .ghost()
+                                                    .label(t!("dl-choose-formats"))
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.open_formats(cx)
+                                                    })),
+                                                cx,
+                                            ),
+                                        ),
+                                    ),
                             ),
                     )
                     .child(
@@ -243,7 +250,12 @@ impl Downloads {
         })
     }
 
-    fn download_button(&self, id: &'static str, count: Option<usize>, cx: &mut Context<Self>) -> Button {
+    fn download_button(
+        &self,
+        id: &'static str,
+        count: Option<usize>,
+        cx: &mut Context<Self>,
+    ) -> Button {
         Button::new(id)
             .primary()
             .label(match count {
@@ -344,7 +356,7 @@ impl Downloads {
             .filter(|e| !self.playlist_off.contains(&e.index))
             .count();
         let none = entries.clone();
-        let list = entries.clone();
+        let list = entries;
         let applied = format::preset_label(self.preset);
         let title = probe.title.clone().unwrap_or_default();
         shell
@@ -362,19 +374,21 @@ impl Downloads {
                         div()
                             .flex()
                             .gap_2()
-                            .child(Button::new("sel-all").ghost().label(t!("dl-select-all")).on_click(
-                                cx.listener(move |this, _, _, cx| {
-                                    this.playlist_off.clear();
-                                    cx.notify();
-                                }),
-                            ))
+                            .child(
+                                Button::new("sel-all")
+                                    .ghost()
+                                    .label(t!("dl-select-all"))
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.playlist_off.clear();
+                                        cx.notify();
+                                    })),
+                            )
                             .child(
                                 Button::new("sel-none")
                                     .ghost()
                                     .label(t!("dl-select-none"))
                                     .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.playlist_off =
-                                            none.iter().map(|e| e.index).collect();
+                                        this.playlist_off = none.iter().map(|e| e.index).collect();
                                         cx.notify();
                                     })),
                             ),
@@ -398,16 +412,14 @@ impl Downloads {
                                     .items_center()
                                     .gap_3()
                                     .h(px(32.))
-                                    .child(
-                                        Checkbox::new(("entry", index as usize), on).on_click(
-                                            cx.listener(move |this, _, _, cx| {
-                                                if !this.playlist_off.remove(&index) {
-                                                    this.playlist_off.insert(index);
-                                                }
-                                                cx.notify();
-                                            }),
-                                        ),
-                                    )
+                                    .child(Checkbox::new(("entry", index as usize), on).on_click(
+                                        cx.listener(move |this, _, _, cx| {
+                                            if !this.playlist_off.remove(&index) {
+                                                this.playlist_off.insert(index);
+                                            }
+                                            cx.notify();
+                                        }),
+                                    ))
                                     .child(
                                         div()
                                             .w(px(36.))
@@ -421,9 +433,11 @@ impl Downloads {
                                             .truncate()
                                             .child(entry.title.unwrap_or_default()),
                                     )
-                                    .child(div().font_features(tabular()).child(
-                                        format::duration(entry.duration_s.unwrap_or(0.)),
-                                    ))
+                                    .child(
+                                        div().font_features(tabular()).child(format::duration(
+                                            entry.duration_s.unwrap_or(0.),
+                                        )),
+                                    )
                                     .when(have, |this| {
                                         this.child(
                                             div()

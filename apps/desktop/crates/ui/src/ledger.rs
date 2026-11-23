@@ -170,7 +170,17 @@ impl RenderOnce for Thumbnail {
             .border_1()
             .border_color(theme.border);
         match self.source {
-            Some(source) => frame.child(img(source).size_full().object_fit(ObjectFit::Cover)),
+            Some(source) => frame.child(
+                img(source)
+                    .size_full()
+                    .object_fit(ObjectFit::Cover)
+                    .with_loading(|| {
+                        crate::skeleton::Skeleton::new()
+                            .size_full()
+                            .into_any_element()
+                    })
+                    .with_fallback(|| gpui::Empty.into_any_element()),
+            ),
             None => frame,
         }
     }

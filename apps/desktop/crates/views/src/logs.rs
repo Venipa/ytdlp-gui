@@ -6,13 +6,13 @@ use std::rc::Rc;
 use domain::DownloadId;
 use gpui::prelude::*;
 use gpui::{
-    ClipboardItem, Context, ScrollStrategy, Subscription, UniformListScrollHandle, Window,
-    div, px, uniform_list,
+    ClipboardItem, Context, ScrollStrategy, Subscription, UniformListScrollHandle, Window, div, px,
+    uniform_list,
 };
 use i18n::t;
 use state::{AppState, LogEntry};
 use ui::{
-    ActiveTheme as _, Button, Chip, MONO, Menu, MenuItem, Popup, Text, Vacancy,
+    ActiveTheme as _, Button, Chip, MONO, Menu, MenuItem, Popup, Scrollbar, Scroller, Text, Vacancy,
 };
 
 use crate::format;
@@ -36,6 +36,7 @@ pub struct LogsView {
     job: Option<DownloadId>,
     picker: Option<gpui::Point<gpui::Pixels>>,
     scroll: UniformListScrollHandle,
+    bar: gpui::Entity<Scrollbar>,
     seen: usize,
     _sub: Subscription,
 }
@@ -44,13 +45,18 @@ impl LogsView {
     /// Builds the page over the registered state.
     pub fn new(cx: &mut Context<Self>) -> Self {
         let app = AppState::global(cx);
+        let scroll = UniformListScrollHandle::new();
+        let bar = cx.new(|cx| {
+            Scrollbar::new(scroll.0.borrow().base_handle.clone()).watching(cx.entity_id())
+        });
         let sub = cx.observe(&app.logs, |_, _, cx| cx.notify());
         Self {
             app,
             least: 0,
             job: None,
             picker: None,
-            scroll: UniformListScrollHandle::new(),
+            bar,
+            scroll,
             seen: 0,
             _sub: sub,
         }
@@ -173,57 +179,64 @@ impl Render for LogsView {
                 .into_any_element(),
             false => {
                 let items = entries.clone();
-                uniform_list(
-                    "log-lines",
-                    entries.len(),
-                    cx.processor(move |_, range: Range<usize>, _, cx| {
-                        let theme = *cx.theme();
-                        range
-                            .filter_map(|at| items.get(at))
-                            .map(|l| {
-                                let tone = match rank(&l.level) {
-                                    3 => theme.danger,
-                                    2 => theme.progress_bar,
-                                    _ => theme.muted_foreground,
-                                };
-                                div()
-                                    .flex()
-                                    .gap_3()
-                                    .h(px(24.))
-                                    .items_center()
-                                    .font_family(MONO)
-                                    .text_size(theme.text(Text::Small))
-                                    .child(
+                Scroller::listing("logs-scroll", &self.bar)
+                    .child(
+                        uniform_list(
+                            "log-lines",
+                            entries.len(),
+                            cx.processor(move |_, range: Range<usize>, _, cx| {
+                                let theme = *cx.theme();
+                                range
+                                    .filter_map(|at| items.get(at))
+                                    .map(|l| {
+                                        let tone = match rank(&l.level) {
+                                            3 => theme.danger,
+                                            2 => theme.progress_bar,
+                                            _ => theme.muted_foreground,
+                                        };
                                         div()
-                                            .w(px(64.))
-                                            .flex_none()
-                                            .text_color(theme.muted_foreground)
-                                            .child(format::clock(l.at)),
-                                    )
-                                    .child(
-                                        div().w(px(44.)).flex_none().text_color(tone).child(
-                                            l.level.clone(),
-                                        ),
-                                    )
-                                    .child(
-                                        div()
-                                            .w(px(40.))
-                                            .flex_none()
-                                            .text_color(theme.muted_foreground)
+                                            .flex()
+                                            .gap_3()
+                                            .h(px(24.))
+                                            .items_center()
+                                            .font_family(MONO)
+                                            .text_size(theme.text(Text::Small))
                                             .child(
-                                                l.job
-                                                    .map(|j| format!("{:04}", j.0))
-                                                    .unwrap_or_default(),
-                                            ),
-                                    )
-                                    .child(div().flex_1().truncate().child(l.message.clone()))
-                            })
-                            .collect::<Vec<_>>()
-                    }),
-                )
-                .track_scroll(&self.scroll)
-                .size_full()
-                .into_any_element()
+                                                div()
+                                                    .w(px(64.))
+                                                    .flex_none()
+                                                    .text_color(theme.muted_foreground)
+                                                    .child(format::clock(l.at)),
+                                            )
+                                            .child(
+                                                div()
+                                                    .w(px(44.))
+                                                    .flex_none()
+                                                    .text_color(tone)
+                                                    .child(l.level.clone()),
+                                            )
+                                            .child(
+                                                div()
+                                                    .w(px(40.))
+                                                    .flex_none()
+                                                    .text_color(theme.muted_foreground)
+                                                    .child(
+                                                        l.job
+                                                            .map(|j| format!("{:04}", j.0))
+                                                            .unwrap_or_default(),
+                                                    ),
+                                            )
+                                            .child(
+                                                div().flex_1().truncate().child(l.message.clone()),
+                                            )
+                                    })
+                                    .collect::<Vec<_>>()
+                            }),
+                        )
+                        .track_scroll(&self.scroll)
+                        .size_full(),
+                    )
+                    .into_any_element()
             }
         };
         let picker = self.picker_menu(cx);
@@ -257,10 +270,12 @@ impl Render for LogsView {
                                     .outline()
                                     .small()
                                     .label(job_label)
-                                    .on_click(cx.listener(|this, event: &gpui::ClickEvent, _, cx| {
-                                        this.picker = Some(event.position());
-                                        cx.notify();
-                                    })),
+                                    .on_click(cx.listener(
+                                        |this, event: &gpui::ClickEvent, _, cx| {
+                                            this.picker = Some(event.position());
+                                            cx.notify();
+                                        },
+                                    )),
                             )
                             .child(
                                 Button::new("logs-copy")
