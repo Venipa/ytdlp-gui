@@ -1,0 +1,224 @@
+use gpui::prelude::*;
+use gpui::{
+    App, ClickEvent, Div, ElementId, Hsla, Interactivity, Pixels, SharedString, Stateful,
+    StyleRefinement, Window, div, px, svg,
+};
+
+use crate::motion::{Motion, Motioned as _, Movement, glow_fill, glowing};
+use crate::theme::ActiveTheme as _;
+
+const SCALE: f32 = 0.85;
+const INSET: f32 = 2.;
+const WIDTH: f32 = 1.75;
+const BORDER: f32 = 1.;
+/// The off handle's diameter as a share of the track's height, and the check's share of the
+/// on handle.
+const OFF_HANDLE: f32 = 0.5;
+const CHECK: f32 = 0.7;
+/// How much larger than the inner track the on handle grows, nearly filling the track.
+const GROWN: Pixels = px(2.);
+
+type Click = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
+
+#[derive(IntoElement)]
+pub struct Switch {
+    id: ElementId,
+    base: Stateful<Div>,
+    checked: bool,
+    disabled: bool,
+    name: Option<SharedString>,
+    /// Whether the switch is a node of its own in the accessibility tree.
+    announced: bool,
+    on_click: Option<Click>,
+}
+
+impl Switch {
+    #[track_caller]
+    pub fn new(id: impl Into<ElementId>, checked: bool) -> Self {
+        let id = id.into();
+
+        Self {
+            base: div().id(id.clone()),
+            id,
+            checked,
+            disabled: false,
+            name: None,
+            announced: true,
+            on_click: None,
+        }
+    }
+
+    /// Names the switch for screen readers. It draws no text of its own, so a switch without a
+    /// name is announced as nothing but its state.
+    pub fn name(mut self, name: impl Into<SharedString>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Leaves the switch out of the accessibility tree, for a row that is the switch itself and
+    /// already reports its name and state. Without it the reader hears the switch twice.
+    pub fn silent(mut self) -> Self {
+        self.announced = false;
+        self
+    }
+
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
+    pub fn on_click(
+        mut self,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_click = Some(Box::new(handler));
+        self
+    }
+}
+
+impl Styled for Switch {
+    fn style(&mut self) -> &mut StyleRefinement {
+        self.base.style()
+    }
+}
+
+impl InteractiveElement for Switch {
+    fn interactivity(&mut self) -> &mut Interactivity {
+        self.base.interactivity()
+    }
+}
+
+impl RenderOnce for Switch {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let Self {
+            id,
+            mut base,
+            checked,
+            disabled,
+            name,
+            announced,
+            on_click,
+        } = self;
+        let theme = *cx.theme();
+        let height = px((theme.metrics.control_small / px(1.) * SCALE).round());
+        let width = px((height / px(1.) * WIDTH).round());
+        // The handle: small and filled in the muted ink while off, grown to nearly the track's
+        // height and carrying a check while on. The track keeps its size.
+        let inner = height - px((INSET + BORDER) * 2.);
+        let (small, large) = (px((height / px(1.) * OFF_HANDLE).round()), inner + GROWN);
+        let travel = width - height;
+        let background = match checked {
+            true => theme.primary,
+            false => theme.muted,
+        };
+        let overrides = std::mem::take(base.style());
+
+        let (from, to) = match checked {
+            true => (0., 1.),
+            false => (1., 0.),
+        };
+        let (track_was, track_is) = match checked {
+            true => (theme.muted, theme.primary),
+            false => (theme.primary, theme.muted),
+        };
+        let (edge_was, edge_is) = match checked {
+            true => (theme.muted_foreground, theme.primary),
+            false => (theme.primary, theme.muted_foreground),
+        };
+        let (hover_was, hover_is) = match checked {
+            true => (theme.secondary_hover, theme.primary_hover),
+            false => (theme.primary_hover, theme.secondary_hover),
+        };
+        let (knob_was, knob_is) = match checked {
+            true => (theme.muted_foreground, theme.primary_foreground),
+            false => (theme.primary_foreground, theme.muted_foreground),
+        };
+        let check = theme.primary;
+        // The handle at `t` of the way from off to on: its place, its size and how much of the
+        // check shows.
+        let handle = move |knob: Div, t: f32, color: Hsla| {
+            let side = small + (large - small) * t;
+            knob.size(side)
+                .rounded(side / 2.)
+                .ml(inner / 2. + travel * t - side / 2.)
+                .bg(color)
+                .child(
+                    svg()
+                        .path(icons::path("icons/check.svg"))
+                        .size(side * CHECK)
+                        .text_color(check.opacity(t * t)),
+                )
+        };
+
+        let movement =
+            window.use_keyed_state((id.clone(), "movement"), cx, |_, _| Movement::new(checked));
+        let animates = movement.update(cx, |movement, _| movement.turning(checked));
+        let knob = div().flex_none().flex().items_center().justify_center();
+
+        let mut switch = base
+            // The role sits on the inner div because the animation wrapper
+            // around it never forwards one, while the real tree still nests
+            // this node during prepaint.
+            .when(announced, |this| {
+                this.role(gpui::accesskit::Role::Switch)
+                    .aria_toggled(gpui::accesskit::Toggled::from(checked))
+                    .when_some(name, |this, name| this.aria_label(name))
+            })
+            .flex()
+            .flex_none()
+            .items_center()
+            .w(width)
+            .h(height)
+            .p(px(INSET))
+            .rounded(height / 2.)
+            .bg(background)
+            .border_1()
+            .border_color(edge_is)
+            .when(disabled, |this| this.opacity(0.4))
+            .when(!disabled, |this| this.cursor_pointer())
+            .child(match animates {
+                true => knob
+                    .motion(
+                        ("thumb", usize::from(checked)),
+                        Motion::Control,
+                        move |knob, t| {
+                            let at = from + (to - from) * t;
+                            handle(knob, at, crate::motion::mix(knob_was, knob_is, t))
+                        },
+                    )
+                    .into_any_element(),
+                false => handle(knob, to, knob_is).into_any_element(),
+            });
+
+        switch.style().refine(&overrides);
+        if !disabled && let Some(handler) = on_click {
+            switch = switch.on_click(handler);
+        }
+
+        let (switch, level) = match disabled {
+            true => (switch, 0.),
+            false => glowing(switch, &id, false, 1., window, cx),
+        };
+        // The track under the pointer, on its way between its own colour and the hover.
+        let lit =
+            move |rest: Hsla, hover: Hsla| glow_fill(Some(rest), hover, level).unwrap_or(rest);
+
+        match animates {
+            true => switch
+                .motion(
+                    ("track", usize::from(checked)),
+                    Motion::Control,
+                    move |track, t| {
+                        track
+                            .bg(lit(
+                                crate::motion::mix(track_was, track_is, t),
+                                crate::motion::mix(hover_was, hover_is, t),
+                            ))
+                            .border_color(crate::motion::mix(edge_was, edge_is, t))
+                    },
+                )
+                .into_any_element(),
+            false => switch.bg(lit(background, hover_is)).into_any_element(),
+        }
+    }
+}

@@ -1,0 +1,193 @@
+use gpui::prelude::*;
+use gpui::{Context, Pixels, Point, Render, SharedString, Window};
+use serde::{Deserialize, Serialize};
+
+use crate::drag::Ghost;
+
+/// The id every liked songs pin carries.
+const LIKED_ID: &str = "liked";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PinKind {
+    Album,
+    Artist,
+    Playlist,
+    Song,
+    /// The listener's liked songs, which open the library's Songs page.
+    Liked,
+}
+
+impl PinKind {
+    pub fn round(self) -> bool {
+        matches!(self, Self::Artist)
+    }
+
+    /// The glyph that stands for the kind wherever it has no cover of its own: a pin's
+    /// fallback, a library page's hero and empty state, the sidebar's menus.
+    pub const fn icon(self) -> &'static str {
+        match self {
+            Self::Album => "icons/disc-3.svg",
+            Self::Artist => "icons/user.svg",
+            Self::Playlist => "icons/list-music.svg",
+            Self::Song => "icons/music.svg",
+            Self::Liked => "icons/heart-filled.svg",
+        }
+    }
+
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Album => "kind-album",
+            Self::Artist => "kind-artist",
+            Self::Playlist => "kind-playlist",
+            Self::Song => "kind-song",
+            Self::Liked => "kind-playlist",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Pin {
+    pub kind: PinKind,
+    pub id: String,
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover: Option<String>,
+    /// An opaque tag for where a dragged row was picked up, which ui never reads. Never stored.
+    #[serde(skip)]
+    pub origin: Option<String>,
+}
+
+impl Pin {
+    pub fn new(kind: PinKind, id: impl Into<String>, title: impl Into<String>) -> Self {
+        Self {
+            kind,
+            id: id.into(),
+            title: title.into(),
+            cover: None,
+            origin: None,
+        }
+    }
+
+    /// The pin of the liked songs. Every provider shares the id, and the slug each pin is
+    /// stored under keeps them apart.
+    pub fn liked() -> Self {
+        Self::new(
+            PinKind::Liked,
+            LIKED_ID,
+            i18n::lookup("library-liked-songs", None).to_string(),
+        )
+    }
+
+    pub fn cover(mut self, cover: Option<String>) -> Self {
+        self.cover = cover;
+        self
+    }
+
+    pub fn origin(mut self, origin: Option<String>) -> Self {
+        self.origin = origin;
+        self
+    }
+
+    pub fn same(&self, other: &Self) -> bool {
+        self.kind == other.kind && self.id == other.id
+    }
+
+    /// The name to show. The liked songs are named in the current language rather than by the
+    /// title stored when they were pinned.
+    pub fn label(&self) -> SharedString {
+        match self.kind {
+            PinKind::Liked => i18n::lookup("library-liked-songs", None),
+            _ => SharedString::from(self.title.clone()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Spot {
+    pub list: &'static str,
+    pub index: usize,
+    pub revision: u64,
+}
+
+impl Spot {
+    pub fn new(list: &'static str, index: usize) -> Self {
+        Self {
+            list,
+            index,
+            revision: 0,
+        }
+    }
+
+    pub fn revision(mut self, revision: u64) -> Self {
+        self.revision = revision;
+        self
+    }
+}
+
+#[derive(Clone)]
+pub struct DraggedPin {
+    pub pin: Pin,
+    from: Option<Spot>,
+    position: Point<Pixels>,
+}
+
+impl DraggedPin {
+    fn new(pin: Pin, from: Option<Spot>) -> Self {
+        Self {
+            pin,
+            from,
+            position: Point::default(),
+        }
+    }
+
+    pub fn spot(&self, list: &str) -> Option<Spot> {
+        self.from.filter(|spot| spot.list == list)
+    }
+
+    fn at(mut self, position: Point<Pixels>) -> Self {
+        self.position = position;
+        self
+    }
+}
+
+impl Render for DraggedPin {
+    fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        // Only a row that names where it came from can be moved, so only it shows the choice.
+        let badge = self
+            .pin
+            .origin
+            .as_ref()
+            .map(|_| match window.modifiers().shift {
+                true => "icons/arrow-right-left.svg",
+                false => "icons/copy.svg",
+            });
+
+        Ghost::new(self.position, self.pin.label())
+            .art(self.pin.cover.clone())
+            .fallback(self.pin.kind.icon())
+            .when(self.pin.kind.round(), Ghost::circle)
+            .when_some(badge, Ghost::badge)
+    }
+}
+
+pub trait Pinnable: Sized {
+    fn pin(self, pin: Pin) -> Self;
+    fn pin_from(self, pin: Pin, spot: Spot) -> Self;
+}
+
+impl<T: StatefulInteractiveElement> Pinnable for T {
+    fn pin(self, pin: Pin) -> Self {
+        haul(self, DraggedPin::new(pin, None))
+    }
+
+    fn pin_from(self, pin: Pin, spot: Spot) -> Self {
+        haul(self, DraggedPin::new(pin, Some(spot)))
+    }
+}
+
+fn haul<T: StatefulInteractiveElement>(element: T, dragged: DraggedPin) -> T {
+    element.on_drag(dragged, |dragged, position, _, cx| {
+        cx.new(|_| dragged.clone().at(position))
+    })
+}

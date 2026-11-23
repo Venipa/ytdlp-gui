@@ -1,0 +1,9 @@
+Every icon pack keeps its own licence beside its files:
+
+  common/   Maple window controls plus Simple Icons brand marks (CC0 1.0)
+  lucide/   Lucide (ISC)
+  iconoir/  Iconoir (MIT)
+  remix/    Remix Icon 4.8.0 (Apache 2.0)
+  solar/    Solar Icon Set, Linear style (CC BY 4.0, attribution required)
+
+scripts/fetch-icons.py rebuilds every pack except lucide and common.
