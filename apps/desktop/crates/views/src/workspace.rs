@@ -1,32 +1,62 @@
+use std::rc::Rc;
+
 use gpui::prelude::*;
 use gpui::{
-    Context, Entity, FocusHandle, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    Window, WindowControlArea, div,
+    AnyElement, Context, Entity, FocusHandle, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, Window, WindowControlArea, div,
 };
 use i18n::t;
 use input::{OpenSettings, ShowDownloads, ShowLogs, ShowSettings, WORKSPACE_CONTEXT};
 use router::{Destination, Navigation, NavigationEvent, SettingsPage};
-use ui::{ActiveTheme as _, Button, Vacancy, WindowControls};
+use ui::{ActiveTheme as _, Button, Input, WindowControls};
+
+use crate::downloads::Downloads;
+use crate::pages;
+use crate::sample::Data;
 
 /// The shell: a title bar with the page navigation over the current page.
 pub struct Workspace {
     navigation: Entity<Navigation>,
     focus: FocusHandle,
+    data: Rc<Data>,
+    downloads: Entity<Downloads>,
+    cookies: Entity<Input>,
     /// Whether the left button went down on the bar and has not moved the window yet.
     grabbed: bool,
 }
 
 impl Workspace {
+    /// Builds the shell. `scene` names a screenshot state such as `card` or `settings-network`.
     pub fn new(
         navigation: Entity<Navigation>,
+        scene: Option<&str>,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         cx.subscribe(&navigation, |_, _, _: &NavigationEvent, cx| cx.notify())
             .detach();
+        let data = Rc::new(Data::sample());
+        let downloads = cx.new(|cx| Downloads::new(data.clone(), cx));
+        let cookies = cx.new(|cx| Input::new(t!("set-cookies-paste-hint"), cx));
+        match scene.unwrap_or("downloads") {
+            "welcome" => router::navigate(Destination::Welcome, cx),
+            "logs" => router::navigate(Destination::Logs, cx),
+            other => match other.strip_prefix("settings-") {
+                Some(id) => router::navigate(
+                    Destination::Settings(
+                        SettingsPage::from_id(id).unwrap_or(SettingsPage::General),
+                    ),
+                    cx,
+                ),
+                None => downloads.update(cx, |d, cx| d.demo(other, cx)),
+            },
+        }
         Self {
             navigation,
             focus: cx.focus_handle(),
+            data,
+            downloads,
+            cookies,
             grabbed: false,
         }
     }
@@ -45,15 +75,20 @@ impl Workspace {
             .on_click(move |_, _, cx| router::navigate(to, cx))
     }
 
-    fn page(current: Destination) -> Vacancy {
-        let (label, icon) = match current {
-            Destination::Welcome | Destination::Downloads => {
-                (t!("page-downloads-empty"), "icons/download.svg")
+    fn page(
+        &self,
+        current: Destination,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        match current {
+            Destination::Welcome => pages::welcome(&self.data, cx),
+            Destination::Downloads => self.downloads.clone().into_any_element(),
+            Destination::Logs => pages::logs(&self.data, cx),
+            Destination::Settings(page) => {
+                pages::settings(page, &self.data, &self.cookies, window, cx)
             }
-            Destination::Logs => (t!("page-logs-empty"), "icons/scroll.svg"),
-            Destination::Settings(_) => (t!("page-settings-empty"), "icons/settings.svg"),
-        };
-        Vacancy::new(label).icon(icon).spoken("page-empty")
+        }
     }
 }
 
@@ -133,7 +168,11 @@ impl Render for Workspace {
                             .child(WindowControls::new(false)),
                     ),
             )
-            .child(div().flex_1().child(Self::page(current).size_full()))
-            .when(window.is_maximized(), |this| this)
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .child(self.page(current, window, cx)),
+            )
     }
 }
