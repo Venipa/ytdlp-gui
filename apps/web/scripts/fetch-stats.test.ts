@@ -11,6 +11,7 @@ test('parseSums reads sha256sum output', () => {
 
 test('isOurs skips the Electron app tags', () => {
   expect(isOurs('v0.15.3')).toBe(false);
+  expect(isOurs('v1.0.0')).toBe(true);
   expect(isOurs('v2.0.0')).toBe(true);
   expect(isOurs('2.1.0-beta.1')).toBe(true);
 });

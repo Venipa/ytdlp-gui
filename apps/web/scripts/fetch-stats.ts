@@ -40,7 +40,7 @@ export function parseSums(text: string): Map<string, string> {
   return sums;
 }
 
-// Release tags of ytdlpd (v2.0.0 and on); older tags in the repo are the Electron app's.
+// Release tags of ytdlpd (v1.0.0 and on); older tags in the repo are the Electron app's.
 export const isOurs = (tag: string) => Number(/^v?(\d+)/.exec(tag)?.[1] ?? 0) >= minMajor;
 // Updater metadata (latest.yml, *.blockmap) is not something to download by hand.
 const isInstaller = (name: string) => name !== 'SHA256SUMS.txt' && !/\.(yml|blockmap)$/i.test(name);
