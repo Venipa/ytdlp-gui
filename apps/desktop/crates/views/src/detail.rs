@@ -257,6 +257,7 @@ impl Downloads {
             .map(|l| (format::clock(l.at), l.message.clone()))
             .collect();
         let skip = logs.len().saturating_sub(TAIL);
+        let empty = logs.is_empty();
         let tail = Scroller::new("detail-log", &self.log_bar)
             .fade_ends(px(12.))
             .child(
@@ -301,7 +302,10 @@ impl Downloads {
                     .border_1()
                     .border_color(theme.border)
                     .p_2()
-                    .child(tail),
+                    .map(|this| match empty {
+                        true => this.text_color(pencil).child(t!("dl-detail-nolog")),
+                        false => this.child(tail),
+                    }),
             );
 
         let body = Scroller::new("detail-scroll", &self.detail_bar).child(

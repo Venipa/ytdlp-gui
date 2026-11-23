@@ -1,15 +1,20 @@
+use std::time::Duration;
+
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, Context, Entity, FocusHandle, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, Window, WindowControlArea, div, px, svg,
+    Animation, AnimationExt as _, AnyElement, Context, Entity, FocusHandle, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Window, WindowControlArea, div, px, svg,
 };
 use input::{
-    DeleteEntry, DeleteFile, FirstRow, FocusIntake, FocusSearch, LastRow, OpenSettings, PasteIntake, ShowDownloads,
-    ShowLogs, ShowSettings, TogglePause, WORKSPACE_CONTEXT,
+    DeleteEntry, DeleteFile, FirstRow, FocusIntake, FocusSearch, LastRow, OpenSettings,
+    PasteIntake, ShowDownloads, ShowLogs, ShowSettings, TogglePause, WORKSPACE_CONTEXT,
 };
 use router::{Destination, Navigation, NavigationEvent, SettingsPage};
 use state::AppState;
-use ui::{ActiveTheme as _, Activate, Button, Deselect, SelectNext, SelectPrevious, WindowControls};
+use ui::{
+    Activate, ActiveTheme as _, Button, Deselect, NextField, PreviousField, SelectNext,
+    SelectPrevious, WindowControls,
+};
 
 use crate::downloads::{Downloads, Key};
 use crate::logs::LogsView;
@@ -205,12 +210,26 @@ impl Workspace {
     }
 
     fn page(&self, current: Destination, cx: &mut Context<Self>) -> AnyElement {
-        match current {
-            Destination::Welcome => welcome::welcome(cx),
-            Destination::Downloads => self.downloads.clone().into_any_element(),
-            Destination::Logs => self.logs.clone().into_any_element(),
-            Destination::Settings(_) => self.settings.clone().into_any_element(),
-        }
+        let (n, page): (usize, AnyElement) = match current {
+            Destination::Welcome => (0, welcome::welcome(cx)),
+            Destination::Downloads => (1, self.downloads.clone().into_any_element()),
+            Destination::Logs => (2, self.logs.clone().into_any_element()),
+            Destination::Settings(_) => (3, self.settings.clone().into_any_element()),
+        };
+        // a page fades in over 120 ms when the section changes; a new id restarts the run
+        let span = match ui::motion::animates(cx) {
+            true => Duration::from_millis(120),
+            false => Duration::from_millis(1),
+        };
+        div()
+            .size_full()
+            .child(page)
+            .with_animation(
+                ("page", n),
+                Animation::new(span).with_easing(ui::ease_out_cubic),
+                |this, delta| this.opacity(delta),
+            )
+            .into_any_element()
     }
 
     /// Forwards a key of the Downloads page.
@@ -257,6 +276,8 @@ impl Render for Workspace {
             )
             .on_action(cx.listener(|this, _: &DeleteFile, w, cx| this.key(Key::DeleteFile, w, cx)))
             .on_action(cx.listener(|this, _: &Deselect, w, cx| this.key(Key::Deselect, w, cx)))
+            .on_action(cx.listener(|_, _: &NextField, w, cx| w.focus_next(cx)))
+            .on_action(cx.listener(|_, _: &PreviousField, w, cx| w.focus_prev(cx)))
             .on_action(cx.listener(|this, _: &FirstRow, w, cx| this.key(Key::First, w, cx)))
             .on_action(cx.listener(|this, _: &LastRow, w, cx| this.key(Key::Last, w, cx)))
             .on_action(cx.listener(|this, _: &Activate, w, cx| this.key(Key::Open, w, cx)))

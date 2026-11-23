@@ -4,8 +4,8 @@
 use gpui::accesskit::Role;
 use gpui::prelude::*;
 use gpui::{
-    App, ClickEvent, ElementId, Entity, Pixels, SharedString, Window, canvas, div, fill,
-    point, px, size,
+    App, ClickEvent, ElementId, Entity, Pixels, SharedString, Window, canvas, div, fill, point, px,
+    size,
 };
 
 use crate::artwork::Artwork;
@@ -187,10 +187,12 @@ pub struct Thumbnail {
 impl Thumbnail {
     /// A thumbnail `width` wide, 16:9. A source that is not a link is a file path.
     pub fn new(source: Option<SharedString>, width: Pixels) -> Self {
-        let source = source.map(|s| match s.starts_with("http") || s.starts_with("file://") {
-            true => s,
-            false => format!("file://{s}").into(),
-        });
+        let source = source.map(
+            |s| match s.starts_with("http") || s.starts_with("file://") {
+                true => s,
+                false => format!("file://{s}").into(),
+            },
+        );
         Self {
             source,
             width,

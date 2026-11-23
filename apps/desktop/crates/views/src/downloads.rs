@@ -27,13 +27,15 @@ use ui::{
 };
 
 use crate::format;
-use input::ROWS_CONTEXT;
 use crate::formats::Draft;
 use crate::os;
 use crate::toasts::{Kind, toast};
+use input::ROWS_CONTEXT;
 
 /// How long a deleted entry can still be brought back.
 const UNDO: Duration = Duration::from_secs(6);
+/// How long a new row takes to fade in.
+pub(crate) const FADE: Duration = Duration::from_millis(160);
 /// How often the free space of the output drive is read again.
 const FREE_EVERY: Duration = Duration::from_secs(5);
 
@@ -121,6 +123,9 @@ pub struct Downloads {
     pub(crate) details_open: bool,
     /// Whether an empty library already moved focus to the intake.
     intake_offered: bool,
+    /// Every id the list has shown, and the ones that arrived lately and fade in.
+    known: HashSet<DownloadId>,
+    pub(crate) fresh: std::collections::HashMap<DownloadId, Instant>,
     free: Option<(u64, String)>,
     free_at: Option<Instant>,
     _subs: Vec<Subscription>,
@@ -159,18 +164,18 @@ impl Downloads {
         let bar = cx.new(|cx| {
             Scrollbar::new(scroll.0.borrow().base_handle.clone()).watching(cx.entity_id())
         });
-        let detail_bar = cx.new(|cx| {
-            Scrollbar::new(gpui::ScrollHandle::new()).watching(cx.entity_id())
-        });
-        let log_bar = cx.new(|cx| {
-            Scrollbar::new(gpui::ScrollHandle::new()).watching(cx.entity_id())
-        });
+        let detail_bar =
+            cx.new(|cx| Scrollbar::new(gpui::ScrollHandle::new()).watching(cx.entity_id()));
+        let log_bar =
+            cx.new(|cx| Scrollbar::new(gpui::ScrollHandle::new()).watching(cx.entity_id()));
         let mut this = Self {
             list_focus: cx.focus_handle().tab_stop(true),
             detail_bar,
             log_bar,
             details_open: true,
             intake_offered: false,
+            known: HashSet::new(),
+            fresh: std::collections::HashMap::new(),
             app,
             intake,
             search,
@@ -708,6 +713,16 @@ impl Downloads {
     fn lines(&mut self, cx: &App) -> Vec<Line> {
         let filter = Filter::parse(self.search.read(cx).text());
         let rows = self.app.downloads.read(cx).rows();
+        if self.known.len() != rows.len() {
+            // the first load is not news; rows that come later fade in
+            let news = !self.known.is_empty();
+            for row in rows {
+                if self.known.insert(row.id) && news {
+                    self.fresh.insert(row.id, Instant::now());
+                }
+            }
+        }
+        self.fresh.retain(|_, at| at.elapsed() < FADE * 2);
         let mut progress = Vec::new();
         let mut history = Vec::new();
         for (at, row) in rows.iter().enumerate() {
@@ -920,12 +935,7 @@ impl Downloads {
             .items_center()
             .gap_2()
             .h(theme.metrics.field)
-            .child(
-                div()
-                    .flex_1()
-                    .font_family(MONO)
-                    .child(self.intake.clone()),
-            )
+            .child(div().flex_1().font_family(MONO).child(self.intake.clone()))
             .when(invalid, |this| {
                 this.child(
                     div()
@@ -964,7 +974,10 @@ impl Downloads {
             let read = std::fs::File::open(path)
                 .and_then(|file| file.take(1 << 20).read_to_string(&mut text));
             if let Err(error) = read {
-                log::warn!("downloads: cannot read dropped file {}: {error}", path.display());
+                log::warn!(
+                    "downloads: cannot read dropped file {}: {error}",
+                    path.display()
+                );
                 continue;
             }
             for link in split_urls(&text.replace("URL=", " ")).urls {
@@ -1037,9 +1050,9 @@ impl Render for Downloads {
                         .outline()
                         .icon("icons/clipboard-paste.svg")
                         .label(t!("dl-empty-paste"))
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.key(Key::Paste, window, cx)
-                        })),
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.key(Key::Paste, window, cx)),
+                        ),
                 )
                 .spoken("downloads-empty")
                 .size_full()
@@ -1062,6 +1075,7 @@ impl Render for Downloads {
             _ => {
                 let items = lines.clone();
                 Scroller::listing("downloads-scroll", &self.bar)
+                    .fade_ends(px(16.))
                     .child(
                         uniform_list(
                             "downloads-rows",
@@ -1069,9 +1083,7 @@ impl Render for Downloads {
                             cx.processor(move |this, range: Range<usize>, _, cx| {
                                 range
                                     .filter_map(|at| {
-                                        items
-                                            .get(at)
-                                            .map(|line| this.line(*line, thumbs, ring, cx))
+                                        items.get(at).map(|line| this.line(*line, thumbs, ring, cx))
                                     })
                                     .collect::<Vec<_>>()
                             }),
@@ -1101,9 +1113,7 @@ impl Render for Downloads {
             .flex()
             .flex_col()
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| this.dropped(paths, cx)))
-            .drag_over::<ExternalPaths>(move |style, _, _, _| {
-                style.bg(theme.table_active)
-            })
+            .drag_over::<ExternalPaths>(move |style, _, _, _| style.bg(theme.table_active))
             .child(
                 div()
                     .flex()

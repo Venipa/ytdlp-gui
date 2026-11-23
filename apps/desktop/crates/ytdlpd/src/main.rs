@@ -155,7 +155,10 @@ fn main() -> ExitCode {
             .detach();
 
             let state = build_app(args.data_dir.clone(), args.launch.demo.as_deref(), cx);
-            cx.set_http_client(std::sync::Arc::new(http::Client::new(state.io.handle())));
+            cx.set_http_client(std::sync::Arc::new(http::Client::new(
+                state.io.handle(),
+                Some(state.paths.cache.join("thumbnails")),
+            )));
             views::apply_stored(args.theme.as_deref(), cx);
             wire_platform(&state, cx);
             router::init(Destination::Downloads, cx);

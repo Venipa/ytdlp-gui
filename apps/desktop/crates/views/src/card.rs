@@ -136,7 +136,11 @@ impl Downloads {
                     div()
                         .flex()
                         .gap_3()
-                        .child(Skeleton::new().w(px(CARD_THUMB)).h(px(CARD_THUMB * 9. / 16.)))
+                        .child(
+                            Skeleton::new()
+                                .w(px(CARD_THUMB))
+                                .h(px(CARD_THUMB * 9. / 16.)),
+                        )
                         .child(
                             div()
                                 .flex()
@@ -259,28 +263,22 @@ impl Downloads {
                                             }),
                                     )
                                     .child(
-                                        div().mt_1().child(self.preset_rows(
-                                            self.download_button("card-download", None, cx),
-                                            Button::new("choose-formats")
-                                                .ghost()
-                                                .label(t!("dl-choose-formats"))
-                                                .on_click(
-                                                    cx.listener(|this, _, _, cx| {
+                                        div().mt_1().child(
+                                            self.preset_rows(
+                                                self.download_button("card-download", None, cx),
+                                                Button::new("choose-formats")
+                                                    .ghost()
+                                                    .label(t!("dl-choose-formats"))
+                                                    .on_click(cx.listener(|this, _, _, cx| {
                                                         this.open_formats(cx)
-                                                    }),
-                                                ),
-                                            cx,
-                                        )),
+                                                    })),
+                                                cx,
+                                            ),
+                                        ),
                                     ),
                             ),
                     )
-                    .child(
-                        div()
-                            .absolute()
-                            .top_1()
-                            .right_1()
-                            .child(dismiss(cx)),
-                    )
+                    .child(div().absolute().top_1().right_1().child(dismiss(cx)))
                     .into_any_element()
             }
             Card::Batch => self.batch_card(shell(), cx),

@@ -497,7 +497,7 @@ impl Db {
                 d.domain.clone()
             };
             let id: i64 = sqlx::query_scalar(
-                "INSERT INTO downloads (url, extractor, video_id, domain, title, uploader, duration_s, kind, preset,                  format_spec, format_label, options_json, status, status_reason, progress, bytes_total, file_path, file_size,                  error_code, error_message, attempts, next_attempt_at, position, created_at, finished_at, updated_at)                  VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,                  CASE WHEN ?13 IN ('completed','failed','cancelled') THEN ?24 END, ?24) RETURNING id",
+                "INSERT INTO downloads (url, extractor, video_id, domain, title, uploader, duration_s, kind, preset,                  format_spec, format_label, options_json, status, status_reason, progress, bytes_total, file_path, file_size,                  error_code, error_message, attempts, next_attempt_at, position, created_at, finished_at, updated_at, thumbnail_url)                  VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,                  CASE WHEN ?13 IN ('completed','failed','cancelled') THEN ?24 END, ?24, ?25) RETURNING id",
             )
             .bind(&d.url)
             .bind(&d.extractor)
@@ -523,6 +523,7 @@ impl Db {
             .bind(r.next_attempt_at)
             .bind(i as f64 + 1.0)
             .bind(r.created_at)
+            .bind(&d.thumbnail_url)
             .fetch_one(&mut *tx)
             .await
             .context("cannot seed download")?;

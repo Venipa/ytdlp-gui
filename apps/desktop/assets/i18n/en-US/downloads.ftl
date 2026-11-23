@@ -125,3 +125,4 @@ dl-empty-paste = Paste from clipboard
 dl-detail-section = Details
 dl-detail-url = Link
 dl-more = More
+dl-detail-nolog = No log lines for this download yet.
