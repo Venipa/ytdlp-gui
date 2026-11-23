@@ -6,6 +6,7 @@ use ui::{
     SelectNext, SelectPrevious, SelectRight, SelectWordLeft, SelectWordRight, ShowCharacterPalette,
     Space, Submit, WordLeft, WordRight,
 };
+use ui::{LineDown, LineUp, Newline, SelectLineDown, SelectLineUp, TEXT_AREA_CONTEXT};
 
 actions!(
     ytdlpd,
@@ -124,6 +125,12 @@ fn shared() -> Vec<KeyBinding> {
         KeyBinding::new("space", Space, editing),
         KeyBinding::new("escape", Dismiss, editing),
         KeyBinding::new("enter", Submit, form),
+        // a text area of several lines: Shift+Enter breaks the line, the arrows move between them
+        KeyBinding::new("shift-enter", Newline, Some(TEXT_AREA_CONTEXT)),
+        KeyBinding::new("up", LineUp, Some(TEXT_AREA_CONTEXT)),
+        KeyBinding::new("down", LineDown, Some(TEXT_AREA_CONTEXT)),
+        KeyBinding::new("shift-up", SelectLineUp, Some(TEXT_AREA_CONTEXT)),
+        KeyBinding::new("shift-down", SelectLineDown, Some(TEXT_AREA_CONTEXT)),
         KeyBinding::new("escape", Dismiss, form),
         KeyBinding::new("tab", NextField, form),
         KeyBinding::new("shift-tab", PreviousField, form),

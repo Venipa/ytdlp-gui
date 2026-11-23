@@ -23,7 +23,7 @@ use i18n::t;
 use state::{AppState, DownloadsEvent, IntakeEvent, ProbeState};
 use ui::{
     ActiveTheme as _, Button, Chip, FORM_CONTEXT, Input, Kbd, MONO, Scrollbar, Scroller, Submit,
-    Text, TokenInput, Vacancy,
+    Text, TextArea, TokenInput, Vacancy,
 };
 
 use crate::format;
@@ -85,7 +85,7 @@ pub enum Key {
 /// The Downloads page.
 pub struct Downloads {
     pub(crate) app: AppState,
-    pub(crate) intake: Entity<Input>,
+    pub(crate) intake: Entity<TextArea>,
     pub(crate) search: Entity<Input>,
     pub(crate) chip: StatusChip,
     pub(crate) selected: Option<DownloadId>,
@@ -142,10 +142,12 @@ impl Downloads {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let app = AppState::global(cx);
         let intake = cx.new(|cx| {
-            Input::new(t!("dl-intake-hint"), cx)
+            TextArea::new("dl-intake-hint", cx)
                 .name("dl-intake-name")
                 .icon("icons/link.svg")
-                .large()
+                // shortcut: one line tall in the layout until the owner picks how it grows
+                // (preview round), the lines scroll inside it
+                .max_lines(1.)
                 .clearable()
         });
         let search = cx.new(|cx| {
@@ -166,6 +168,7 @@ impl Downloads {
             }),
             cx.observe(&search, |_, _, cx| cx.notify()),
             cx.observe(&intake, |this, _, cx| this.intake_changed(cx)),
+            cx.subscribe(&intake, |this, _, _: &ui::Pasted, cx| this.pasted(cx)),
             cx.observe(&app.downloads, |_, _, cx| cx.notify()),
             cx.observe(&app.settings, |_, _, cx| cx.notify()),
             cx.observe(&app.tools, |_, _, cx| cx.notify()),
@@ -230,7 +233,10 @@ impl Downloads {
 
     /// Puts links into the field and starts reading them.
     pub(crate) fn fill(&mut self, urls: &[String], cx: &mut Context<Self>) {
-        let text = urls.join(" ");
+        let text = urls.join(
+            "
+",
+        );
         self.last_text.clone_from(&text);
         self.intake.update(cx, |input, cx| input.set_text(text, cx));
         self.begin(cx);
@@ -330,6 +336,14 @@ impl Downloads {
                 );
             }
         }
+    }
+
+    /// Pasted links go one to a line, as the old app's box had them, and are read at once.
+    fn pasted(&mut self, cx: &mut Context<Self>) {
+        let lined = one_per_line(self.intake.read(cx).text());
+        self.last_text.clone_from(&lined);
+        self.intake.update(cx, |area, cx| area.set_text(lined, cx));
+        self.begin(cx);
     }
 
     /// Typing edits a link, pasting starts reading it.
@@ -758,7 +772,7 @@ impl Downloads {
             Key::Paste => {
                 if let Some(text) = cx.read_from_clipboard().and_then(|i| i.text()) {
                     self.intake
-                        .update(cx, |input, cx| input.set_text(ui::single_line(&text), cx));
+                        .update(cx, |input, cx| input.set_text(one_per_line(&text), cx));
                 }
                 self.intake.update(cx, |input, cx| input.focus(window, cx));
             }
@@ -1080,18 +1094,24 @@ impl Downloads {
     fn intake_strip(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = *cx.theme();
         let text = self.intake.read(cx).text().trim().to_owned();
-        let valid = !split_urls(&text).urls.is_empty();
+        let links = split_urls(&text).urls.len();
+        let valid = links > 0;
         let invalid = !text.is_empty() && !valid;
+        let note = match (invalid, links) {
+            (true, _) => Some(t!("dl-intake-invalid")),
+            (false, 2..) => Some(t!("dl-intake-count", count = links)),
+            _ => None,
+        };
         // the card has its own Download once it can download; one primary action at a time
         let own = matches!(
             self.card(cx),
             Card::Result(_) | Card::Batch | Card::Playlist(_) | Card::Failed(_)
         );
+        // the box grows a line at a time; the note and the button stay level with its first line
         div()
             .flex()
-            .items_center()
+            .items_start()
             .gap(theme.metrics.pad)
-            .h(theme.metrics.field)
             .child(
                 div()
                     .flex_1()
@@ -1099,13 +1119,17 @@ impl Downloads {
                     .font_family(MONO)
                     .child(self.intake.clone()),
             )
-            .when(invalid, |this| {
+            .when_some(note, |this, note| {
                 this.child(
                     div()
                         .flex_none()
+                        .h(theme.metrics.field)
+                        .flex()
+                        .items_center()
+                        .font_features(ui::tabular())
                         .text_size(theme.text(Text::Small))
                         .text_color(theme.muted_foreground)
-                        .child(t!("dl-intake-invalid")),
+                        .child(note),
                 )
             })
             .when(!own, |this| {
@@ -1379,4 +1403,12 @@ impl Render for Downloads {
             .children(confirm)
             .children(self.formats_modal(cx))
     }
+}
+
+/// Every whitespace-separated word of `text` on a line of its own.
+fn one_per_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(
+        "
+",
+    )
 }

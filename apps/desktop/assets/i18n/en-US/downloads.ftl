@@ -1,4 +1,4 @@
-dl-intake-hint = Paste a link
+dl-intake-hint = Paste links, one per line
 dl-intake-name = Link to download
 dl-download = Download
 dl-download-count = Download { $count }
@@ -125,6 +125,7 @@ dl-formats-hint = Up and Down choose, Tab switches list, Enter downloads, Esc cl
 
 # UI polish (lane P-A)
 dl-intake-invalid = Needs a full link
+dl-intake-count = { $count } links captured
 dl-drop-none = No links in the dropped files
 dl-empty-paste = Paste from clipboard
 dl-detail-section = Details
