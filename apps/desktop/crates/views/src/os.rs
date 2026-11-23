@@ -92,7 +92,10 @@ fn free_bytes(at: &Path) -> Option<u64> {
     }
     // SAFETY: statvfs returned 0, so the struct is initialised.
     let stat = unsafe { stat.assume_init() };
-    Some(stat.f_bavail as u64 * stat.f_frsize as u64)
+    // statvfs field widths differ per platform (u32 on macOS, u64 on Linux): the cast is needed on some targets
+    #[allow(clippy::unnecessary_cast)]
+    let free = stat.f_bavail as u64 * stat.f_frsize as u64;
+    Some(free)
 }
 
 #[cfg(test)]
