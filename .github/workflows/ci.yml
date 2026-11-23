@@ -1,0 +1,73 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ["**/*.md"]
+  pull_request:
+    paths-ignore: ["**/*.md"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+defaults:
+  run:
+    working-directory: apps/desktop
+
+jobs:
+  lint:
+    name: fmt and clippy (ubuntu)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: system dependencies
+        working-directory: .
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config cmake mold \
+            libfontconfig1-dev libfreetype-dev \
+            libx11-dev libxcb1-dev libxcursor-dev libxi-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libvulkan-dev libdbus-1-dev
+      - name: rust toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop
+          key: lint
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  test-windows:
+    name: tests (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: rust toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop
+          key: test-windows
+      # cargo-nextest is not installed locally yet, so plain cargo test is the common denominator.
+      - run: cargo test --workspace --locked
+
+  clippy-macos:
+    name: clippy (macos)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - name: rust toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop
+          key: clippy-macos
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings

@@ -1,0 +1,12 @@
+{
+  "name": "@ytdlpd/desktop",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "dev": "cargo run -p ytdlpd",
+    "build": "cargo build -p ytdlpd --release",
+    "check": "cargo check --workspace",
+    "setup": "bun scripts/setup.ts",
+    "dev:hot": "dx serve --hot-patch --package ytdlpd"
+  }
+}
