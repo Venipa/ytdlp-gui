@@ -4,7 +4,8 @@
 use domain::{DownloadId, DownloadStatus, DownloadSummary, MediaKind};
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, Context, FontWeight, Hsla, MouseButton, MouseDownEvent, SharedString, div, px,
+    Animation, AnimationExt as _, AnyElement, Context, FontWeight, Hsla, MouseButton,
+    MouseDownEvent, SharedString, div, px,
 };
 use i18n::t;
 use ui::{
@@ -24,7 +25,7 @@ fn height(thumbs: bool) -> gpui::Pixels {
 }
 
 /// The status words of a row and the colour they take.
-fn status_text(s: &DownloadSummary, theme: &ui::Theme) -> (SharedString, Hsla) {
+pub(crate) fn status_text(s: &DownloadSummary, theme: &ui::Theme) -> (SharedString, Hsla) {
     let pencil = theme.muted_foreground;
     match s.status {
         DownloadStatus::Queued => (t!("dl-status-queued"), pencil),
@@ -61,10 +62,13 @@ fn status_text(s: &DownloadSummary, theme: &ui::Theme) -> (SharedString, Hsla) {
     }
 }
 
+type Act = fn(&mut Downloads, DownloadId, &mut Context<Downloads>);
+
 fn rule(s: &DownloadSummary) -> Rule {
     match s.status {
         DownloadStatus::Downloading | DownloadStatus::Processing => Rule::Fill(s.progress as f32),
         DownloadStatus::Completed => Rule::Solid,
+        DownloadStatus::Probing => Rule::Pulse,
         DownloadStatus::Failed => Rule::Failed,
         _ => Rule::Dotted,
     }
@@ -72,17 +76,20 @@ fn rule(s: &DownloadSummary) -> Rule {
 
 impl Downloads {
     /// One list line.
-    pub(crate) fn line(&mut self, line: Line, thumbs: bool, cx: &mut Context<Self>) -> AnyElement {
+    pub(crate) fn line(
+        &mut self,
+        line: Line,
+        thumbs: bool,
+        ring: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         match line {
             Line::Header(key, count) => self.header(key, count, thumbs, cx),
             Line::Row(at) => {
                 let Some(s) = self.app.downloads.read(cx).rows().get(at).cloned() else {
                     return div().h(height(thumbs)).into_any_element();
                 };
-                match thumbs {
-                    true => self.ledger_row(&s, cx),
-                    false => self.compact_row(&s, cx),
-                }
+                self.row(&s, thumbs, ring, cx)
             }
         }
     }
@@ -120,6 +127,7 @@ impl Downloads {
         &self,
         s: &DownloadSummary,
         thumbs: bool,
+        ring: bool,
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<gpui::Div> {
         let theme = *cx.theme();
@@ -127,6 +135,8 @@ impl Downloads {
         let selected = self.selected == Some(id);
         div()
             .id(("row", id.0 as usize))
+            .group(SharedString::from(format!("row-{}", id.0)))
+            .relative()
             .flex()
             .flex_col()
             .flex_none()
@@ -134,9 +144,14 @@ impl Downloads {
             .w_full()
             .cursor_pointer()
             .when(selected, |this| this.bg(theme.table_active))
+            .when(selected && ring, |this| {
+                this.border_1().border_color(theme.table_active_border)
+            })
             .hover(|style| style.bg(theme.table_hover))
-            .on_click(cx.listener(move |this, _, _, cx| {
+            .active(|style| style.bg(theme.table_active))
+            .on_click(cx.listener(move |this, _, window, cx| {
                 this.selected = Some(id);
+                window.focus(&this.list_focus, cx);
                 cx.notify();
             }))
             .on_mouse_down(
@@ -169,40 +184,142 @@ impl Downloads {
         (size, third)
     }
 
-    fn compact_row(&self, s: &DownloadSummary, cx: &mut Context<Self>) -> AnyElement {
+    /// The icon buttons that appear over a hovered row, for what its state allows.
+    fn row_actions(&self, s: &DownloadSummary, cx: &mut Context<Self>) -> AnyElement {
         let theme = *cx.theme();
-        let selected = self.selected == Some(s.id);
+        let id = s.id;
+        let button = |key: &'static str,
+                      icon: &'static str,
+                      tip: &'static str,
+                      act: Act,
+                      cx: &mut Context<Self>| {
+            Button::new((key, id.0 as usize))
+                .ghost()
+                .small()
+                .icon(icon)
+                .tooltip(tip)
+                .on_click(cx.listener(move |this, _, _, cx| act(this, id, cx)))
+        };
+        let has_file = s.file_path.is_some() && !s.file_missing;
+        let mut buttons = Vec::new();
+        match s.status {
+            DownloadStatus::Paused => buttons.push(button(
+                "a-resume",
+                "icons/play.svg",
+                "dl-resume",
+                |t, id, cx| t.resume(id, cx),
+                cx,
+            )),
+            DownloadStatus::Failed | DownloadStatus::Cancelled => buttons.push(button(
+                "a-retry",
+                "icons/rotate-cw.svg",
+                "dl-try-again",
+                |t, id, cx| t.retry(id, cx),
+                cx,
+            )),
+            DownloadStatus::Completed => {}
+            _ => buttons.push(button(
+                "a-pause",
+                "icons/pause.svg",
+                "dl-pause",
+                |t, id, cx| t.pause(id, cx),
+                cx,
+            )),
+        }
+        if !s.status.is_terminal() {
+            buttons.push(button(
+                "a-cancel",
+                "icons/x.svg",
+                "dl-cancel-download",
+                |t, id, cx| t.cancel(id, cx),
+                cx,
+            ));
+        }
+        if has_file {
+            buttons.push(button(
+                "a-folder",
+                "icons/folder-open.svg",
+                "dl-show-folder",
+                |t, id, cx| t.show_folder(id, cx),
+                cx,
+            ));
+        }
+        div()
+            .absolute()
+            .right(theme.metrics.pad)
+            .top_0()
+            .bottom_0()
+            .flex()
+            .items_center()
+            .gap_1()
+            .px_1()
+            .bg(theme.background.blend(theme.table_hover))
+            .invisible()
+            .group_hover(SharedString::from(format!("row-{}", id.0)), |style| {
+                style.visible()
+            })
+            .children(buttons)
+            .into_any_element()
+    }
+
+    fn row(
+        &self,
+        s: &DownloadSummary,
+        thumbs: bool,
+        ring: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = *cx.theme();
+        let id = s.id;
+        let selected = self.selected == Some(id);
         let (status, tone) = status_text(s, &theme);
         let (size, third) = self.numbers(s, cx);
         let active = matches!(
             s.status,
             DownloadStatus::Downloading | DownloadStatus::Processing
         );
-        self.shell(s, false, cx)
+        let title = s.title.clone().unwrap_or_else(|| s.url.clone());
+        let actions = self.row_actions(s, cx);
+        let thumb = s
+            .thumbnail_path
+            .clone()
+            .or_else(|| s.thumbnail_url.clone())
+            .map(SharedString::from);
+        let fade = self.fresh.contains_key(&id) && ui::motion::animates(cx);
+        let row = self
+            .shell(s, thumbs, ring, cx)
             .child(
                 div()
+                    .relative()
                     .flex()
                     .flex_1()
                     .items_center()
                     .gap_3()
                     .px(theme.metrics.pad)
-                    .child(CallNumber::new(s.id.0).selected(selected))
+                    .child(CallNumber::new(id.0).selected(selected))
+                    .when(thumbs, |this| {
+                        this.child(Thumbnail::new(thumb, px(80.)).audio(s.kind == MediaKind::Audio))
+                    })
                     .child(
                         div()
                             .flex()
                             .flex_1()
                             .min_w_0()
-                            .items_baseline()
-                            .gap_2()
+                            .when(thumbs, |this| this.flex_col().justify_center())
+                            .when(!thumbs, |this| this.items_baseline().gap_2())
                             .child(
                                 div()
                                     .truncate()
-                                    .child(s.title.clone().unwrap_or_else(|| s.url.clone())),
+                                    .when(thumbs, |this| {
+                                        this.text_size(theme.text(Text::Heading))
+                                            .font_weight(FontWeight::MEDIUM)
+                                    })
+                                    .child(title),
                             )
                             .child(
                                 div()
                                     .flex_none()
-                                    .max_w(px(140.))
+                                    .max_w(px(160.))
                                     .truncate()
                                     .text_size(theme.text(Text::Small))
                                     .text_color(theme.muted_foreground)
@@ -219,16 +336,19 @@ impl Downloads {
                     )
                     .child(
                         div()
-                            .w(px(64.))
+                            .w(px(72.))
                             .flex_none()
+                            .whitespace_nowrap()
+                            .text_right()
                             .font_features(tabular())
                             .child(size),
                     )
                     .child(
                         div()
-                            .w(px(108.))
+                            .w(px(112.))
                             .flex_none()
                             .truncate()
+                            .text_right()
                             .font_features(tabular())
                             .text_color(theme.muted_foreground)
                             .child(third),
@@ -241,7 +361,7 @@ impl Downloads {
                             .justify_end()
                             .gap_2()
                             .text_color(tone)
-                            .child(div().truncate().child(status))
+                            .child(div().min_w_0().truncate().child(status))
                             .when(active, |this| {
                                 this.child(
                                     div()
@@ -252,106 +372,20 @@ impl Downloads {
                                         .child(format!("{:.0}%", s.progress * 100.)),
                                 )
                             }),
-                    ),
+                    )
+                    .child(actions),
             )
-            .child(ProgressRule::new(rule(s)))
-            .into_any_element()
-    }
-
-    fn ledger_row(&self, s: &DownloadSummary, cx: &mut Context<Self>) -> AnyElement {
-        let theme = *cx.theme();
-        let id = s.id;
-        let selected = self.selected == Some(id);
-        let (status, tone) = status_text(s, &theme);
-        let (size, third) = self.numbers(s, cx);
-        let active = matches!(
-            s.status,
-            DownloadStatus::Downloading | DownloadStatus::Processing
-        );
-        let failed = s.status == DownloadStatus::Failed;
-        self.shell(s, true, cx)
-            .child(
-                div()
-                    .flex()
-                    .flex_1()
-                    .items_center()
-                    .gap_3()
-                    .px(theme.metrics.pad)
-                    .child(CallNumber::new(id.0).selected(selected))
-                    .child(Thumbnail::new(
-                        s.thumbnail_path
-                            .clone()
-                            .or_else(|| s.thumbnail_url.clone())
-                            .map(SharedString::from),
-                        px(80.),
-                    ))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_size(theme.text(Text::Heading))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(s.title.clone().unwrap_or_else(|| s.url.clone())),
-                            )
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_size(theme.text(Text::Small))
-                                    .text_color(theme.muted_foreground)
-                                    .child(s.domain.clone()),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .w(px(64.))
-                            .text_color(theme.muted_foreground)
-                            .child(s.format_label.clone().unwrap_or_else(|| "-".into())),
-                    )
-                    .child(div().w(px(72.)).font_features(tabular()).child(size))
-                    .child(
-                        div()
-                            .w(px(104.))
-                            .font_features(tabular())
-                            .text_color(theme.muted_foreground)
-                            .child(third),
-                    )
-                    .child(
-                        div()
-                            .w(px(200.))
-                            .flex()
-                            .justify_end()
-                            .gap_2()
-                            .text_color(tone)
-                            .child(div().truncate().child(status))
-                            .when(active, |this| {
-                                this.child(
-                                    div()
-                                        .w(px(36.))
-                                        .text_right()
-                                        .font_features(tabular())
-                                        .child(format!("{:.0}%", s.progress * 100.)),
-                                )
-                            })
-                            .when(failed, |this| {
-                                this.child(
-                                    Button::new(("retry", id.0 as usize))
-                                        .small()
-                                        .outline()
-                                        .label(t!("dl-try-again"))
-                                        .on_click(
-                                            cx.listener(move |this, _, _, cx| this.retry(id, cx)),
-                                        ),
-                                )
-                            }),
-                    ),
-            )
-            .child(ProgressRule::new(rule(s)))
-            .into_any_element()
+            .child(ProgressRule::new(rule(s)));
+        match fade {
+            true => row
+                .with_animation(
+                    ("row-in", id.0 as usize),
+                    Animation::new(crate::downloads::FADE).with_easing(ui::ease_out_cubic),
+                    |this, delta| this.opacity(delta),
+                )
+                .into_any_element(),
+            false => row.into_any_element(),
+        }
     }
 
     /// The right-click menu of a row.
