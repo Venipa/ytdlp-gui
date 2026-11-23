@@ -1,5 +1,5 @@
 import localFont from 'next/font/local';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Provider } from '@/components/provider';
 import './global.css';
 
@@ -26,6 +26,9 @@ export const metadata: Metadata = {
   description:
     'Paste a link, pick a preset, get a correctly named file. A native desktop app for anything yt-dlp supports, on Windows, macOS and Linux.',
 };
+
+// cover lets env(safe-area-inset-bottom) reach the phone tab bar.
+export const viewport: Viewport = { viewportFit: 'cover' };
 
 export default function Layout({ children }: LayoutProps<'/'>) {
   return (
