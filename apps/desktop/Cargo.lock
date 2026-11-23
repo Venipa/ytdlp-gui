@@ -929,7 +929,7 @@ checksum = "e0921b3876b3a1df8a1c9f912e7f94342458022c2e84288015893d83c4d62a79"
 
 [[package]]
 name = "cli"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "clap",
  "dirs 7.0.0",
@@ -1532,7 +1532,7 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "anyhow",
  "dirs 7.0.0",
@@ -1595,7 +1595,7 @@ dependencies = [
 
 [[package]]
 name = "embed"
-version = "1.0.0"
+version = "1.0.2"
 
 [[package]]
 name = "embed-resource"
@@ -1633,7 +1633,7 @@ checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
 
 [[package]]
 name = "engine"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "anyhow",
  "domain",
@@ -2824,7 +2824,7 @@ dependencies = [
 
 [[package]]
 name = "i18n"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "embed",
  "fluent-bundle",
@@ -2860,7 +2860,7 @@ dependencies = [
 
 [[package]]
 name = "icons"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "anyhow",
  "embed",
@@ -3061,7 +3061,7 @@ dependencies = [
 
 [[package]]
 name = "input"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "gpui",
  "ui",
@@ -5313,7 +5313,7 @@ dependencies = [
 
 [[package]]
 name = "router"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "gpui",
 ]
@@ -6118,7 +6118,7 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "state"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "anyhow",
  "domain",
@@ -6145,7 +6145,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "storage"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "anyhow",
  "dirs 7.0.0",
@@ -6674,7 +6674,7 @@ checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
 
 [[package]]
 name = "tools"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "anyhow",
  "dirs 7.0.0",
@@ -6832,7 +6832,7 @@ dependencies = [
 
 [[package]]
 name = "ui"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "ashpd 0.14.3",
  "futures",
@@ -7072,7 +7072,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "views"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "domain",
  "gpui",
@@ -8190,7 +8190,7 @@ dependencies = [
 
 [[package]]
 name = "ytdlpd"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "anyhow",
  "clap",
