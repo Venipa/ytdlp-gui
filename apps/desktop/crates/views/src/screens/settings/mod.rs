@@ -4,7 +4,9 @@
 mod fields;
 mod layout;
 mod look;
+mod miniature;
 mod pages;
+mod themes;
 
 pub use look::{apply_stored, apply_window};
 
@@ -22,8 +24,8 @@ use i18n::t;
 use router::{Destination, Navigation, NavigationEvent, SettingsPage};
 use state::{AppSettings, AppState, Hooks, Tools, ToolsEvent};
 use ui::{
-    ActiveTheme as _, Chip, Input, Look, MONO, Notice, Popovers, Scrollbar, Scroller, SideNav,
-    SideNavItem, Stepper, SwitchRow, Text,
+    ActiveTheme as _, Chip, Input, Look, MONO, Notice, Popovers, Scrollbar, Scroller,
+    ScrubberState, SideNav, SideNavItem, Stepper, SwitchRow, Text,
 };
 
 use crate::toasts::{Kind, toast};
@@ -69,6 +71,11 @@ pub struct SettingsView {
     cookie_note: Option<(SharedString, bool)>,
     /// The theme and font size the window shows now, so only a change repaints.
     applied: Look,
+    /// The theme id `applied` was drawn from (theme files share the dark `Look`).
+    applied_theme: String,
+    /// The theme family whose variant menu the Appearance page holds.
+    theme_variants: Option<&'static str>,
+    opacity: ScrubberState,
     language: String,
     /// The look the window was last given, so a frame re-applies only after a change.
     window_look: Option<Look>,
@@ -144,6 +151,9 @@ impl SettingsView {
             popovers: Popovers::default(),
             cookie_note: None,
             applied: look::look_of(&current, None),
+            applied_theme: current.theme.clone(),
+            theme_variants: None,
+            opacity: ScrubberState::new("set-opacity"),
             language: current.language,
             window_look: None,
             preview: None,
@@ -228,9 +238,12 @@ impl SettingsView {
             }
         }
         let look = look::look_of(&current, None);
-        if look != self.applied {
+        if look != self.applied || current.theme != self.applied_theme {
             self.applied = look;
-            look::apply_look(look, cx);
+            self.applied_theme.clone_from(&current.theme);
+            look::apply_look(look, &look::overrides_of(&current, None), cx);
+            // the window background follows on the next frame
+            self.window_look = None;
         }
         if current.language != self.language {
             self.language = current.language.clone();

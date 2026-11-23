@@ -21,11 +21,11 @@ pub fn look_of(s: &Settings, theme: Option<&str>) -> Look {
         font: s.font_size,
         transparent,
         transparency: if transparent {
-            ui::BACKDROP_TRANSPARENCY
+            s.transparency.clamp(0., ui::MAX_TRANSPARENCY)
         } else {
             1.
         },
-        blur: blur_window,
+        blur: s.blur_ui,
         blur_window,
         tint: None,
         tint_secondary: None,
@@ -40,9 +40,14 @@ pub fn apply_window(window: &mut Window, cx: &mut App) {
     window.set_background_appearance(ui::backdrop(theme.blur_window, theme.transparent));
 }
 
-/// Applies the stored look to the theme and every open window.
-pub fn apply_look(look: Look, cx: &mut App) {
-    Theme::set(look, &ThemeOverrides::default(), cx);
+/// The colours the theme id (or the `--theme` flag) lays over the Ledger palette.
+pub fn overrides_of(s: &Settings, theme: Option<&str>) -> ThemeOverrides {
+    super::themes::overrides(theme.unwrap_or(&s.theme))
+}
+
+/// Applies the stored look and theme colours to the theme and every open window.
+pub fn apply_look(look: Look, overrides: &ThemeOverrides, cx: &mut App) {
+    Theme::set(look, overrides, cx);
     for handle in cx.windows() {
         // a window busy rendering is skipped, the Settings page applies it on its next frame
         handle
@@ -53,8 +58,8 @@ pub fn apply_look(look: Look, cx: &mut App) {
 
 /// Applies the settings stored in `AppState` at startup; `theme` is an explicit `--theme`.
 pub fn apply_stored(theme: Option<&str>, cx: &mut App) {
-    let look = look_of(AppState::global(cx).settings.read(cx).get(), theme);
-    apply_look(look, cx);
+    let s = AppState::global(cx).settings.read(cx).get().clone();
+    apply_look(look_of(&s, theme), &overrides_of(&s, theme), cx);
 }
 
 #[cfg(test)]
@@ -69,8 +74,15 @@ mod tests {
         s.background = "blur".into();
         let look = look_of(&s, Some("light"));
         assert!(look.transparent && look.blur_window && look.kind == ThemeKind::Light);
+        assert!(!look.blur && look.transparency == 0.15);
         s.background = "translucent".into();
+        (s.transparency, s.blur_ui) = (0.6, true);
         let look = look_of(&s, None);
-        assert!(look.transparent && !look.blur_window);
+        assert!(look.transparent && !look.blur_window && look.blur && look.transparency == 0.6);
+        // a theme file is laid over the dark palette
+        s.theme = "nord".into();
+        assert_eq!(look_of(&s, None).kind, ThemeKind::Dark);
+        assert!(overrides_of(&s, None).background.is_some());
+        assert_eq!(overrides_of(&s, Some("light")), ThemeOverrides::default());
     }
 }

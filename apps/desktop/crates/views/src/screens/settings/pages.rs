@@ -10,8 +10,8 @@ use gpui::prelude::*;
 use gpui::{AnyElement, Context, SharedString, div, px};
 use i18n::t;
 use ui::{
-    ActiveTheme as _, Button, Chip, MONO, MenuItem, Notice, Picker, ProgressRule, Rule, Text,
-    WindowBlur, tabular,
+    ActiveTheme as _, Button, Chip, MAX_TRANSPARENCY, MONO, MenuItem, Notice, Picker, ProgressRule,
+    Rule, Scrubber, SwitchRow, Text, WindowBlur, tabular,
 };
 
 use super::fields::Field;
@@ -600,55 +600,71 @@ impl SettingsView {
     }
 
     pub(super) fn page_appearance(&self, s: &Settings, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let bg = |id: &'static str, key| {
-            (
-                id,
-                key,
-                s.background == id,
-                Rc::new(move |st: &mut Settings| st.background = id.to_owned()) as Edit,
-            )
-        };
-        let mut backgrounds = vec![
-            bg("solid", "set-bg-solid"),
-            bg("translucent", "set-bg-translucent"),
-        ];
+        let theme = *cx.theme();
+        let solid = s.background == "solid";
+        // maple's window controls: one opacity slider (100% is solid), blur behind the window
+        // and blur of the floating UI; settings.json keeps `background` as the mode
+        let transparency = if solid { 0. } else { s.transparency };
+        let percent = ((1. - transparency) * 100.).round() as i64;
+        let settings = self.settings();
+        let slider = Scrubber::new(&self.opacity, 1. - transparency / MAX_TRANSPARENCY)
+            .name(t!("set-opacity"))
+            .value(t!("unit-percent", value = percent))
+            .colors(theme.muted_foreground, theme.muted, theme.foreground)
+            .on_move(move |fraction: &f32, _, cx| {
+                let transparency = (1. - fraction) * MAX_TRANSPARENCY;
+                settings.update(cx, |s, cx| {
+                    s.update(|st| set_transparency(st, transparency), cx)
+                });
+            });
+        let opacity = div()
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .child(div().w(theme.metrics.cover).child(slider))
+            .child(
+                div()
+                    .w(theme.metrics.control * 1.5)
+                    .text_right()
+                    .font_features(tabular())
+                    .child(t!("unit-percent", value = percent)),
+            );
+        let opaque = solid && !ui::COMPOSITOR_OPACITY;
+        let blur = s.background == "blur";
+        let mut window = vec![row(
+            t!("set-opacity"),
+            Some(t!("set-opacity-desc")),
+            opacity,
+            cx,
+        )];
         if WindowBlur::supported(cx) {
-            backgrounds.push(bg("blur", "set-bg-blur"));
+            window.push(
+                SwitchRow::new("set-blur-window", t!("set-blur-window"), blur && !opaque)
+                    .detail(t!("set-blur-window-desc"))
+                    .disabled(opaque)
+                    .on_click(self.edit(move |st| {
+                        st.background = if blur { "translucent" } else { "blur" }.into()
+                    }))
+                    .into_any_element(),
+            );
         }
-        let choice = |id: &'static str, key| {
-            (
-                id,
-                key,
-                s.theme == id,
-                Rc::new(move |st: &mut Settings| st.theme = id.to_owned()) as Edit,
-            )
-        };
+        window.push(
+            self.switch("set-blur-ui", "set-blur-ui", s.blur_ui, |s, v| {
+                s.blur_ui = v
+            }),
+        );
         vec![
             section(
                 Some(t!("set-sec-colours")),
-                vec![
-                    row(
-                        t!("set-theme"),
-                        Some(t!("set-theme-desc")),
-                        self.chips(
-                            "theme",
-                            [
-                                choice("system", "set-theme-system"),
-                                choice("dark", "set-theme-dark"),
-                                choice("light", "set-theme-light"),
-                            ],
-                        ),
-                        cx,
-                    ),
-                    row(
-                        t!("set-background"),
-                        Some(t!("set-background-desc")),
-                        self.chips("bg", backgrounds),
-                        cx,
-                    ),
-                ],
+                vec![stacked(
+                    t!("set-theme"),
+                    Some(t!("set-theme-desc")),
+                    self.theme_cards(&s.theme, cx),
+                    cx,
+                )],
                 cx,
             ),
+            section(Some(t!("set-sec-window")), window, cx),
             section(
                 Some(t!("set-sec-text")),
                 vec![row(
@@ -735,5 +751,38 @@ impl SettingsView {
                 cx,
             ),
         ]
+    }
+}
+/// Moves the opacity slider: fully opaque is the solid background, anything less is see-through,
+/// keeping the blur behind the window when it was on.
+fn set_transparency(s: &mut Settings, transparency: f32) {
+    // the last step of the slider snaps to solid, so a drag to the end is never 99.6%
+    if transparency < 0.005 {
+        s.background = "solid".into();
+        return;
+    }
+    s.transparency = transparency;
+    if s.background == "solid" {
+        s.background = "translucent".into();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_opacity_slider_moves_between_solid_and_see_through() {
+        let mut s = Settings::default();
+        set_transparency(&mut s, 0.4);
+        assert_eq!(
+            (s.background.as_str(), s.transparency),
+            ("translucent", 0.4)
+        );
+        s.background = "blur".into();
+        set_transparency(&mut s, 0.2);
+        assert_eq!((s.background.as_str(), s.transparency), ("blur", 0.2));
+        set_transparency(&mut s, 0.);
+        assert_eq!((s.background.as_str(), s.transparency), ("solid", 0.2));
     }
 }

@@ -7080,6 +7080,7 @@ dependencies = [
  "log",
  "open",
  "router",
+ "serde_json",
  "state",
  "ui",
  "windows-sys 0.61.2",
