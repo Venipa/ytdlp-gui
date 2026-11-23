@@ -215,7 +215,7 @@ CREATE TABLE tools (
 
 CREATE TABLE app_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);   -- first_run_done, ytdlp_active_site, ...
 ```
-Seven tables. `list_summaries` never selects `options_json` or `info_json` (a test asserts it). Filter and search run in memory on `DownloadSummary` with precomputed lowercase `title_lc` and `uploader_lc` (about 10 MB at 50k rows; no FTS5, D-005). Settings are in settings.json, not the DB. Cookie files are copied into `data/cookies/`.
+Six tables. `list_summaries` never selects `options_json` or `info_json` (a test asserts it). Filter and search run in memory on `DownloadSummary` with precomputed lowercase `title_lc` and `uploader_lc` (about 10 MB at 50k rows; no FTS5, D-005). Settings are in settings.json, not the DB. Cookie files are copied into `data/cookies/`.
 
 ## 12. settings.json (hot reload, maple pattern; D-006)
 Located in the config dir; `notify` watcher with debounced save; invalid JSON keeps the last good value and logs. Field names are snake_case (plan values, owner may rename before 1.0). Every field must be referenced outside the settings crate (`tests/settings_used.rs`, allowlist file for deliberate future ones).
