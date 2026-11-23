@@ -170,8 +170,8 @@ pub use table::{
 };
 pub use tabs::{TabBar, Tabs};
 pub use text_area::{
-    LineDown, LineUp, MAX_LINES, Newline, Pasted, SelectLineDown, SelectLineUp, TEXT_AREA_CONTEXT,
-    TextArea, unix_lines,
+    LineDown, LineNote, LineUp, MAX_LINES, Newline, Pasted, SelectLineDown, SelectLineUp,
+    TEXT_AREA_CONTEXT, TextArea, unix_lines,
 };
 pub use theme::{
     ActiveTheme, BACKDROP_TRANSPARENCY, COMPOSITOR_OPACITY, CoverFill, Look, MAX_FONT,

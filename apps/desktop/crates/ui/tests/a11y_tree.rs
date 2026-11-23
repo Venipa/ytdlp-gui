@@ -295,6 +295,46 @@ async fn input_names_itself_from_hint(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+async fn text_area_reads_as_a_named_multiline_field_with_its_text(cx: &mut TestAppContext) {
+    let lines = open_probe(cx, |window, cx| {
+        let area = cx.new(|cx| ui::TextArea::new("common-search", cx).name("common-save"));
+        area.update(cx, |area, cx| {
+            area.set_text(
+                "https://a.example/1
+not a link",
+                cx,
+            );
+            let field = snapshot("text-area", &area.render(window, cx).into_element());
+            // the editor's sheet keeps the same node
+            area.set_notes(Some(vec![ui::LineNote::default(); 2]), cx);
+            let sheet = snapshot("text-area-sheet", &area.render(window, cx).into_element());
+            format!(
+                "{field}
+{sheet}"
+            )
+        })
+    });
+    let lines = rendered(&lines, "text-area");
+    let both = lines.join(
+        "
+",
+    );
+    assert_eq!(
+        both.matches("role=MultilineTextInput").count(),
+        2,
+        "text area exposes no Role::MultilineTextInput, screen readers skip it: {lines:?}"
+    );
+    assert!(
+        !both.contains("name=None"),
+        "text area exposes no accessible name: {lines:?}"
+    );
+    assert!(
+        both.contains("not a link"),
+        "text area does not expose its text as its value: {lines:?}"
+    );
+}
+
+#[gpui::test]
 async fn otp_input_reads_as_a_named_field_with_its_code(cx: &mut TestAppContext) {
     let lines = open_probe(cx, |window, cx| {
         let field = cx.new(|cx| OtpInput::new(6, "common-search", cx).grouped(3));

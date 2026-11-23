@@ -1,16 +1,18 @@
 //! A text field of several lines, for text that comes a line at a time (the intake's links). It
 //! grows from one line to `MAX_LINES`, then scrolls. Enter is left to the form around it (submit),
 //! Shift+Enter breaks the line. Editing keys are the `Input` ones, through the same context.
+//! With `set_notes` it draws as a bare sheet for a larger surface around it (the intake's
+//! editor): numbered lines, a note at each line's end, wrong lines marked.
 
 use std::ops::Range;
 
 use gpui::prelude::*;
 use gpui::{
     App, AvailableSpace, Bounds, BoxShadow, ClipboardItem, Context, CursorStyle, Element,
-    ElementInputHandler, Entity, EntityInputHandler, FocusHandle, Focusable, GlobalElementId,
+    ElementInputHandler, Entity, EntityInputHandler, FocusHandle, Focusable, Font, GlobalElementId,
     InspectorElementId, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent, PaintQuad, Pixels,
-    Point, ScrollHandle, SharedString, Style, TextRun, UTF16Selection, Window, WrappedLine,
-    actions, div, fill, point, px, relative, size, svg,
+    Point, ScrollHandle, ShapedLine, SharedString, Style, TextRun, UTF16Selection, UnderlineStyle,
+    Window, WrappedLine, actions, div, fill, point, px, relative, size, svg,
 };
 use i18n::t;
 use unicode_segmentation::UnicodeSegmentation as _;
@@ -20,6 +22,7 @@ use crate::input::{
     Backspace, BackspaceWord, Copy, Cut, Delete, End, Home, INPUT_CONTEXT, Left, Paste, Right,
     SelectAll, SelectEnd, SelectHome, SelectLeft, SelectRight, Space, WordLeft, WordRight,
 };
+use crate::ledger::MONO;
 use crate::theme::ActiveTheme as _;
 
 actions!(
@@ -44,6 +47,9 @@ const FILL: f32 = 0.045;
 const EDGE: f32 = 0.15;
 const RING: f32 = 0.4;
 const RING_WIDTH: Pixels = px(2.);
+/// A sheet's line-number gutter, in font sizes, and the share of its width its notes take.
+const GUTTER: f32 = 2.5;
+const NOTE_SHARE: f32 = 0.34;
 
 /// `text` with every `\r\n` and lone `\r` turned into `\n`, the one line break the area keeps.
 pub fn unix_lines(text: &str) -> String {
@@ -127,18 +133,20 @@ struct Shaped {
 }
 
 impl Shaped {
-    fn shape(text: &str, width: Pixels, run: &TextRun, font_size: Pixels, window: &Window) -> Self {
+    fn shape(
+        text: &str,
+        width: Pixels,
+        runs: &[TextRun],
+        font_size: Pixels,
+        window: &Window,
+    ) -> Self {
         let line_height = window.line_height();
-        let run = TextRun {
-            len: text.len(),
-            ..run.clone()
-        };
         let lines = window
             .text_system()
             .shape_text(
                 SharedString::from(text.to_owned()),
                 font_size,
-                &[run],
+                runs,
                 Some(width),
                 None,
             )
@@ -204,6 +212,14 @@ impl Shaped {
 /// Emitted after a paste into the area, so its owner can tidy what arrived.
 pub struct Pasted;
 
+/// What a sheet says at the end of one of its lines (`TextArea::set_notes`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LineNote {
+    pub text: SharedString,
+    /// The line is wrong: drawn in the danger colour with a wavy underline.
+    pub bad: bool,
+}
+
 /// A field of several lines. See the module docs.
 pub struct TextArea {
     focus_handle: FocusHandle,
@@ -215,6 +231,10 @@ pub struct TextArea {
     clearable: bool,
     /// How many lines the area grows to before it scrolls.
     max_lines: f32,
+    /// Set while the area is a sheet: one note per line of the text.
+    notes: Option<Vec<LineNote>>,
+    /// A small count at the end of the field, before its clear button ("+4").
+    badge: Option<SharedString>,
     content: String,
     selected_range: Range<usize>,
     selection_reversed: bool,
@@ -236,6 +256,8 @@ impl TextArea {
             icon: None,
             clearable: false,
             max_lines: MAX_LINES,
+            notes: None,
+            badge: None,
             content: String::new(),
             selected_range: 0..0,
             selection_reversed: false,
@@ -272,6 +294,84 @@ impl TextArea {
         self
     }
 
+    /// Changes how many lines the area grows to, as `max_lines` does.
+    pub fn set_max_lines(&mut self, lines: f32, cx: &mut Context<Self>) {
+        self.max_lines = lines.max(1.);
+        self.reveal = true;
+        cx.notify();
+    }
+
+    /// `Some` draws the area as a bare sheet for a surface around it: no field chrome, icon or
+    /// clear button, numbered lines, and `notes[i]` at the end of line `i`. `None` is the field.
+    pub fn set_notes(&mut self, notes: Option<Vec<LineNote>>, cx: &mut Context<Self>) {
+        if self.notes != notes {
+            self.notes = notes;
+            cx.notify();
+        }
+    }
+
+    /// Shows `badge` as a small chip at the end of the field, or none.
+    pub fn set_badge(&mut self, badge: Option<SharedString>, cx: &mut Context<Self>) {
+        if self.badge != badge {
+            self.badge = badge;
+            cx.notify();
+        }
+    }
+
+    /// Puts the caret at the very start, so a one-line field shows its first line.
+    pub fn move_to_start(&mut self, cx: &mut Context<Self>) {
+        self.move_to(0, cx);
+    }
+
+    /// The field as it looks focused, without editing: its icon, the first line and the badge.
+    /// For the field's place while the area itself is drawn elsewhere (a sheet over the page).
+    pub fn face(&self, window: &Window, cx: &App) -> gpui::Div {
+        let theme = *cx.theme();
+        let first = self.content.lines().next().unwrap_or_default().to_owned();
+        let line = window.line_height();
+        // the same box as the field's one line, so swapping them moves nothing
+        div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .w_full()
+            .min_w_0()
+            .py(((theme.metrics.field - line) / 2.).max(Pixels::ZERO))
+            .px_3()
+            .rounded(theme.radius)
+            .bg(theme.foreground.opacity(FILL))
+            .border_1()
+            .border_color(theme.table_active_border)
+            .shadow(vec![ring(&theme)])
+            .cursor(CursorStyle::IBeam)
+            .when_some(self.icon.clone(), |this, path| {
+                this.child(
+                    svg()
+                        .path(icons::path(path))
+                        .size_4()
+                        .flex_none()
+                        .text_color(theme.muted_foreground),
+                )
+            })
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .h(line)
+                    .truncate()
+                    .font_family(MONO)
+                    .child(first),
+            )
+            .children(self.badge.clone().map(|text| {
+                div()
+                    .flex_none()
+                    .h(line)
+                    .flex()
+                    .items_center()
+                    .child(badge(text, &theme))
+            }))
+    }
+
     /// The text, lines joined by `\n`.
     pub fn text(&self) -> &str {
         &self.content
@@ -284,6 +384,7 @@ impl TextArea {
         self.move_to(self.content.len(), cx);
     }
 
+    /// Moves keyboard focus into the area.
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
         window.focus(&self.focus_handle, cx);
     }
@@ -623,30 +724,87 @@ struct Prepared {
     shaped: Shaped,
     caret: Option<PaintQuad>,
     selection: Vec<PaintQuad>,
+    /// A sheet's line numbers and notes, each with where it is drawn.
+    marks: Vec<(Point<Pixels>, ShapedLine)>,
+    notes: Vec<(Point<Pixels>, ShapedLine)>,
+    /// The column the notes are clipped to.
+    note_column: Bounds<Pixels>,
+}
+
+/// Where a sheet's text stands inside `width`: its left inset (the gutter) and its own width.
+/// A field's text takes the whole width.
+fn columns(sheet: bool, width: Pixels, font_size: Pixels) -> (Pixels, Pixels) {
+    match sheet {
+        false => (Pixels::ZERO, width),
+        true => {
+            let gutter = font_size * GUTTER;
+            (gutter, (width - gutter - width * NOTE_SHARE).max(px(1.)))
+        }
+    }
 }
 
 impl Lines {
-    /// The text drawn (the placeholder while empty) and its run.
-    fn text(&self, window: &Window, cx: &App) -> (String, TextRun, Pixels) {
+    /// The text drawn (the placeholder while empty), its runs (a sheet's wrong lines marked),
+    /// its font size and whether the area is a sheet.
+    fn text(&self, window: &Window, cx: &App) -> (String, Vec<TextRun>, Pixels, bool) {
         let area = self.area.read(cx);
+        let theme = cx.theme();
         let style = window.text_style();
-        let empty = area.content.is_empty();
-        let text = match empty {
-            true => i18n::lookup(&area.hint, None).to_string(),
-            false => area.content.clone(),
-        };
-        let run = TextRun {
-            len: text.len(),
+        let font_size = style.font_size.to_pixels(window.rem_size());
+        let sheet = area.notes.is_some();
+        let base = TextRun {
+            len: 0,
             font: style.font(),
-            color: match empty {
-                true => cx.theme().muted_foreground,
-                false => style.color,
-            },
+            color: style.color,
             background_color: None,
             underline: None,
             strikethrough: None,
         };
-        (text, run, style.font_size.to_pixels(window.rem_size()))
+        if area.content.is_empty() {
+            let text = i18n::lookup(&area.hint, None).to_string();
+            let run = TextRun {
+                len: text.len(),
+                color: theme.muted_foreground,
+                ..base
+            };
+            return (text, vec![run], font_size, sheet);
+        }
+        // the links are mono, the placeholder and the notes keep the surrounding face
+        let mono = TextRun {
+            font: Font {
+                family: MONO.into(),
+                ..style.font()
+            },
+            ..base
+        };
+        let notes = area.notes.as_deref().unwrap_or_default();
+        let mut runs: Vec<TextRun> = area
+            .content
+            .split('\n')
+            .enumerate()
+            .map(|(at, line)| match notes.get(at).is_some_and(|n| n.bad) {
+                true => TextRun {
+                    len: line.len() + 1,
+                    color: theme.danger,
+                    underline: Some(UnderlineStyle {
+                        thickness: px(1.),
+                        color: Some(theme.danger),
+                        wavy: true,
+                    }),
+                    ..mono.clone()
+                },
+                false => TextRun {
+                    len: line.len() + 1,
+                    ..mono.clone()
+                },
+            })
+            .collect();
+        // the last line has no break after it
+        if let Some(last) = runs.last_mut() {
+            last.len -= 1;
+        }
+        runs.retain(|run| run.len > 0);
+        (area.content.clone(), runs, font_size, sheet)
     }
 }
 
@@ -669,7 +827,7 @@ impl Element for Lines {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        let (text, run, font_size) = self.text(window, cx);
+        let (text, runs, font_size, sheet) = self.text(window, cx);
         let mut style = Style::default();
         style.size.width = relative(1.).into();
         let layout = window.request_measured_layout(style, move |known, available, window, _| {
@@ -677,7 +835,8 @@ impl Element for Lines {
                 AvailableSpace::Definite(width) => width,
                 _ => px(10_000.),
             });
-            let shaped = Shaped::shape(&text, width, &run, font_size, window);
+            let (_, text_width) = columns(sheet, width, font_size);
+            let shaped = Shaped::shape(&text, text_width, &runs, font_size, window);
             size(width, shaped.height())
         });
         (layout, ())
@@ -693,9 +852,11 @@ impl Element for Lines {
         cx: &mut App,
     ) -> Self::PrepaintState {
         let theme = *cx.theme();
-        let (text, run, font_size) = self.text(window, cx);
-        let mut shaped = Shaped::shape(&text, bounds.size.width, &run, font_size, window);
-        shaped.origin = bounds.origin;
+        let (text, runs, font_size, sheet) = self.text(window, cx);
+        let (gutter, text_width) = columns(sheet, bounds.size.width, font_size);
+        let mut shaped = Shaped::shape(&text, text_width, &runs, font_size, window);
+        shaped.origin = bounds.origin + point(gutter, Pixels::ZERO);
+        let (left, right) = (shaped.origin.x, shaped.origin.x + text_width);
         let area = self.area.read(cx);
         let lh = shaped.line_height;
         let (selection, caret) = match area.content.is_empty() || area.selected_range.is_empty() {
@@ -726,21 +887,61 @@ impl Element for Lines {
                 if a.y == b.y {
                     quads.push(rect(a.x, b.x, a.y));
                 } else {
-                    quads.push(rect(a.x, bounds.right(), a.y));
+                    quads.push(rect(a.x, right, a.y));
                     if b.y > a.y + lh {
                         quads.push(fill(
-                            Bounds::from_corners(
-                                point(bounds.left(), a.y + lh),
-                                point(bounds.right(), b.y),
-                            ),
+                            Bounds::from_corners(point(left, a.y + lh), point(right, b.y)),
                             color,
                         ));
                     }
-                    quads.push(rect(bounds.left(), b.x, b.y));
+                    quads.push(rect(left, b.x, b.y));
                 }
                 (quads, None)
             }
         };
+        // a sheet numbers its lines in the gutter and writes each note at the end of its line
+        let note_column = Bounds::from_corners(
+            point(right + font_size, bounds.top()),
+            point(bounds.right(), bounds.bottom()),
+        );
+        let (mut marks, mut notes) = (vec![], vec![]);
+        if let Some(line_notes) = area.notes.as_ref().filter(|_| !area.content.is_empty()) {
+            let small = theme.text(crate::Text::Small);
+            let style = window.text_style();
+            let shape = |text: String, font: Font, color| {
+                let run = TextRun {
+                    len: text.len(),
+                    font,
+                    color,
+                    background_color: None,
+                    underline: None,
+                    strikethrough: None,
+                };
+                window
+                    .text_system()
+                    .shape_line(text.into(), small, &[run], None)
+            };
+            let mono = Font {
+                family: MONO.into(),
+                ..style.font()
+            };
+            for (at, top) in shaped.tops.iter().enumerate() {
+                let y = bounds.top() + *top;
+                let number = shape((at + 1).to_string(), mono.clone(), theme.muted_foreground);
+                let x = left - font_size * 0.75 - number.width();
+                marks.push((point(x, y), number));
+                if let Some(note) = line_notes.get(at).filter(|n| !n.text.is_empty()) {
+                    let color = match note.bad {
+                        true => theme.danger,
+                        false => theme.muted_foreground,
+                    };
+                    let line = shape(note.text.to_string(), style.font(), color);
+                    // right-aligned; a note wider than its column starts at the column and is cut
+                    let x = (bounds.right() - line.width()).max(note_column.left());
+                    notes.push((point(x, y), line));
+                }
+            }
+        }
         // keep the caret in the scrolled view after a move or an edit
         if area.reveal {
             let caret = shaped.position(area.cursor());
@@ -761,6 +962,9 @@ impl Element for Lines {
             shaped,
             caret,
             selection,
+            marks,
+            notes,
+            note_column,
         }
     }
 
@@ -787,10 +991,11 @@ impl Element for Lines {
             }
         }
         let shaped = std::mem::take(&mut prepared.shaped);
+        let lh = shaped.line_height;
         for (line, top) in shaped.lines.iter().zip(&shaped.tops) {
             line.paint(
                 shaped.origin + point(Pixels::ZERO, *top),
-                shaped.line_height,
+                lh,
                 gpui::TextAlign::Left,
                 None,
                 window,
@@ -798,6 +1003,17 @@ impl Element for Lines {
             )
             .ok();
         }
+        for (at, mark) in &prepared.marks {
+            mark.paint(*at, lh, gpui::TextAlign::Left, None, window, cx)
+                .ok();
+        }
+        let column = prepared.note_column;
+        window.with_content_mask(Some(gpui::ContentMask { bounds: column }), |window| {
+            for (at, note) in &prepared.notes {
+                note.paint(*at, lh, gpui::TextAlign::Left, None, window, cx)
+                    .ok();
+            }
+        });
         if focused && let Some(caret) = prepared.caret.take() {
             window.paint_quad(caret);
         }
@@ -820,6 +1036,9 @@ impl Render for TextArea {
             || i18n::lookup(&self.hint, None),
             |key| i18n::lookup(key, None),
         );
+        // a sheet is bare: the surface around it draws the edge, the padding and the actions
+        let field = self.notes.is_none();
+        let line_box = || div().flex_none().h(line).flex().items_center();
         div()
             .id(&self.focus_handle)
             .role(gpui::accesskit::Role::MultilineTextInput)
@@ -832,22 +1051,17 @@ impl Render for TextArea {
             .gap_2()
             .w_full()
             .min_w_0()
-            .px_3()
-            // the padding stays outside the scrolled lines, so a scrolled view shows whole lines
-            .py(pad)
-            .rounded(theme.radius)
-            .bg(theme.foreground.opacity(FILL))
-            .border_1()
-            .border_color(edge)
-            .when(focused, |this| {
-                this.shadow(vec![BoxShadow {
-                    color: theme.table_active_border.opacity(RING),
-                    offset: point(Pixels::ZERO, Pixels::ZERO),
-                    blur_radius: Pixels::ZERO,
-                    spread_radius: RING_WIDTH,
-                    inset: false,
-                }])
+            .when(field, |this| {
+                this.px_3()
+                    // the padding stays outside the scrolled lines, so a scrolled view shows
+                    // whole lines
+                    .py(pad)
+                    .rounded(theme.radius)
+                    .bg(theme.foreground.opacity(FILL))
+                    .border_1()
+                    .border_color(edge)
             })
+            .when(field && focused, |this| this.shadow(vec![ring(&theme)]))
             .key_context(format!("{INPUT_CONTEXT} {TEXT_AREA_CONTEXT}").as_str())
             .track_focus(&self.focus_handle)
             .cursor(CursorStyle::IBeam)
@@ -884,9 +1098,9 @@ impl Render for TextArea {
                 MouseButton::Left,
                 cx.listener(|this, _, _, _| this.selecting = false),
             )
-            .when_some(self.icon.clone(), |this, path| {
+            .when_some(self.icon.clone().filter(|_| field), |this, path| {
                 this.child(
-                    div().flex_none().h(line).flex().items_center().child(
+                    line_box().child(
                         svg()
                             .path(icons::path(path))
                             .size_4()
@@ -904,29 +1118,71 @@ impl Render for TextArea {
                     .track_scroll(&self.scroll)
                     .child(Lines { area: cx.entity() }),
             )
-            .when(self.clearable && !self.content.is_empty(), |this| {
-                this.child(
-                    div().flex_none().h(line).flex().items_center().child(
-                        Button::new("text-area-clear")
-                            .icon("icons/x.svg")
-                            .tooltip("common-clear")
-                            .aria_label(t!("common-clear"))
-                            .small()
-                            .ghost()
-                            .px_1()
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.set_text("", cx);
-                                this.focus(window, cx);
-                            })),
-                    ),
-                )
+            .when_some(self.badge.clone().filter(|_| field), |this, text| {
+                this.child(line_box().child(badge(text, &theme)))
             })
+            .when(
+                field && self.clearable && !self.content.is_empty(),
+                |this| {
+                    this.child(
+                        line_box().child(
+                            Button::new("text-area-clear")
+                                .icon("icons/x.svg")
+                                .tooltip("common-clear")
+                                .aria_label(t!("common-clear"))
+                                .small()
+                                .ghost()
+                                .px_1()
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.set_text("", cx);
+                                    this.focus(window, cx);
+                                })),
+                        ),
+                    )
+                },
+            )
     }
+}
+
+/// The focus ring a focused field wears.
+fn ring(theme: &crate::theme::Theme) -> BoxShadow {
+    BoxShadow {
+        color: theme.table_active_border.opacity(RING),
+        offset: point(Pixels::ZERO, Pixels::ZERO),
+        blur_radius: Pixels::ZERO,
+        spread_radius: RING_WIDTH,
+        inset: false,
+    }
+}
+
+/// The field's count chip: ink on the selection tint, small.
+fn badge(text: SharedString, theme: &crate::theme::Theme) -> gpui::Div {
+    div()
+        .flex_none()
+        .px_1p5()
+        .rounded(theme.radius)
+        .border_1()
+        .border_color(theme.table_active_border.opacity(0.5))
+        .bg(theme.table_active)
+        .text_color(theme.table_active_border)
+        .text_size(theme.text(crate::Text::Small))
+        .font_features(crate::tabular())
+        .child(text)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_sheet_keeps_a_gutter_and_a_note_column() {
+        assert_eq!(columns(false, px(500.), px(12.)), (px(0.), px(500.)));
+        let (gutter, text) = columns(true, px(500.), px(12.));
+        assert_eq!(gutter, px(30.));
+        assert_eq!(text, px(500.) - px(30.) - px(500.) * NOTE_SHARE);
+        // never a negative width, however narrow
+        assert_eq!(columns(true, px(10.), px(12.)).1, px(1.));
+    }
 
     #[test]
     fn line_breaks_become_newlines() {
