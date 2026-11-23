@@ -14,4 +14,13 @@ fn main() {
     let out = PathBuf::from(env::var("OUT_DIR").expect("cargo sets the output")).join("fonts.rs");
     fs::write(&out, source).expect("cannot write the font registry");
     println!("cargo:rerun-if-changed=build.rs");
+    #[cfg(windows)]
+    {
+        let icon = root.join("assets/windows/ytdlpd.ico");
+        println!("cargo:rerun-if-changed={}", icon.display());
+        winresource::WindowsResource::new()
+            .set_icon(icon.to_str().expect("a utf-8 path"))
+            .compile()
+            .expect("cannot embed the Windows icon");
+    }
 }

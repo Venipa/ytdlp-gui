@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod assets;
+mod platform;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -28,6 +29,10 @@ struct Args {
     /// The first window size, as WIDTHxHEIGHT.
     #[arg(long, value_name = "WxH")]
     window_size: Option<WindowSize>,
+    #[command(flatten)]
+    launch: cli::args::Launch,
+    #[command(subcommand)]
+    command: Option<cli::args::Command>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -65,6 +70,14 @@ fn main() -> ExitCode {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("ytdlpd=info"))
         .init();
     let args = Args::parse();
+    // single instance: a second launch forwards its links to the running app and exits
+    let Some(platform) = platform::start(
+        &args.launch,
+        args.command.as_ref(),
+        args.data_dir.as_deref(),
+    ) else {
+        return ExitCode::SUCCESS;
+    };
 
     gpui_platform::application()
         .with_assets(assets::Assets)
@@ -89,7 +102,7 @@ fn main() -> ExitCode {
             cx.bind_keys(input::bindings());
             cx.on_action(|_: &input::Quit, cx| cx.quit());
             cx.on_window_closed(|cx, _| {
-                if cx.windows().is_empty() {
+                if cx.windows().is_empty() && !platform::keeps_running(cx) {
                     cx.quit();
                 }
             })
@@ -97,17 +110,25 @@ fn main() -> ExitCode {
 
             let _backend = build_app(args.data_dir.clone(), cx);
             router::init(Destination::Downloads, cx);
-            open_window(
-                args.window_size.map(|size| size.0).unwrap_or(FIRST_SIZE),
-                cx,
-            );
+            let size = args.window_size.map(|size| size.0).unwrap_or(FIRST_SIZE);
+            let frame_stats = args.launch.frame_stats;
+            // Lane C routes `on_event` into state; for now links are only logged.
+            let hooks = platform::Hooks {
+                open_window: Box::new(move |cx| open_window(size, frame_stats, cx)),
+                on_event: Box::new(|event, _cx| log::info!("ytdlpd: platform event {event:?}")),
+            };
+            // release builds with the real data dir register the ytdlpd:// scheme
+            let register = !cfg!(debug_assertions) && args.data_dir.is_none();
+            if platform.install(hooks, register, cx) {
+                open_window(size, frame_stats, cx);
+            }
             cx.activate(true);
             log::info!("ytdlpd: ready");
         });
     ExitCode::SUCCESS
 }
 
-fn open_window(first: Size<Pixels>, cx: &mut App) {
+fn open_window(first: Size<Pixels>, frame_stats: bool, cx: &mut App) {
     cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, first, cx))),
@@ -126,6 +147,10 @@ fn open_window(first: Size<Pixels>, cx: &mut App) {
         |window, cx| {
             use ui::ActiveTheme as _;
             window.set_rem_size(cx.theme().font_size);
+            platform::attach_window(window, cx);
+            if frame_stats {
+                platform::stats::start(window);
+            }
             cx.new(|cx| Root::new(window, cx))
         },
     )
