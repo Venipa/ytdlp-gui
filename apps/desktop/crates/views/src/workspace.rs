@@ -60,6 +60,9 @@ impl Workspace {
         match scene.unwrap_or("downloads") {
             "welcome" => router::navigate(Destination::Welcome, cx),
             "logs" => router::navigate(Destination::Logs, cx),
+            other if !other.starts_with("settings-") => {
+                downloads.update(cx, |d, cx| d.show_scene(other, cx))
+            }
             other => {
                 if let Some(id) = other.strip_prefix("settings-") {
                     router::navigate(
