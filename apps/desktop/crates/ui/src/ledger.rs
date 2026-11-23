@@ -337,6 +337,7 @@ impl RenderOnce for Chip {
             Some(count) => format!("{} {count}", self.label),
             None => self.label.to_string(),
         };
+        let id = self.id.clone();
         crate::focus::focusable(div().id(self.id.clone()), &self.id, window, cx)
             .role(Role::Button)
             .aria_label(name)
@@ -376,6 +377,7 @@ impl RenderOnce for Chip {
                 )
             })
             .when_some(self.on_click, |this, handler| this.on_click(handler))
+            .map(|this| crate::motion::pressing(this, &id, crate::motion::PRESS_SCALE, window, cx))
     }
 }
 
@@ -510,6 +512,9 @@ impl RenderOnce for SideNav {
                     })
                     .when(!narrow, |this| {
                         this.child(div().truncate().child(item.label))
+                    })
+                    .map(|this| {
+                        crate::motion::pressing(this, &id, crate::motion::PRESS_SCALE, window, cx)
                     })
             }))
     }

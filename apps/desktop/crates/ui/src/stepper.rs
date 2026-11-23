@@ -93,6 +93,9 @@ impl RenderOnce for Stepper {
                 .when_some(step, |this, step| {
                     this.on_click(move |_, window, cx| step(delta, window, cx))
                 })
+                .map(|this| {
+                    crate::motion::pressing(this, &id, crate::motion::PRESS_SCALE, window, cx)
+                })
         };
         let less = button(-1, window, cx);
         let more = button(1, window, cx);

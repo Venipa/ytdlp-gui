@@ -14,11 +14,23 @@ where
 {
     let ring = cx.theme().table_active_border;
     let handle = handle(id, window, cx);
-    // the halo sits outside the edge, so a selected part (ink edge too) still shows its focus
-    let halo = halo(ring, false);
+    // drawn inside the part with no border width of its own, so focus never moves the layout
+    // and a card that clips its rows still shows it; a part with a border inks that border
+    let rings = vec![edge(ring), halo(ring, true)];
     element
         .track_focus(&handle)
-        .focus_visible(move |style| style.border_1().border_color(ring).shadow(vec![halo]))
+        .focus_visible(move |style| style.border_color(ring).shadow(rings))
+}
+
+/// The 1px ink edge drawn inside a part that has no border of its own.
+fn edge(ring: gpui::Hsla) -> BoxShadow {
+    BoxShadow {
+        color: ring,
+        offset: point(px(0.), px(0.)),
+        blur_radius: px(0.),
+        spread_radius: px(1.),
+        inset: true,
+    }
 }
 
 /// The same ring laid over a part that fills its room edge to edge (a list, a row in it), where
@@ -39,7 +51,7 @@ fn halo(ring: gpui::Hsla, inset: bool) -> BoxShadow {
         color: ring.opacity(0.4),
         offset: point(px(0.), px(0.)),
         blur_radius: px(0.),
-        spread_radius: px(2.),
+        spread_radius: px(3.),
         inset,
     }
 }
