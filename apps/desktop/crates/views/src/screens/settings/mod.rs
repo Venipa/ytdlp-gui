@@ -83,6 +83,8 @@ pub struct SettingsView {
     preview: Option<Result<String, String>>,
     preview_task: Option<Task<()>>,
     preview_inputs: (String, String),
+    /// Whether the last frame showed the Downloads page, so entering it is told apart.
+    on_downloads: bool,
     bar: Entity<Scrollbar>,
     /// The version of the bundled yt-dlp, once the engine told.
     ytdlp_version: Option<String>,
@@ -159,6 +161,7 @@ impl SettingsView {
             preview: None,
             preview_task: None,
             preview_inputs: (current.outtmpl.clone(), current.output_dir.clone()),
+            on_downloads: false,
             bar,
             ytdlp_version: None,
         };
@@ -509,6 +512,9 @@ impl SettingsView {
                 .spawn_blocking(move || preview(&spec))
                 .await
                 .unwrap_or_else(|e| Err(e.to_string()));
+            if let Err(error) = &result {
+                log::warn!("settings: cannot preview the file name: {error}");
+            }
             this.update(cx, |this, cx| {
                 this.preview = Some(result.map(|path| {
                     let path = std::path::Path::new(&path);
@@ -598,6 +604,13 @@ fn tool_toast(event: &ToolsEvent, cx: &mut App) {
     toast(cx, kind, message, None);
 }
 
+/// Whether opening the Downloads page should ask for the preview again. The page is built with
+/// the window at launch, and a preview that failed or never arrived then would otherwise stay
+/// until the template or folder changed (the user had to clear and retype the template).
+fn retry_preview(entering: bool, preview: &Option<Result<String, String>>) -> bool {
+    entering && !matches!(preview, Some(Ok(_)))
+}
+
 /// The icon of a settings page in the side list.
 fn page_icon(page: SettingsPage) -> &'static str {
     match page {
@@ -633,6 +646,11 @@ impl Render for SettingsView {
             Destination::Settings(page) => page,
             _ => SettingsPage::General,
         };
+        let entering = page == SettingsPage::Downloads && !self.on_downloads;
+        self.on_downloads = page == SettingsPage::Downloads;
+        if retry_preview(entering, &self.preview) {
+            self.refresh_preview(cx);
+        }
         let s = self.settings().read(cx).get().clone();
         let broken = self.settings().read(cx).error().is_some();
         let nav = SideNav::new(
@@ -676,5 +694,19 @@ impl Render for SettingsView {
                     cx,
                 )),
             ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::retry_preview;
+
+    #[test]
+    fn a_failed_or_missing_preview_is_asked_again_on_open() {
+        assert!(retry_preview(true, &Some(Err("first call failed".into()))));
+        assert!(retry_preview(true, &None));
+        assert!(!retry_preview(true, &Some(Ok("a.mp4".into()))));
+        // staying on the page never loops on a failure
+        assert!(!retry_preview(false, &Some(Err("x".into()))));
     }
 }
