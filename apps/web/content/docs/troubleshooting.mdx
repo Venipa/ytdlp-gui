@@ -1,0 +1,42 @@
+---
+title: Troubleshooting
+description: What the error messages mean and what to do about them.
+---
+
+## Messages on a download
+
+| Message | What to do |
+| --- | --- |
+| Sign in needed. Add cookies in Settings. | Set up [cookies](/docs/settings#cookies), then **Try again**. |
+| This video is age-restricted. | Use cookies from a browser where you are signed in. |
+| This video is private. | Only the uploader, or accounts they share it with, can get it. Cookies help if your account has access. |
+| Not available in your country. | Try a proxy in Settings, Network. |
+| Too many requests. Trying again in 30 seconds. | Nothing; ytdlpd waits and retries. Lower **Per site** if it keeps happening. |
+| That quality isn't available for this video. | Pick another preset or use **Choose formats**. |
+| ffmpeg is missing. | Download it in Settings, Tools, or choose your own file. |
+| YouTube needs deno. | Download the JavaScript runtime in Settings, Tools. |
+| Couldn't read the browser's cookies. | Close the browser, or use a cookies file. On Windows, use Firefox rather than Chrome or Edge. |
+| Couldn't make a secure connection. | Check your date and time, proxy or antivirus. |
+| The disk is full. / Can't write to this folder. | Free space, or pick another folder in Settings, Downloads. |
+| No connection. Try again. | Check the network, then **Try again**. |
+| Something went wrong. See the log. | Open the line's details or **Logs** for the full message. |
+
+## Logs
+
+**Logs** in the sidebar shows engine and app log lines, filterable by level and by download; **Copy all** puts them on the clipboard for a bug report. The log files are in the log folder (Settings, About, **Open log folder**).
+
+## Where things live
+
+Release builds use the folder name `ytdlpd`; development builds use `ytdlpd.dev`.
+
+| | Windows | macOS | Linux |
+| --- | --- | --- | --- |
+| settings.json | `%APPDATA%\ytdlpd` | `~/Library/Application Support/ytdlpd` | `~/.config/ytdlpd` |
+| database, tools, logs | `%LOCALAPPDATA%\ytdlpd` | `~/Library/Application Support/ytdlpd` | `~/.local/share/ytdlpd` |
+| cache | `%LOCALAPPDATA%\ytdlpd\cache` | `~/Library/Caches/ytdlpd` | `~/.cache/ytdlpd` |
+
+`--data-dir <dir>` keeps everything under one folder instead (a separate instance, with no `ytdlpd://` link registration).
+
+## Still stuck
+
+Open an issue on <Repo path="/issues">GitHub</Repo> with the log lines of the failing download and the link, if you can share it.

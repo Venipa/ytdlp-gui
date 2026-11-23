@@ -13,6 +13,9 @@
     "setup": "bun run --filter @ytdlpd/desktop setup",
     "dev:hot": "bun run --filter @ytdlpd/desktop dev:hot",
     "release:win": "bun run --filter @ytdlpd/desktop release:win",
-    "release:mac": "bun run --filter @ytdlpd/desktop release:mac"
+    "release:mac": "bun run --filter @ytdlpd/desktop release:mac",
+    "web:dev": "bun run --filter @ytdlpd/web dev",
+    "web:build": "bun run --filter @ytdlpd/web build",
+    "web:stats": "bun run --filter @ytdlpd/web stats"
   }
 }
