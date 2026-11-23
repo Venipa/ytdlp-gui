@@ -33,6 +33,8 @@ pub struct Workspace {
     app: AppState,
     /// Whether the first run was finished in an earlier session; `None` until read.
     first_run_done: Option<bool>,
+    /// A `--screen` debug scene is open: first run does not route away from it.
+    pinned: bool,
     /// Whether the start-up tool check has been acted on.
     routed: bool,
     /// Whether the left button went down on the bar and has not moved the window yet.
@@ -95,6 +97,7 @@ impl Workspace {
             settings,
             app,
             first_run_done: None,
+            pinned: scene.is_some(),
             routed: false,
             grabbed: false,
         }
@@ -128,7 +131,9 @@ impl Workspace {
         if !std::mem::replace(&mut self.routed, true) {
             match (ready, first_run_done) {
                 (false, false) => {
-                    router::navigate(Destination::Welcome, cx);
+                    if !self.pinned {
+                        router::navigate(Destination::Welcome, cx);
+                    }
                     tools.update(cx, |t, cx| t.ensure_missing(cx));
                 }
                 (true, false) => self
@@ -138,7 +143,7 @@ impl Workspace {
                 _ => {}
             }
         }
-        if ready && self.navigation.read(cx).current() == Destination::Welcome {
+        if ready && !self.pinned && self.navigation.read(cx).current() == Destination::Welcome {
             welcome::leave(cx);
         }
         cx.notify();

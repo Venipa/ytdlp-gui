@@ -2,11 +2,11 @@
 
 use domain::{ToolKind, ToolSource, ToolState};
 use gpui::prelude::*;
-use gpui::{AnyElement, App, FontWeight, PathPromptOptions, SharedString, div, px};
+use gpui::{AnyElement, App, FontWeight, PathPromptOptions, SharedString, div, px, svg};
 use i18n::t;
 use router::Destination;
 use state::AppState;
-use ui::{ActiveTheme as _, Button, ProgressRule, Rule, Text, tabular};
+use ui::{ActiveTheme as _, Button, Perch, ProgressRule, Rule, Spinner, Text, Tipped as _, tabular};
 
 use crate::downloads::error_text;
 use crate::format;
@@ -66,7 +66,26 @@ fn choose_ffmpeg(cx: &mut App) {
     .detach();
 }
 
-/// The Getting ready screen.
+/// The part of a version string that people read: `7.0.1-essentials_build-www.gyan.dev` is `7.0.1`.
+fn short_version(version: &str) -> &str {
+    version
+        .split(|c: char| c.is_whitespace() || c == '-' || c == '_')
+        .next()
+        .unwrap_or(version)
+}
+
+fn tool_icon(kind: ToolKind) -> &'static str {
+    match kind {
+        ToolKind::YtDlp => "icons/download.svg",
+        ToolKind::YtDlpEjs => "icons/link.svg",
+        ToolKind::Ffmpeg => "icons/film.svg",
+        ToolKind::Ffprobe => "icons/info.svg",
+        ToolKind::Deno => "icons/settings.svg",
+        ToolKind::Python => "icons/list.svg",
+    }
+}
+
+/// The Getting ready screen: one centred column, a line per tool; the rule under it is its progress.
 pub fn welcome(cx: &App) -> AnyElement {
     let theme = *cx.theme();
     let pencil = theme.muted_foreground;
@@ -76,109 +95,178 @@ pub fn welcome(cx: &App) -> AnyElement {
         .iter()
         .any(|s| matches!(s.state, ToolState::Failed(_)));
     let go = can_continue(cx);
-    div()
-        .flex()
-        .flex_col()
-        .gap_3()
-        .p(theme.metrics.pad * 2.)
-        .max_w(px(640.))
-        .child(
-            div()
-                .text_size(theme.text(Text::Title))
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(t!("welcome-title")),
-        )
-        .child(div().text_color(pencil).child(t!("welcome-detail")))
-        .children(
-            statuses
-                .into_iter()
-                .filter(|tool| tool.kind != ToolKind::Python)
-                .map(|tool| {
-                    let (state, rule, extra): (SharedString, Rule, Option<String>) = match &tool
-                        .state
-                    {
-                        ToolState::Ready if tool.source == Some(ToolSource::Path) => {
-                            (t!("welcome-found"), Rule::Solid, None)
-                        }
-                        ToolState::Ready => (t!("welcome-ready"), Rule::Solid, None),
-                        ToolState::Checking => (t!("welcome-checking"), Rule::Dotted, None),
-                        ToolState::Missing => (t!("welcome-waiting"), Rule::Dotted, None),
-                        ToolState::Failed(error) => (error_text(error.code), Rule::Failed, None),
-                        ToolState::Downloading { done, total } => (
-                            t!("welcome-downloading"),
-                            Rule::Fill(total.map_or(0., |t| *done as f32 / t.max(1) as f32)),
-                            total.map(|t| {
-                                t!(
-                                    "welcome-progress",
-                                    done = format::bytes(*done as i64),
-                                    total = format::bytes(t as i64)
-                                )
-                                .to_string()
-                            }),
+    let rows = statuses
+        .into_iter()
+        .filter(|tool| tool.kind != ToolKind::Python)
+        .map(|tool| {
+            let mut danger = false;
+            let (state, rule): (SharedString, Rule) = match &tool.state {
+                ToolState::Ready if tool.source == Some(ToolSource::Path) => {
+                    (t!("welcome-found"), Rule::Solid)
+                }
+                ToolState::Ready => (t!("welcome-ready"), Rule::Solid),
+                ToolState::Checking => (t!("welcome-checking"), Rule::Dotted),
+                ToolState::Missing => (t!("welcome-waiting"), Rule::Dotted),
+                ToolState::Failed(error) => {
+                    danger = true;
+                    (error_text(error.code), Rule::Failed)
+                }
+                ToolState::Downloading { done, total } => (
+                    match total {
+                        Some(total) => t!(
+                            "welcome-progress",
+                            done = format::bytes(*done as i64),
+                            total = format::bytes(*total as i64)
                         ),
-                    };
+                        None => t!("welcome-downloading"),
+                    },
+                    Rule::Fill(total.map_or(0., |t| *done as f32 / t.max(1) as f32)),
+                ),
+            };
+            let key = tool.kind as usize;
+            let lead: AnyElement = match &tool.state {
+                ToolState::Downloading { .. } | ToolState::Checking => {
+                    Spinner::new(("tool-spin", key)).into_any_element()
+                }
+                ToolState::Ready => svg()
+                    .path(icons::path("icons/circle-check.svg"))
+                    .size(px(16.))
+                    .text_color(pencil)
+                    .into_any_element(),
+                ToolState::Failed(_) => svg()
+                    .path(icons::path("icons/circle-alert.svg"))
+                    .size(px(16.))
+                    .text_color(theme.danger)
+                    .into_any_element(),
+                ToolState::Missing => div().size(px(16.)).into_any_element(),
+            };
+            let version = tool.version.clone().unwrap_or_default();
+            let short = short_version(&version).to_string();
+            let long = version != short;
+            div()
+                .flex()
+                .flex_col()
+                .child(
                     div()
                         .flex()
-                        .flex_col()
-                        .gap_1()
+                        .h(px(40.))
+                        .items_center()
+                        .gap_3()
+                        .child(
+                            svg()
+                                .path(icons::path(tool_icon(tool.kind)))
+                                .size(px(16.))
+                                .flex_none()
+                                .text_color(pencil),
+                        )
+                        .child(
+                            div()
+                                .w(px(112.))
+                                .flex_none()
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(tool_name(tool.kind)),
+                        )
+                        .child(
+                            div()
+                                .id(("tool-version", key))
+                                .w(px(80.))
+                                .flex_none()
+                                .truncate()
+                                .font_features(tabular())
+                                .text_color(pencil)
+                                .child(short)
+                                .when(long, |this| this.tip_label(version.clone(), Perch::Below)),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .text_right()
+                                .font_features(tabular())
+                                .text_color(if danger { theme.danger } else { pencil })
+                                .child(state),
+                        )
+                        .child(div().flex_none().w(px(16.)).child(lead)),
+                )
+                .child(ProgressRule::new(rule))
+        });
+    div()
+        .size_full()
+        .flex()
+        .justify_center()
+        .pt(px(72.))
+        .child(
+            div()
+                .w_full()
+                .max_w(px(560.))
+                .px_4()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(
+                    div()
+                        .text_size(theme.text(Text::Title))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(t!("welcome-title")),
+                )
+                .child(div().text_color(pencil).child(t!("welcome-detail")))
+                .child(div().flex().flex_col().mt_2().children(rows))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .mt_3()
+                        .child(
+                            Button::new("own-ffmpeg")
+                                .ghost()
+                                .small()
+                                .label(t!("welcome-own-ffmpeg"))
+                                .on_click(|_, _, cx| choose_ffmpeg(cx)),
+                        )
                         .child(
                             div()
                                 .flex()
-                                .h(px(32.))
                                 .items_center()
-                                .child(div().w(px(120.)).child(tool_name(tool.kind)))
+                                .gap_3()
+                                .when(!go && !failed, |this| {
+                                    this.child(
+                                        div().text_color(pencil).child(t!("welcome-continue-wait")),
+                                    )
+                                })
+                                .when(failed, |this| {
+                                    let tools = tools.clone();
+                                    this.child(
+                                        Button::new("welcome-retry")
+                                            .outline()
+                                            .label(t!("dl-try-again"))
+                                            .on_click(move |_, _, cx| {
+                                                tools.update(cx, |t, cx| t.ensure_missing(cx))
+                                            }),
+                                    )
+                                })
                                 .child(
-                                    div()
-                                        .w(px(120.))
-                                        .font_features(tabular())
-                                        .text_color(pencil)
-                                        .child(tool.version.unwrap_or_default()),
-                                )
-                                .child(div().w(px(240.)).truncate().child(state))
-                                .child(
-                                    div()
-                                        .font_features(tabular())
-                                        .text_color(pencil)
-                                        .child(extra.unwrap_or_default()),
+                                    Button::new("welcome-continue")
+                                        .primary()
+                                        .disabled(!go)
+                                        .label(t!("welcome-continue"))
+                                        .on_click(|_, _, cx| leave(cx)),
                                 ),
-                        )
-                        .child(ProgressRule::new(rule))
-                }),
-        )
-        .child(
-            div()
-                .flex()
-                .justify_between()
-                .mt_3()
-                .child(
-                    Button::new("own-ffmpeg")
-                        .ghost()
-                        .label(t!("welcome-own-ffmpeg"))
-                        .on_click(|_, _, cx| choose_ffmpeg(cx)),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .gap_2()
-                        .when(failed, |this| {
-                            let tools = tools.clone();
-                            this.child(
-                                Button::new("welcome-retry")
-                                    .outline()
-                                    .label(t!("dl-try-again"))
-                                    .on_click(move |_, _, cx| {
-                                        tools.update(cx, |t, cx| t.ensure_missing(cx))
-                                    }),
-                            )
-                        })
-                        .child(
-                            Button::new("welcome-continue")
-                                .primary()
-                                .disabled(!go)
-                                .label(t!("welcome-continue"))
-                                .on_click(|_, _, cx| leave(cx)),
                         ),
                 ),
         )
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn short_version_drops_build_suffix() {
+        assert_eq!(
+            super::short_version("7.0.1-essentials_build-www.gyan.dev"),
+            "7.0.1"
+        );
+        assert_eq!(super::short_version("2026.03.13"), "2026.03.13");
+    }
 }
