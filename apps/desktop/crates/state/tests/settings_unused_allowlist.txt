@@ -8,7 +8,6 @@ ffmpeg_flavor
 language
 last_preset
 notifications
-playlist_outtmpl
 start_minimized
 window
 ytdlp_auto_check

@@ -127,16 +127,27 @@ impl AppSettings {
         }
     }
 
-    /// Builds the spec for a new download from the current settings.
-    pub fn job_spec(&self, url: &str, preset: Preset, format_spec: &str) -> JobSpec {
+    /// Builds the spec for a new download from the current settings. A playlist entry (`Some(index)`)
+    /// uses the playlist output template.
+    pub fn job_spec(
+        &self,
+        url: &str,
+        preset: Preset,
+        format_spec: &str,
+        playlist_index: Option<u32>,
+    ) -> JobSpec {
         let s = &self.settings;
         JobSpec {
             url: url.to_string(),
             preset,
             format_spec: format_spec.to_string(),
             output_dir: s.output_dir.clone(),
-            outtmpl: s.outtmpl.clone(),
-            playlist_index: None,
+            outtmpl: if playlist_index.is_some() {
+                s.playlist_outtmpl.clone()
+            } else {
+                s.outtmpl.clone()
+            },
+            playlist_index,
             embed_thumbnail: s.embed_thumbnail,
             embed_metadata: s.embed_metadata,
             embed_chapters: s.embed_chapters,

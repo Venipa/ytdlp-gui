@@ -27,9 +27,6 @@ struct Args {
     /// Where the database, settings and logs live instead of the platform default.
     #[arg(long, value_name = "DIR")]
     data_dir: Option<PathBuf>,
-    /// Run against fake data: an in-memory database, a fake engine and fake tools.
-    #[arg(long, value_name = "SCENE", value_parser = clap::builder::PossibleValuesParser::new(state::Scene::NAMES))]
-    demo: Option<String>,
     /// The first window size, as WIDTHxHEIGHT.
     #[arg(long, value_name = "WxH")]
     window_size: Option<WindowSize>,
@@ -67,14 +64,39 @@ impl FromStr for WindowSize {
 }
 
 /// The one place state is wired up: runtime, storage (opened in the background, honours
-/// `--data-dir`), fake or real engine, and every entity.
+/// `--data-dir`), the real engine (feature `real-engine`) or the fake one, and every entity.
 fn build_app(data_dir: Option<PathBuf>, demo: Option<&str>, cx: &mut App) -> state::AppState {
+    let scene = demo.and_then(|name| {
+        let scene = state::Scene::parse(name);
+        if scene.is_none() {
+            log::warn!(
+                "ytdlpd: unknown demo scene {name:?}, expected one of {:?}",
+                state::Scene::NAMES
+            );
+        }
+        scene
+    });
+    #[cfg(feature = "real-engine")]
+    let backend: Option<std::sync::Arc<dyn domain::Backend>> = scene.is_none().then(|| {
+        let paths = storage::Paths::resolve(data_dir.as_deref());
+        let config = engine::EngineConfig {
+            worker_exe: std::env::current_exe().unwrap_or_default(),
+            python_home: None,
+            site_updates: Some(paths.data.join("python-site")),
+            env: engine::spec::Env {
+                cache_dir: Some(paths.cache.join("yt-dlp").to_string_lossy().into_owned()),
+                // the JavaScript runtime travels in each job spec (settings, then the detected deno)
+                js_runtime: None,
+            },
+        };
+        std::sync::Arc::new(engine::EngineBackend::new(config)) as _
+    });
+    #[cfg(not(feature = "real-engine"))]
+    let backend = None;
     let args = state::InitArgs {
         data_dir,
-        demo: demo.and_then(state::Scene::parse),
-        // TODO(real-engine): construct the engine `Backend` here once the engine crate lands;
-        // until then both builds run on `FakeBackend`.
-        backend: None,
+        demo: scene,
+        backend,
         ..Default::default()
     };
     state::init(args, cx).expect("cannot start the application state")
@@ -129,15 +151,15 @@ fn main() -> ExitCode {
             })
             .detach();
 
-            let _state = build_app(args.data_dir.clone(), args.demo.as_deref(), cx);
+            let state = build_app(args.data_dir.clone(), args.launch.demo.as_deref(), cx);
+            wire_platform(&state, cx);
             router::init(Destination::Downloads, cx);
             let size = args.window_size.map(|size| size.0).unwrap_or(FIRST_SIZE);
             let frame_stats = args.launch.frame_stats;
             let scene = args.screen.clone();
-            // Lane C routes `on_event` into state; for now links are only logged.
             let hooks = platform::Hooks {
                 open_window: Box::new(move |cx| open_window(scene.clone(), size, frame_stats, cx)),
-                on_event: Box::new(|event, _cx| log::info!("ytdlpd: platform event {event:?}")),
+                on_event: Box::new(move |event, cx| route_event(&state, event.clone(), cx)),
             };
             // release builds with the real data dir register the ytdlpd:// scheme
             let register = !cfg!(debug_assertions) && args.data_dir.is_none();
@@ -148,6 +170,56 @@ fn main() -> ExitCode {
             log::info!("ytdlpd: ready");
         });
     ExitCode::SUCCESS
+}
+
+/// Settings drive the tray behaviour; finished and failed downloads raise notifications.
+fn wire_platform(state: &state::AppState, cx: &mut App) {
+    cx.observe(&state.settings, |settings, cx| {
+        platform::set_close_to_tray(settings.read(cx).get().close_to_tray, cx);
+    })
+    .detach();
+    let settings = state.settings.clone();
+    cx.subscribe(&state.downloads, move |downloads, event, cx| {
+        if !settings.read(cx).get().notifications {
+            return;
+        }
+        let title = |id| {
+            downloads
+                .read(cx)
+                .get(id)
+                .and_then(|r| r.title.clone())
+                .unwrap_or_else(|| "ytdlpd".into())
+        };
+        match event {
+            state::DownloadsEvent::Completed(id) => {
+                platform::notifier(cx).notify(&title(*id), "Download finished")
+            }
+            state::DownloadsEvent::Failed(id, error) => {
+                platform::notifier(cx).notify(&title(*id), &error.message)
+            }
+            state::DownloadsEvent::Loaded => {}
+        }
+    })
+    .detach();
+}
+
+/// Platform events become state: links go to `Intake`, quit pauses jobs first.
+fn route_event(state: &state::AppState, event: platform::Event, cx: &mut App) {
+    match event {
+        platform::Event::AddUrls(urls) => state.intake.update(cx, |i, cx| i.add(&urls, cx)),
+        platform::Event::ClipboardLinks(urls) => {
+            state.intake.update(cx, |i, cx| i.offer(&urls, cx))
+        }
+        platform::Event::Show => {}
+        platform::Event::Quit => {
+            let done = state.shutdown(cx);
+            cx.spawn(async move |cx| {
+                done.await;
+                cx.update(|cx| cx.quit());
+            })
+            .detach();
+        }
+    }
 }
 
 fn open_window(scene: Option<String>, first: Size<Pixels>, frame_stats: bool, cx: &mut App) {

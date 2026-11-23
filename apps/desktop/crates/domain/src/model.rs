@@ -79,6 +79,12 @@ impl ErrorCode {
     pub fn retryable(self) -> bool {
         matches!(self, Self::Network | Self::RateLimited)
     }
+
+    /// Fluent message id for the user-facing copy: `err-` plus the code with `_` as `-`
+    /// (`age_restricted` is `err-age-restricted`).
+    pub fn message_key(self) -> String {
+        format!("err-{}", self.as_str().replace('_', "-"))
+    }
 }
 
 /// Classified engine failure.
@@ -400,5 +406,7 @@ mod tests {
             assert_eq!(s.as_str().parse::<DownloadStatus>().unwrap(), *s);
         }
         assert!(ErrorCode::Network.retryable() && !ErrorCode::Login.retryable());
+        assert_eq!(ErrorCode::AgeRestricted.message_key(), "err-age-restricted");
+        assert_eq!(ErrorCode::Geo.message_key(), "err-geo");
     }
 }
