@@ -37,7 +37,7 @@ Open item for Phase 0b: check which field `ui` reads for the focus ring and make
 - `UI_FONT = "IBM Plex Sans"` in `views/src/root.rs`; `ui::MONO = "IBM Plex Mono"` (new const).
 - Tabular figures: every number (size, speed, ETA, duration, percentage, counts) uses `.font_features(ui::tabular())`.
 - Mono only for: call numbers, ids and format codes (`137+140`), logs, file paths in the detail panel, the intake text.
-- Scale (theme font_size 13): 11 meta (pencil), 13 body, 15 row title (Medium), 22 page title (SemiBold). Intake text 13 mono. Line height `LEADING` 1.25 as maple.
+- Scale (theme font_size 12, the default): 10 tiny (pills, badges), 11 meta (pencil), 12 body, 14 row title and card title (Medium), 20 page title (SemiBold). Intake text 12 mono. Line height `LEADING` 1.25 as maple. Nothing renders under 10.
 
 ## Metrics
 Built on maple `Metrics::new(14)`. Radius 2px via `ThemeOverrides.radius` (rows, inputs, cards, buttons; D-037, fallback 4 if buttons look cut). Hairlines 1px.
@@ -45,7 +45,9 @@ Built on maple `Metrics::new(14)`. Radius 2px via `ThemeOverrides.radius` (rows,
 |---|---|
 | Title bar | 40 (`title_bar`) |
 | Page padding | 16 (`pad`) |
-| Intake field | 40 high, full width |
+| Intake field | 36 high (`field`), full width, its Download button the same height |
+| Controls | `control_small` 24 (icon buttons over rows), `control` 28 (buttons, chips, inputs, pickers, steppers, search), `field` 36; one height per row (D-180) |
+| Page gutter | 16 (`gutter`) left and right of every page; lists run edge to edge with rows padded by the gutter |
 | Download row | 52 (two lines) plus 2px ledger rule; compact mode 36 without thumbnail |
 | Call-number column | 56 wide |
 | Settings and logs row | 32 (`list_row`) |

@@ -1,8 +1,9 @@
 use std::time::Duration;
 
+use gpui::accesskit::Role;
 use gpui::prelude::*;
 use gpui::{
-    Animation, AnimationExt as _, AnyElement, Context, Entity, FocusHandle, MouseButton,
+    Animation, AnimationExt as _, AnyElement, Context, ElementId, Entity, FocusHandle, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, Window, WindowControlArea, div, px, svg,
 };
 use input::{
@@ -12,8 +13,8 @@ use input::{
 use router::{Destination, Navigation, NavigationEvent, SettingsPage};
 use state::AppState;
 use ui::{
-    Activate, ActiveTheme as _, Button, Deselect, NextField, PreviousField, SelectNext,
-    SelectPrevious, WindowControls,
+    Activate, ActiveTheme as _, Deselect, NextField, Perch, PreviousField, SelectNext,
+    SelectPrevious, Tipped as _, WindowControls,
 };
 
 use crate::downloads::{Downloads, Key};
@@ -152,8 +153,9 @@ impl Workspace {
         cx.notify();
     }
 
-    /// One page button of the bar: an icon and label, the open page lit with a rule under it, and
-    /// an amber count of the unfinished downloads on Downloads.
+    /// One page tab of the bar: icon and label, muted until hovered or open; the open page has an
+    /// ink rule on the bar's bottom edge, and Downloads carries the amber count of unfinished jobs.
+    #[allow(clippy::too_many_arguments)]
     fn entry(
         &self,
         key: &'static str,
@@ -161,62 +163,89 @@ impl Workspace {
         to: Destination,
         current: Destination,
         count: usize,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = *cx.theme();
         let on = to.same_section(&current);
-        div()
-            .relative()
-            .flex_none()
+        let id = ElementId::from(key);
+        let label = i18n::lookup(key, None);
+        let tip = match key {
+            "nav-downloads" => "nav-downloads-tip",
+            "nav-logs" => "nav-logs-tip",
+            _ => "nav-settings-tip",
+        };
+        let tint = match on {
+            true => theme.foreground,
+            false => theme.muted_foreground,
+        };
+        let tab = ui::focusable(div().id(id.clone()), &id, window, cx)
+            .role(Role::Tab)
+            .aria_label(match count {
+                0 => label.clone(),
+                n => format!("{label} {n}").into(),
+            })
+            .aria_selected(on)
+            .group(key)
+            .flex()
+            .items_center()
+            .gap(px(6.))
+            .h(theme.metrics.control)
+            .px(px(10.))
+            .rounded(theme.radius)
+            .cursor_pointer()
+            .text_color(tint)
+            .hover(|style| style.bg(theme.secondary_hover).text_color(theme.foreground))
+            .active(|style| style.bg(theme.secondary_active))
+            .tip(tip, Perch::Below)
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_click(move |_, _, cx| router::navigate(to, cx))
             .child(
-                Button::new(key)
-                    .ghost()
-                    .icon(icon)
-                    .label(i18n::lookup(key, None))
-                    .tooltip(match key {
-                        "nav-downloads" => "nav-downloads-tip",
-                        "nav-logs" => "nav-logs-tip",
-                        _ => "nav-settings-tip",
-                    })
-                    .selected(on)
-                    .when(on, |this| this.tint(theme.table_active_border))
-                    .on_click(move |_, _, cx| router::navigate(to, cx)),
+                svg()
+                    .path(icons::path(icon))
+                    .size(px(16.))
+                    .flex_none()
+                    .text_color(tint)
+                    .group_hover(key, |style| style.text_color(theme.foreground)),
             )
+            .child(label)
             .when(count > 0, |this| {
                 this.child(
                     div()
-                        .absolute()
-                        .top(px(-1.))
-                        .right(px(-4.))
-                        .min_w(px(14.))
-                        .h(px(14.))
-                        .px(px(3.))
+                        .h(px(16.))
+                        .min_w(px(16.))
+                        .px(px(5.))
                         .flex()
                         .items_center()
                         .justify_center()
                         .rounded_full()
-                        .bg(theme.progress_bar)
-                        .text_color(theme.background)
+                        .bg(theme.progress_bar.opacity(0.16))
+                        .text_color(theme.progress_bar)
                         .text_size(theme.text(ui::Text::Tiny))
                         .font_features(ui::tabular())
                         .child(count.to_string()),
                 )
-            })
+            });
+        div()
+            .relative()
+            .flex()
+            .flex_none()
+            .items_center()
+            .h_full()
+            .child(tab)
             .when(on, |this| {
                 this.child(
                     div()
                         .absolute()
-                        .left_2()
-                        .right_2()
+                        .left(px(10.))
+                        .right(px(10.))
                         .bottom(px(-1.))
                         .h(px(2.))
-                        .rounded_full()
                         .bg(theme.table_active_border),
                 )
             })
             .into_any_element()
     }
-
     fn page(&self, current: Destination, cx: &mut Context<Self>) -> AnyElement {
         let (n, page): (usize, AnyElement) = match current {
             Destination::Welcome => (0, welcome::welcome(cx)),
@@ -249,7 +278,7 @@ impl Workspace {
 }
 
 impl Render for Workspace {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = *cx.theme();
         let current = self.navigation.read(cx).current();
         let settings = Destination::Settings(SettingsPage::General);
@@ -334,16 +363,17 @@ impl Render for Workspace {
                         div()
                             .flex()
                             .flex_1()
+                            .h_full()
                             .items_center()
-                            .gap_1()
-                            .px_3()
+                            .gap(px(2.))
+                            .px(theme.metrics.gutter)
                             .child(
                                 div()
                                     .flex()
                                     .flex_none()
                                     .items_center()
-                                    .gap_2()
-                                    .mr_3()
+                                    .gap(px(8.))
+                                    .mr(theme.metrics.gutter)
                                     .child(
                                         div()
                                             .flex()
@@ -374,6 +404,7 @@ impl Render for Workspace {
                                 Destination::Downloads,
                                 current,
                                 unfinished,
+                                window,
                                 cx,
                             ))
                             .child(self.entry(
@@ -382,6 +413,7 @@ impl Render for Workspace {
                                 Destination::Logs,
                                 current,
                                 0,
+                                window,
                                 cx,
                             ))
                             .child(self.entry(
@@ -390,6 +422,7 @@ impl Render for Workspace {
                                 settings,
                                 current,
                                 0,
+                                window,
                                 cx,
                             )),
                     )

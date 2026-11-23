@@ -64,6 +64,30 @@ pub(crate) fn status_text(s: &DownloadSummary, theme: &ui::Theme) -> (SharedStri
 
 type Act = fn(&mut Downloads, DownloadId, &mut Context<Downloads>);
 
+/// Which columns a row has room for: the list drops the format, then the speed, then the call
+/// number as it gets narrower, so the title keeps room to be read.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Columns {
+    pub call: bool,
+    pub format: bool,
+    pub speed: bool,
+    /// The width of the status column.
+    pub status: f32,
+}
+
+impl Columns {
+    /// The columns for a list `width` wide.
+    pub(crate) fn for_width(width: gpui::Pixels) -> Self {
+        let w = f32::from(width);
+        Self {
+            call: w >= 560.,
+            format: w >= 900.,
+            speed: w >= 720.,
+            status: if w >= 720. { 190. } else { 150. },
+        }
+    }
+}
+
 fn rule(s: &DownloadSummary) -> Rule {
     match s.status {
         DownloadStatus::Downloading | DownloadStatus::Processing => Rule::Fill(s.progress as f32),
@@ -81,6 +105,7 @@ impl Downloads {
         line: Line,
         thumbs: bool,
         ring: bool,
+        cols: Columns,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         match line {
@@ -89,7 +114,7 @@ impl Downloads {
                 let Some(s) = self.app.downloads.read(cx).rows().get(at).cloned() else {
                     return div().h(height(thumbs)).into_any_element();
                 };
-                self.row(&s, thumbs, ring, cx)
+                self.row(&s, thumbs, ring, cols, cx)
             }
         }
     }
@@ -109,8 +134,8 @@ impl Downloads {
             .gap_2()
             .h(height(thumbs))
             .w_full()
-            .px(theme.metrics.pad)
-            .pb_1()
+            .px(theme.metrics.gutter)
+            .pb(px(6.))
             .text_size(theme.text(Text::Label))
             .text_color(theme.muted_foreground)
             .child(
@@ -143,12 +168,25 @@ impl Downloads {
             .h(height(thumbs))
             .w_full()
             .cursor_pointer()
-            .when(selected, |this| this.bg(theme.table_active))
+            .when(!selected, |this| {
+                this.hover(|style| style.bg(theme.table_hover))
+                    .active(|style| style.bg(theme.secondary_hover))
+            })
+            .when(selected, |this| {
+                // the selected row: an ink wash and an ink edge at its start
+                this.bg(theme.table_active).child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .top_0()
+                        .bottom_0()
+                        .w(px(2.))
+                        .bg(theme.table_active_border),
+                )
+            })
             .when(selected && ring, |this| {
                 this.border_1().border_color(theme.table_active_border)
             })
-            .hover(|style| style.bg(theme.table_hover))
-            .active(|style| style.bg(theme.table_active))
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.selected = Some(id);
                 window.focus(&this.list_focus, cx);
@@ -246,14 +284,17 @@ impl Downloads {
         }
         div()
             .absolute()
-            .right(theme.metrics.pad)
+            .right(theme.metrics.gutter - px(4.))
             .top_0()
             .bottom_0()
             .flex()
             .items_center()
-            .gap_1()
-            .px_1()
-            .bg(theme.background.blend(theme.table_hover))
+            .gap(px(2.))
+            .px(px(4.))
+            .bg(theme.background.blend(match self.selected == Some(id) {
+                true => theme.table_active,
+                false => theme.table_hover,
+            }))
             .invisible()
             .group_hover(SharedString::from(format!("row-{}", id.0)), |style| {
                 style.visible()
@@ -267,6 +308,7 @@ impl Downloads {
         s: &DownloadSummary,
         thumbs: bool,
         ring: bool,
+        cols: Columns,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = *cx.theme();
@@ -286,6 +328,7 @@ impl Downloads {
             .or_else(|| s.thumbnail_url.clone())
             .map(SharedString::from);
         let fade = self.fresh.contains_key(&id) && ui::motion::animates(cx);
+        let muted = theme.muted_foreground;
         let row = self
             .shell(s, thumbs, ring, cx)
             .child(
@@ -294,21 +337,24 @@ impl Downloads {
                     .flex()
                     .flex_1()
                     .items_center()
-                    .gap_3()
-                    .px(theme.metrics.pad)
-                    .child(CallNumber::new(id.0).selected(selected))
+                    .gap(px(12.))
+                    .px(theme.metrics.gutter)
+                    .when(cols.call, |this| {
+                        this.child(CallNumber::new(id.0).selected(selected))
+                    })
                     .when(thumbs, |this| {
-                        this.child(Thumbnail::new(thumb, px(80.)).audio(s.kind == MediaKind::Audio))
+                        this.child(Thumbnail::new(thumb, px(72.)).audio(s.kind == MediaKind::Audio))
                     })
                     .child(
                         div()
                             .flex()
                             .flex_1()
                             .min_w_0()
-                            .when(thumbs, |this| this.flex_col().justify_center())
-                            .when(!thumbs, |this| this.items_baseline().gap_2())
+                            .when(thumbs, |this| this.flex_col().justify_center().gap(px(2.)))
+                            .when(!thumbs, |this| this.items_baseline().gap(px(8.)))
                             .child(
                                 div()
+                                    .min_w_0()
                                     .truncate()
                                     .when(thumbs, |this| {
                                         this.text_size(theme.text(Text::Heading))
@@ -322,18 +368,20 @@ impl Downloads {
                                     .max_w(px(160.))
                                     .truncate()
                                     .text_size(theme.text(Text::Small))
-                                    .text_color(theme.muted_foreground)
+                                    .text_color(muted)
                                     .child(s.domain.clone()),
                             ),
                     )
-                    .child(
-                        div()
-                            .w(px(88.))
-                            .flex_none()
-                            .truncate()
-                            .text_color(theme.muted_foreground)
-                            .child(s.format_label.clone().unwrap_or_else(|| "-".into())),
-                    )
+                    .when(cols.format, |this| {
+                        this.child(
+                            div()
+                                .w(px(88.))
+                                .flex_none()
+                                .truncate()
+                                .text_color(muted)
+                                .child(s.format_label.clone().unwrap_or_else(|| "-".into())),
+                        )
+                    })
                     .child(
                         div()
                             .w(px(72.))
@@ -341,25 +389,28 @@ impl Downloads {
                             .whitespace_nowrap()
                             .text_right()
                             .font_features(tabular())
+                            .text_color(muted)
                             .child(size),
                     )
+                    .when(cols.speed, |this| {
+                        this.child(
+                            div()
+                                .w(px(112.))
+                                .flex_none()
+                                .truncate()
+                                .text_right()
+                                .font_features(tabular())
+                                .text_color(muted)
+                                .child(third),
+                        )
+                    })
                     .child(
                         div()
-                            .w(px(112.))
-                            .flex_none()
-                            .truncate()
-                            .text_right()
-                            .font_features(tabular())
-                            .text_color(theme.muted_foreground)
-                            .child(third),
-                    )
-                    .child(
-                        div()
-                            .w(px(190.))
+                            .w(px(cols.status))
                             .flex_none()
                             .flex()
                             .justify_end()
-                            .gap_2()
+                            .gap(px(8.))
                             .text_color(tone)
                             .child(div().min_w_0().truncate().child(status))
                             .when(active, |this| {
@@ -375,7 +426,11 @@ impl Downloads {
                     )
                     .child(actions),
             )
-            .child(ProgressRule::new(rule(s)));
+            .child(
+                div()
+                    .px(theme.metrics.gutter)
+                    .child(ProgressRule::new(rule(s))),
+            );
         match fade {
             true => row
                 .with_animation(
@@ -387,7 +442,6 @@ impl Downloads {
             false => row.into_any_element(),
         }
     }
-
     /// The right-click menu of a row.
     pub(crate) fn row_menu(&self, cx: &mut Context<Self>) -> Option<Popup> {
         let (at, id) = self.menu?;
@@ -512,5 +566,21 @@ impl Downloads {
                 )
                 .into_any_element(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Columns;
+    use gpui::px;
+
+    #[test]
+    fn columns_drop_as_the_list_narrows() {
+        let wide = Columns::for_width(px(1240.));
+        assert!(wide.call && wide.format && wide.speed);
+        let mid = Columns::for_width(px(760.));
+        assert!(mid.call && !mid.format && mid.speed);
+        let narrow = Columns::for_width(px(480.));
+        assert!(!narrow.call && !narrow.format && !narrow.speed && narrow.status < mid.status);
     }
 }

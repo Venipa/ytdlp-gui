@@ -563,6 +563,7 @@ fn demo_row(i: usize, status: DownloadStatus, created_at: i64) -> SeedRow {
     new.duration_s = Some(60.0 + (i % 50) as f64 * 37.0);
     new.format_label = Some(match preset {
         Preset::Audio(_) => "mp3".into(),
+        Preset::Video(domain::VideoQuality::Best) => "best mp4".into(),
         Preset::Video(q) => format!("{q}p mp4"),
         Preset::Custom => "custom".into(),
     });
