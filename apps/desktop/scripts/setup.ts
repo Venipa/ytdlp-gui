@@ -115,26 +115,34 @@ const smoke = () => {
 smoke();
 
 // compile once so no worker ever pays for it (write_bytecode is off at runtime)
-run(exe, ["-I", "-m", "compileall", "-q", "-j", "0", site, join(py, "Lib")]);
+const stdlib = isWin ? join(py, "Lib") : join(py, "lib", "python3.14"); // unix PBS keeps the stdlib under lib/python3.14
+run(exe, ["-I", "-m", "compileall", "-q", "-j", "0", site, stdlib]);
 
 // 5. prune (runtime.prune list, architecture.md section 8)
-const PRUNE_DIRS = ["Lib/test", "Lib/idlelib", "Lib/tkinter", "Lib/turtledemo", "Lib/ensurepip", "Lib/pydoc_data", "Lib/venv",
-  "tcl", "share", "include", "Lib/site-packages/pip", "Lib/site-packages/setuptools", "Lib/site-packages/_distutils_hack"];
-const PRUNE_FILES = ["Lib/turtle.py", "DLLs/_tkinter.pyd", "DLLs/tcl86t.dll", "DLLs/tk86t.dll", "DLLs/_ctypes_test.pyd"];
+const PRUNE_DIRS = isWin
+  ? ["Lib/test", "Lib/idlelib", "Lib/tkinter", "Lib/turtledemo", "Lib/ensurepip", "Lib/pydoc_data", "Lib/venv",
+    "tcl", "share", "include", "Lib/site-packages/pip", "Lib/site-packages/setuptools", "Lib/site-packages/_distutils_hack"]
+  : ["lib/python3.14/test", "lib/python3.14/idlelib", "lib/python3.14/tkinter", "lib/python3.14/turtledemo", "lib/python3.14/ensurepip",
+    "lib/python3.14/pydoc_data", "lib/python3.14/venv", "lib/python3.14/site-packages/pip", "lib/python3.14/site-packages/setuptools",
+    "lib/python3.14/site-packages/_distutils_hack", "lib/pkgconfig", "share", "include",
+    ...readdirSync(join(py, "lib")).filter((n) => /^(tcl|tk|itcl|thread)\d/.test(n)).map((n) => `lib/${n}`)];
+const PRUNE_FILES = isWin
+  ? ["Lib/turtle.py", "DLLs/_tkinter.pyd", "DLLs/tcl86t.dll", "DLLs/tk86t.dll", "DLLs/_ctypes_test.pyd"]
+  : ["lib/python3.14/turtle.py", ...readdirSync(join(py, "lib")).filter((n) => /^lib(tcl|tk)/.test(n)).map((n) => `lib/${n}`)];
 const rm = (p: string) => rmSync(join(py, p), { recursive: true, force: true });
 PRUNE_DIRS.forEach(rm);
 PRUNE_FILES.forEach(rm);
 function walk(d: string, inLib: boolean) {
   for (const e of readdirSync(d, { withFileTypes: true })) {
     const p = join(d, e.name);
-    if (!e.isDirectory()) { if (/^_test.*\.pyd$/.test(e.name)) rmSync(p); continue; }
+    if (!e.isDirectory()) { if (/^_(test|tkinter|ctypes_test).*\.(pyd|so)$/.test(e.name)) rmSync(p); continue; }
     // Lib/*/tests go (__pycache__ is kept on purpose: without .pyc every worker start recompiles yt-dlp, ~1 s); baked site and site-packages keep their own "tests" dirs (harmless, tiny)
     if (inLib && /^tests?$/.test(e.name)) rmSync(p, { recursive: true, force: true });
     else walk(p, inLib && e.name !== "site-packages");
   }
 }
 walk(py, false);
-walk(join(py, "Lib"), true);
+walk(stdlib, true);
 rmSync(join(site, "bin"), { recursive: true, force: true });
 rmSync(join(site, "share"), { recursive: true, force: true });
 if (flag("ship")) rmSync(join(py, "libs"), { recursive: true, force: true }); // only linking needs libs/*.lib
