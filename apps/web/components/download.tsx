@@ -4,8 +4,8 @@ import { type Asset, type Os, describe, formatSize, osName, pick } from '@/lib/s
 
 type UaData = { getHighEntropyValues?: (hints: string[]) => Promise<{ architecture?: string }> };
 
-// Picks the installer for the visitor's OS after mount; the static HTML renders the Windows one.
-export function DownloadButton({ assets, version }: { assets: Asset[]; version: string }) {
+// The installer for the visitor's OS, picked after mount; the static HTML gets the Windows one.
+export function useOsAsset(assets: Asset[]): Asset | undefined {
   const [os, setOs] = useState<Os>('windows');
   const [arm, setArm] = useState<boolean | undefined>(undefined);
 
@@ -17,7 +17,11 @@ export function DownloadButton({ assets, version }: { assets: Asset[]; version: 
     uad?.getHighEntropyValues?.(['architecture']).then((v) => v.architecture && setArm(v.architecture === 'arm'), () => {});
   }, []);
 
-  const asset = pick(assets, os, arm) ?? pick(assets, 'windows') ?? assets[0];
+  return pick(assets, os, arm) ?? pick(assets, 'windows') ?? assets[0];
+}
+
+export function DownloadButton({ assets, version }: { assets: Asset[]; version: string }) {
+  const asset = useOsAsset(assets);
   if (!asset) return null;
   const d = describe(asset.name);
 

@@ -412,3 +412,150 @@ html > body[data-scroll-locked] {
     font-weight: 400;
   }
 }
+
+/* Landing nav: a floating Ledger bar, transparent over the hero, filled once the page scrolls. */
+.lp {
+  padding-top: 64px;
+}
+.lp section[id] {
+  scroll-margin-top: 88px;
+}
+.sn {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: calc(100vw - 24px);
+}
+.sn-bar {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  height: 52px;
+  padding: 0 8px 0 14px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--l-paper);
+  white-space: nowrap;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.sn[data-scrolled] .sn-bar {
+  background: var(--l-ground);
+  border-color: var(--l-edge);
+  box-shadow: 0 12px 32px -20px rgb(0 0 0 / 0.5);
+}
+.sn-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  min-height: 44px;
+}
+.sn-more {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.sn-link {
+  color: var(--l-pencil);
+  font-size: 14px;
+  padding: 6px 0;
+}
+.sn-link:hover {
+  color: var(--l-paper);
+}
+.sn-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--l-primary);
+  color: var(--l-primary-fg);
+}
+.sn-btn:hover {
+  opacity: 0.88;
+}
+.sn-btn.sn-quiet {
+  background: none;
+  color: var(--l-pencil);
+  border: 1px solid var(--l-edge);
+  font-weight: 400;
+  margin-right: -12px;
+}
+.sn-btn.sn-quiet:hover {
+  color: var(--l-paper);
+  opacity: 1;
+}
+.sn-theme,
+.sn-theme > * {
+  border-radius: 2px;
+}
+.sn-stars {
+  font-variant-numeric: tabular-nums;
+}
+:is(.sn, .sn-tabs) a:focus-visible {
+  outline: 2px solid var(--l-ink);
+  outline-offset: 2px;
+}
+.sn-tabs {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sn-bar {
+    transition: none;
+  }
+}
+/* Phones: the bar shrinks to the mark, and the links move to a bottom tab bar. */
+@media (max-width: 640px) {
+  .lp {
+    padding-top: 56px;
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+  .sn {
+    left: 12px;
+    transform: none;
+  }
+  .sn-bar {
+    padding: 0 4px;
+  }
+  .sn-brand {
+    min-width: 44px;
+    justify-content: center;
+  }
+  .sn-more,
+  .sn-name {
+    display: none;
+  }
+  .sn-tabs {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--l-ground);
+    border-top: 1px solid var(--l-edge);
+  }
+  .sn-tabs a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: 56px;
+    font-size: 12px;
+    color: var(--l-pencil);
+  }
+  .sn-tabs a[aria-current='page'] {
+    color: var(--l-paper);
+    font-weight: 600;
+  }
+}
