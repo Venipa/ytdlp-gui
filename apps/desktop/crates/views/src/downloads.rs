@@ -155,7 +155,15 @@ impl Downloads {
                 .shortcut("/")
                 .clearable()
         });
+        let list_focus = cx.focus_handle().tab_stop(true);
         let subs = vec![
+            // Tab into the list brings its selected row into sight, so the ring shows on it
+            cx.on_focus(&list_focus, window, |this: &mut Self, _, cx| {
+                if let Some(line) = this.selected.and_then(|id| this.line_of(id)) {
+                    this.scroll.scroll_to_item(line, ScrollStrategy::Nearest);
+                    cx.notify();
+                }
+            }),
             cx.observe(&search, |_, _, cx| cx.notify()),
             cx.observe(&intake, |this, _, cx| this.intake_changed(cx)),
             cx.observe(&app.downloads, |_, _, cx| cx.notify()),
@@ -177,7 +185,7 @@ impl Downloads {
         let log_bar =
             cx.new(|cx| Scrollbar::new(gpui::ScrollHandle::new()).watching(cx.entity_id()));
         let mut this = Self {
-            list_focus: cx.focus_handle().tab_stop(true),
+            list_focus,
             detail_bar,
             log_bar,
             details_open: true,
@@ -543,6 +551,27 @@ impl Downloads {
 
     pub(crate) fn resume(&mut self, id: DownloadId, cx: &mut Context<Self>) {
         self.app.downloads.update(cx, |d, cx| d.resume(id, cx));
+    }
+
+    /// Pauses every running and waiting row, or (`resume`) resumes every paused one.
+    fn all(&mut self, resume: bool, cx: &mut Context<Self>) {
+        self.app.downloads.update(cx, |d, cx| {
+            let ids: Vec<DownloadId> = d
+                .rows()
+                .iter()
+                .filter(|r| match resume {
+                    true => r.status == DownloadStatus::Paused,
+                    false => !r.status.is_terminal() && r.status != DownloadStatus::Paused,
+                })
+                .map(|r| r.id)
+                .collect();
+            for id in ids {
+                match resume {
+                    true => d.resume(id, cx),
+                    false => d.pause(id, cx),
+                }
+            }
+        });
     }
 
     pub(crate) fn cancel(&mut self, id: DownloadId, cx: &mut Context<Self>) {
@@ -996,6 +1025,12 @@ impl Downloads {
         let running = downloads.count(|s| s.is_active());
         let paused = downloads.count(|s| s == DownloadStatus::Paused);
         let queued = downloads.count(|s| s == DownloadStatus::Queued);
+        // one switch for the whole queue: pause while anything runs or waits, else resume
+        let all = match (running + queued, paused) {
+            (0, 0) => None,
+            (0, _) => Some(("dl-resume-all", "icons/play.svg", true)),
+            _ => Some(("dl-pause-all", "icons/pause.svg", false)),
+        };
         div()
             .flex()
             .flex_none()
@@ -1008,15 +1043,29 @@ impl Downloads {
             .text_size(theme.text(Text::Body))
             .text_color(theme.muted_foreground)
             .font_features(ui::tabular())
-            .child(match queued {
-                0 => t!("dl-status-bar", running = running, paused = paused),
-                q => t!(
-                    "dl-status-bar-queued",
-                    running = running,
-                    paused = paused,
-                    queued = q
-                ),
-            })
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(match queued {
+                        0 => t!("dl-status-bar", running = running, paused = paused),
+                        q => t!(
+                            "dl-status-bar-queued",
+                            running = running,
+                            paused = paused,
+                            queued = q
+                        ),
+                    })
+                    .children(all.map(|(key, icon, resume)| {
+                        Button::new("queue-all")
+                            .ghost()
+                            .small()
+                            .icon(icon)
+                            .label(i18n::lookup(key, None))
+                            .on_click(cx.listener(move |this, _, _, cx| this.all(resume, cx)))
+                    })),
+            )
             .children(self.free.as_ref().map(|(free, drive)| {
                 let size = format::bytes(*free as i64);
                 t!(
@@ -1157,7 +1206,11 @@ impl Render for Downloads {
         if loaded && total == 0 && !std::mem::replace(&mut self.intake_offered, true) {
             self.intake.update(cx, |input, cx| input.focus(window, cx));
         }
-        let ring = self.list_focus.is_focused(window) && window.last_input_was_keyboard();
+        let keyboard = window.last_input_was_keyboard();
+        let focus = crate::rows::ListFocus {
+            ring: keyboard && self.list_focus.is_focused(window),
+            within: keyboard && self.list_focus.contains_focused(window, cx),
+        };
         // a wide window docks the detail panel beside the list, a narrow one lays it over the list
         let width = window.viewport_size().width;
         let docked = width >= px(DOCK_AT);
@@ -1238,7 +1291,7 @@ impl Render for Downloads {
                                     .filter_map(|at| {
                                         items
                                             .get(at)
-                                            .map(|line| this.line(*line, thumbs, ring, cols, cx))
+                                            .map(|line| this.line(*line, thumbs, focus, cols, cx))
                                     })
                                     .collect::<Vec<_>>()
                             }),
@@ -1249,12 +1302,17 @@ impl Render for Downloads {
                     .into_any_element()
             }
         };
+        // with no row selected the list itself wears the focus ring; else the selected row does
         let list = div()
             .id("downloads-list")
+            .relative()
             .size_full()
             .key_context(ROWS_CONTEXT)
             .track_focus(&self.list_focus)
-            .child(list);
+            .child(list)
+            .when(focus.ring && self.selected.is_none(), |this| {
+                this.child(ui::focus_ring(cx))
+            });
         let selected = self.selected.and_then(|id| self.summary(id, cx));
         // the card gives a list row back where the list drops its format column
         let card = self.card_view(!cols.format, cx);

@@ -36,7 +36,7 @@ const AUDIO: [AudioFormat; 4] = [
 ];
 /// The width of the result card's thumbnail, and its width in a narrow list.
 const CARD_THUMB: f32 = 160.;
-const CARD_THUMB_NARROW: f32 = 96.;
+const CARD_THUMB_NARROW: f32 = 64.;
 /// The width of the Video and Audio labels before the chips.
 const LABEL: f32 = 52.;
 /// The tallest a one-link card gets, which its unfold opens to.
@@ -109,6 +109,58 @@ impl Downloads {
                     .child(div().flex_1())
                     .child(audio_end),
             )
+            .into_any_element()
+    }
+
+    /// A narrow card's one chip row: the chips of the chosen preset's kind, a switch to the
+    /// other kind where the row's name stands (it picks that kind's Best), and `end` after them.
+    /// The card loses its second chip row, so the list gets a row back.
+    fn preset_row_narrow(&self, end: impl IntoElement, cx: &mut Context<Self>) -> AnyElement {
+        let audio = matches!(self.preset, Preset::Audio(_));
+        let chips: Vec<Chip> = match audio {
+            true => AUDIO
+                .map(|a| {
+                    let label = match a {
+                        AudioFormat::Best => t!("dl-preset-best"),
+                        a => SharedString::from(a.as_str()),
+                    };
+                    self.preset_chip(Preset::Audio(a), label, cx)
+                })
+                .into(),
+            false => VIDEO
+                .map(|q| {
+                    let label = match q {
+                        VideoQuality::Best => t!("dl-preset-best"),
+                        q => SharedString::from(q.as_str()),
+                    };
+                    self.preset_chip(Preset::Video(q), label, cx)
+                })
+                .into(),
+        };
+        div()
+            .flex()
+            .items_center()
+            .gap(px(6.))
+            .child(
+                Button::new("card-kind")
+                    .ghost()
+                    .label(match audio {
+                        true => t!("dl-card-audio"),
+                        false => t!("dl-card-video"),
+                    })
+                    .trailing("icons/chevrons-up-down.svg")
+                    .tooltip("dl-card-kind-tip")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.preset = match audio {
+                            true => Preset::Video(VideoQuality::Best),
+                            false => Preset::Audio(AudioFormat::Best),
+                        };
+                        cx.notify();
+                    })),
+            )
+            .children(chips)
+            .child(div().flex_1())
+            .child(end)
             .into_any_element()
     }
 
@@ -350,11 +402,10 @@ impl Downloads {
                                                     .child(meta),
                                             ),
                                     )
-                                    .child(div().mt(px(8.)).child(self.preset_rows(
-                                        div(),
-                                        actions,
-                                        cx,
-                                    ))),
+                                    .child(div().mt(px(8.)).child(match narrow {
+                                        true => self.preset_row_narrow(actions, cx),
+                                        false => self.preset_rows(div(), actions, cx),
+                                    })),
                             ),
                     )
                     .child(

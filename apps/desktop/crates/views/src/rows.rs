@@ -9,8 +9,8 @@ use gpui::{
 };
 use i18n::t;
 use ui::{
-    ActiveTheme as _, Button, CallNumber, Menu, MenuItem, Modal, Popup, ProgressRule, Rule, Text,
-    Thumbnail, tabular,
+    ActiveTheme as _, Button, CallNumber, Menu, MenuItem, Modal, Perch, Popup, ProgressRule, Rule,
+    Text, Thumbnail, Tipped as _, tabular,
 };
 
 use crate::downloads::{Downloads, Line, error_text_of};
@@ -20,9 +20,11 @@ use crate::format;
 const PAUSED: f32 = 0.78;
 /// How much of its tone a paused row's glyph keeps.
 const GLYPH: f32 = 0.8;
-/// The widths of the speed and time-left columns.
+/// The widths of the size, speed and time-left columns, and the gap between columns.
+const SIZE: f32 = 72.;
 const SPEED: f32 = 72.;
 const ETA: f32 = 44.;
+const GAP: f32 = 12.;
 
 /// The row height of the list (headers included, the list is uniform).
 fn height(thumbs: bool) -> gpui::Pixels {
@@ -55,22 +57,40 @@ pub(crate) fn status_text(s: &DownloadSummary, theme: &ui::Theme) -> (SharedStri
         DownloadStatus::Paused => (t!("dl-status-paused"), pencil),
         DownloadStatus::Completed if s.file_missing => (t!("dl-file-missing"), theme.danger),
         DownloadStatus::Completed => (t!("dl-status-done"), pencil),
-        DownloadStatus::Failed => {
-            let why = s
-                .error_code
-                .as_deref()
-                .map(error_text_of)
-                .unwrap_or_else(|| t!("dl-err-unknown"));
-            (
-                t!("dl-status-failed-why", reason = why.as_ref()),
-                theme.danger,
-            )
-        }
+        // the red words and the alert glyph already say it failed: the cell says why, briefly
+        DownloadStatus::Failed => (short_reason(&failure(s)), theme.danger),
         DownloadStatus::Cancelled => (t!("dl-status-cancelled"), pencil),
     }
 }
 
+/// Why a failed row failed, in full.
+fn failure(s: &DownloadSummary) -> SharedString {
+    s.error_code
+        .as_deref()
+        .map(error_text_of)
+        .unwrap_or_else(|| t!("dl-err-unknown"))
+}
+
+/// The first sentence of a message without its stop, so "No connection. Try again." fits a
+/// status cell as "No connection"; the whole message stays in the tooltip and the detail panel.
+// shortcut: splits on the en-US full stop, the only locale shipped; give each error a short
+// Fluent string when a second locale lands.
+fn short_reason(text: &str) -> SharedString {
+    let first = text.split(". ").next().unwrap_or(text);
+    SharedString::from(first.trim_end_matches('.').to_string())
+}
+
 type Act = fn(&mut Downloads, DownloadId, &mut Context<Downloads>);
+
+/// Where keyboard focus sits, as the list's rows need to know it.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct ListFocus {
+    /// The list itself holds it from the keyboard: the selected row wears the ring.
+    pub ring: bool,
+    /// It came from the keyboard and sits on the list or inside it: the selected row keeps its
+    /// actions in sight, so Tab reaches them.
+    pub within: bool,
+}
 
 /// Which columns a row has room for: the list drops the format, then the speed, then the call
 /// number as it gets narrower, so the title keeps room to be read.
@@ -96,24 +116,37 @@ impl Columns {
     }
 }
 
-fn rule(s: &DownloadSummary) -> Rule {
+/// The ruled progress line, which only work in motion carries; every row also sits on the
+/// list's plain hairline divider.
+fn rule(s: &DownloadSummary) -> Option<Rule> {
     match s.status {
-        DownloadStatus::Downloading | DownloadStatus::Processing => Rule::Fill(s.progress as f32),
-        DownloadStatus::Completed => Rule::Solid,
-        DownloadStatus::Probing => Rule::Pulse,
-        DownloadStatus::Failed => Rule::Failed,
-        DownloadStatus::Paused if s.progress > 0. => Rule::Held(s.progress as f32),
-        _ => Rule::Dotted,
+        DownloadStatus::Downloading | DownloadStatus::Processing => {
+            Some(Rule::Fill(s.progress as f32))
+        }
+        DownloadStatus::Probing => Some(Rule::Pulse),
+        _ => None,
+    }
+}
+
+/// The share a row shows as a percentage in its status cell: running rows, and paused ones
+/// that fetched part of the file.
+fn percent(s: &DownloadSummary) -> Option<f64> {
+    match s.status {
+        DownloadStatus::Downloading | DownloadStatus::Processing => Some(s.progress),
+        DownloadStatus::Paused if s.progress > 0. => Some(s.progress),
+        _ => None,
     }
 }
 
 impl Downloads {
     /// One list line.
+    /// `focus` is where keyboard focus sits: on the list itself (the selected row wears the
+    /// ring) or anywhere in it (the selected row keeps its actions in sight).
     pub(crate) fn line(
         &mut self,
         line: Line,
         thumbs: bool,
-        ring: bool,
+        focus: ListFocus,
         cols: Columns,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -123,7 +156,7 @@ impl Downloads {
                 let Some(s) = self.app.downloads.read(cx).rows().get(at).cloned() else {
                     return div().h(height(thumbs)).into_any_element();
                 };
-                self.row(&s, thumbs, ring, cols, cx)
+                self.row(&s, thumbs, focus, cols, cx)
             }
         }
     }
@@ -152,7 +185,7 @@ impl Downloads {
             .flex()
             .flex_none()
             .items_end()
-            .gap(px(12.))
+            .gap(px(GAP))
             .h(height(thumbs))
             .w_full()
             .px(theme.metrics.gutter)
@@ -175,7 +208,7 @@ impl Downloads {
             .when(cols.format, |this| {
                 this.child(caption("dl-col-format", 88., false))
             })
-            .child(caption("dl-col-size", 72., true))
+            .child(caption("dl-col-size", SIZE, true))
             .when(cols.speed, |this| match speed {
                 true => this
                     .child(caption("dl-col-speed", SPEED, true))
@@ -193,7 +226,6 @@ impl Downloads {
         &self,
         s: &DownloadSummary,
         thumbs: bool,
-        ring: bool,
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<gpui::Div> {
         let theme = *cx.theme();
@@ -224,9 +256,6 @@ impl Downloads {
                         .w(px(2.))
                         .bg(theme.table_active_border),
                 )
-            })
-            .when(selected && ring, |this| {
-                this.border_1().border_color(theme.table_active_border)
             })
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.selected = Some(id);
@@ -262,9 +291,17 @@ impl Downloads {
         (size, speed, eta)
     }
 
-    /// The icon buttons that appear over a hovered row, for what its state allows. They cover
-    /// the whole status cell, `cover` wide, so no part of the state words peeks out beside them.
-    fn row_actions(&self, s: &DownloadSummary, cover: f32, cx: &mut Context<Self>) -> AnyElement {
+    /// The icon buttons a hovered row shows for what its state allows, 28 px each with a
+    /// tooltip. They sit left of the status cell, over the size, speed and time-left cells, so
+    /// the state words stay in sight. `shown` brings them out without a hover (the selected row
+    /// while keyboard focus is in the list), so Tab reaches them.
+    fn row_actions(
+        &self,
+        s: &DownloadSummary,
+        cols: Columns,
+        shown: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let theme = *cx.theme();
         let id = s.id;
         let button = |key: &'static str,
@@ -274,7 +311,6 @@ impl Downloads {
                       cx: &mut Context<Self>| {
             Button::new((key, id.0 as usize))
                 .ghost()
-                .small()
                 .icon(icon)
                 .tooltip(tip)
                 .on_click(cx.listener(move |this, _, _, cx| act(this, id, cx)))
@@ -332,9 +368,23 @@ impl Downloads {
                 cx,
             ));
         }
+        if s.status == DownloadStatus::Completed {
+            buttons.push(button(
+                "a-link",
+                "icons/link.svg",
+                "dl-copy-link",
+                |t, id, cx| t.copy_link(id, cx),
+                cx,
+            ));
+        }
+        // cover the whole of the cells under the buttons, so no number shows half cut
+        let cover = match cols.speed {
+            true => SPEED + GAP + ETA + 8.,
+            false => SIZE + 8.,
+        };
         div()
             .absolute()
-            .right(theme.metrics.gutter - px(4.))
+            .right(theme.metrics.gutter + px(cols.status + 4.))
             .top_0()
             .bottom_0()
             .flex()
@@ -347,9 +397,11 @@ impl Downloads {
                 true => theme.table_active,
                 false => theme.table_hover,
             }))
-            .invisible()
-            .group_hover(SharedString::from(format!("row-{}", id.0)), |style| {
-                style.visible()
+            .when(!shown, |this| {
+                this.invisible()
+                    .group_hover(SharedString::from(format!("row-{}", id.0)), |style| {
+                        style.visible()
+                    })
             })
             .children(buttons)
             .into_any_element()
@@ -359,7 +411,7 @@ impl Downloads {
         &self,
         s: &DownloadSummary,
         thumbs: bool,
-        ring: bool,
+        focus: ListFocus,
         cols: Columns,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -368,12 +420,9 @@ impl Downloads {
         let selected = self.selected == Some(id);
         let (status, tone) = status_text(s, &theme);
         let (size, speed, eta) = self.numbers(s, cx);
-        let active = matches!(
-            s.status,
-            DownloadStatus::Downloading | DownloadStatus::Processing
-        );
+        let percent = percent(s);
         let title = s.title.clone().unwrap_or_else(|| s.url.clone());
-        let actions = self.row_actions(s, cols.status + 4., cx);
+        let actions = self.row_actions(s, cols, selected && focus.within, cx);
         let thumb = s
             .thumbnail_path
             .clone()
@@ -385,20 +434,25 @@ impl Downloads {
         // of paused, done and failed rows separates without reading
         let paused = s.status == DownloadStatus::Paused;
         let glyph = match s.status {
-            DownloadStatus::Paused => Some("icons/circle-pause.svg"),
+            DownloadStatus::Paused => Some("icons/pause.svg"),
             DownloadStatus::Completed if !s.file_missing => Some("icons/check.svg"),
             DownloadStatus::Failed => Some("icons/circle-alert.svg"),
             _ => None,
         };
+        // the cell keeps the reason short; the whole message is a hover away
+        let why = (s.status == DownloadStatus::Failed).then(|| {
+            let reason = failure(s);
+            t!("dl-status-failed-why", reason = reason.as_ref())
+        });
         let row = self
-            .shell(s, thumbs, ring, cx)
+            .shell(s, thumbs, cx)
             .child(
                 div()
                     .relative()
                     .flex()
                     .flex_1()
                     .items_center()
-                    .gap(px(12.))
+                    .gap(px(GAP))
                     .px(theme.metrics.gutter)
                     .when(cols.call, |this| {
                         this.child(CallNumber::new(id.0).selected(selected))
@@ -448,7 +502,7 @@ impl Downloads {
                     })
                     .child(
                         div()
-                            .w(px(72.))
+                            .w(px(SIZE))
                             .flex_none()
                             .whitespace_nowrap()
                             .text_right()
@@ -471,6 +525,7 @@ impl Downloads {
                     })
                     .child(
                         div()
+                            .id(("status", id.0 as usize))
                             .w(px(cols.status))
                             .flex_none()
                             .flex()
@@ -478,6 +533,7 @@ impl Downloads {
                             .items_center()
                             .gap(px(8.))
                             .text_color(tone)
+                            .when_some(why, |this, why| this.tip_label(why, Perch::Below))
                             .child(
                                 div()
                                     .flex()
@@ -497,24 +553,41 @@ impl Downloads {
                                     }))
                                     .child(div().min_w_0().truncate().child(status)),
                             )
-                            .when(active, |this| {
+                            .when_some(percent, |this, share| {
                                 this.child(
                                     div()
                                         .w(px(36.))
                                         .flex_none()
                                         .text_right()
                                         .font_features(tabular())
-                                        .child(format!("{:.0}%", s.progress * 100.)),
+                                        .child(format!("{:.0}%", share * 100.)),
                                 )
                             }),
                     )
                     .child(actions),
             )
+            // one plain hairline divides every row the list wide; only work in motion adds the
+            // ruled progress line over it, inside the gutters
             .child(
                 div()
-                    .px(theme.metrics.gutter)
-                    .child(ProgressRule::new(rule(s))),
-            );
+                    .absolute()
+                    .left_0()
+                    .right_0()
+                    .bottom_0()
+                    .h(px(1.))
+                    .bg(theme.border),
+            )
+            .children(rule(s).map(|rule| {
+                div()
+                    .absolute()
+                    .left(theme.metrics.gutter)
+                    .right(theme.metrics.gutter)
+                    .bottom_0()
+                    .child(ProgressRule::new(rule))
+            }))
+            .when(selected && focus.ring, |this| {
+                this.child(ui::focus_ring(cx))
+            });
         match fade {
             true => row
                 .with_animation(
@@ -655,8 +728,21 @@ impl Downloads {
 
 #[cfg(test)]
 mod tests {
-    use super::Columns;
+    use super::{Columns, short_reason};
     use gpui::px;
+
+    #[test]
+    fn a_reason_keeps_its_first_sentence() {
+        assert_eq!(
+            short_reason("No connection. Try again.").as_ref(),
+            "No connection"
+        );
+        assert_eq!(
+            short_reason("The disk is full.").as_ref(),
+            "The disk is full"
+        );
+        assert_eq!(short_reason("Sign in needed").as_ref(), "Sign in needed");
+    }
 
     #[test]
     fn columns_drop_as_the_list_narrows() {
