@@ -66,6 +66,9 @@ pub trait Backend: Send + Sync {
     ) -> BoxFuture<'static, Result<(JobHandle, BoxStream<'static, JobEvent>), EngineError>>;
     /// Kills the worker's process tree.
     fn kill(&self, handle: JobHandle) -> BoxFuture<'static, ()>;
+    /// Points new workers (and the first probe) at an updated yt-dlp site dir; `None` goes back to
+    /// the bundled one. Running jobs keep what they loaded.
+    fn set_site(&self, _site: Option<std::path::PathBuf>) {}
 }
 
 /// Progress/outcome of `ToolsApi::ensure`.
@@ -74,6 +77,16 @@ pub enum ToolEvent {
     Progress { done: u64, total: Option<u64> },
     Done(ToolStatus),
     Failed(EngineError),
+}
+
+/// A verified yt-dlp site dir to switch to.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SiteUpdate {
+    pub version: String,
+    /// The new site dir.
+    pub site: String,
+    /// The site that was active before, kept for a way back.
+    pub previous: Option<String>,
 }
 
 /// Tools-facing backend.
@@ -95,6 +108,16 @@ pub trait ToolsApi: Send + Sync {
         _current: Option<String>,
     ) -> BoxFuture<'static, Result<Option<String>, EngineError>> {
         Box::pin(async { Ok(None) })
+    }
+    /// Downloads the newest `tool` (yt-dlp with the yt-dlp-ejs it pins) into a new site dir, runs the
+    /// self-test on it and, only when that passes, reports it as ready to switch to. `active` is the
+    /// site in use now, kept as the way back. A failure leaves everything as it was.
+    fn install_update(
+        &self,
+        _tool: ToolKind,
+        _active: Option<String>,
+    ) -> BoxFuture<'static, Result<SiteUpdate, EngineError>> {
+        Box::pin(async { Err(EngineError::new(ErrorCode::Unknown, "no update channel")) })
     }
     /// Points `tool` at a user binary; rejects executables that are not that tool.
     fn set_custom_path(

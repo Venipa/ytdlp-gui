@@ -183,6 +183,44 @@ pub struct InitArgs {
     pub clock: Option<Arc<dyn Clock>>,
 }
 
+/// The updated yt-dlp site: read at start, and followed after each verified update. The pointer lives
+/// in `app_state` (`ytdlp_site`, with `ytdlp_site_previous` as the way back); a pointer whose dir is
+/// gone is ignored, so the bundled yt-dlp is the fallback.
+fn wire_site(backend: &Arc<dyn Backend>, store: &Store, tools: &Entity<Tools>, cx: &mut App) {
+    let read = store.read(|db| async move { db.state_get("ytdlp_site").await });
+    let (b, t) = (backend.clone(), tools.clone());
+    cx.spawn(async move |cx| {
+        let site = read
+            .await
+            .ok()
+            .flatten()
+            .filter(|s| std::path::Path::new(s).is_dir());
+        if let Some(site) = site {
+            b.set_site(Some(site.clone().into()));
+            t.update(cx, |t, _| t.set_site(Some(site)));
+        }
+    })
+    .detach();
+    let (backend, store) = (backend.clone(), store.clone());
+    cx.subscribe(tools, move |_, event: &ToolsEvent, _| {
+        if let ToolsEvent::Updated {
+            result: Ok(update), ..
+        } = event
+        {
+            backend.set_site(Some(update.site.clone().into()));
+            let (site, previous) = (
+                update.site.clone(),
+                update.previous.clone().unwrap_or_default(),
+            );
+            store.write(|db| async move {
+                db.state_set("ytdlp_site_previous", &previous).await?;
+                db.state_set("ytdlp_site", &site).await
+            });
+        }
+    })
+    .detach();
+}
+
 /// Creates the runtime, opens storage in the background, builds every entity and registers `AppState`.
 pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
     let io = Io::new()?;
@@ -239,6 +277,7 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
     let intake = cx.new(|_| Intake::default());
     let probes = cx.new(|_| Probes::new(backend.clone()));
     let tools = cx.new(|_| Tools::new(tools_api));
+    wire_site(&backend, &store, &tools, cx);
     let downloads = {
         let (store, logs, clock) = (store.clone(), logs.clone(), clock.clone());
         cx.new(|cx| Downloads::new(backend, store, clock, logs, &settings, cx))

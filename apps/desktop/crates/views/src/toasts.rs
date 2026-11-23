@@ -12,6 +12,8 @@ use ui::{Toast, motion};
 
 /// How long a toast stays when nobody dismisses it; a pointer over the stack holds the clock.
 const LIFETIME: Duration = Duration::from_secs(4);
+/// A toast that carries a button stays longer, so there is time to reach it.
+const LIFETIME_ACTION: Duration = Duration::from_secs(8);
 /// The most toasts on screen; a new one pushes the oldest out.
 const MAX: usize = 3;
 const TICK: Duration = Duration::from_millis(100);
@@ -141,12 +143,17 @@ pub fn toast(
     layer.update(cx, |layer, cx| {
         layer.next += 1;
         let id = layer.next;
+        let left = if action.is_some() {
+            LIFETIME_ACTION
+        } else {
+            LIFETIME
+        };
         layer.items.push(Item {
             id,
             kind,
             message,
             action,
-            left: LIFETIME,
+            left,
             leaving: false,
         });
         while layer.items.len() > MAX {

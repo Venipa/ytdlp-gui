@@ -266,3 +266,88 @@ fn scheduler_limits_and_penalty_are_pure() {
     );
     assert_eq!(s.pick(&Vec::new(), 0, &limits), vec![]);
 }
+
+/// A tools backend whose update installs by script; the active site it was handed is recorded.
+struct Updating {
+    seen: Mutex<Vec<Option<String>>>,
+    fail: bool,
+}
+
+impl domain::ToolsApi for Updating {
+    fn status(&self) -> BoxFuture<'static, Vec<domain::ToolStatus>> {
+        async { vec![] }.boxed()
+    }
+    fn ensure(&self, _: ToolKind) -> BoxStream<'static, domain::ToolEvent> {
+        futures::StreamExt::boxed(futures::stream::empty())
+    }
+    fn install_update(
+        &self,
+        _: ToolKind,
+        active: Option<String>,
+    ) -> BoxFuture<'static, Result<domain::SiteUpdate, EngineError>> {
+        self.seen.lock().unwrap().push(active.clone());
+        let fail = self.fail;
+        async move {
+            match fail {
+                true => Err(EngineError::new(
+                    domain::ErrorCode::Unknown,
+                    "self-test failed",
+                )),
+                false => Ok(domain::SiteUpdate {
+                    version: "2".into(),
+                    site: "site/2".into(),
+                    previous: active,
+                }),
+            }
+        }
+        .boxed()
+    }
+    fn set_custom_path(
+        &self,
+        _: ToolKind,
+        _: String,
+    ) -> BoxFuture<'static, Result<domain::ToolStatus, EngineError>> {
+        async { Err(EngineError::new(domain::ErrorCode::Unknown, "no")) }.boxed()
+    }
+}
+
+#[gpui::test]
+fn update_hands_over_the_active_site_and_a_failure_keeps_it(cx: &mut TestAppContext) {
+    let ok = Arc::new(Updating {
+        seen: Mutex::default(),
+        fail: false,
+    });
+    let tools = cx.new(|_| Tools::new(ok.clone()));
+    tools.update(cx, |t, _| t.set_site(Some("site/1".into())));
+    tools.update(cx, |t, cx| t.install_update(ToolKind::YtDlp, cx));
+    settle(cx, "updated", |cx| {
+        !tools.read_with(cx, |t, _| t.updating())
+    });
+    tools.update(cx, |t, cx| t.install_update(ToolKind::YtDlp, cx));
+    settle(cx, "updated again", |cx| {
+        !tools.read_with(cx, |t, _| t.updating())
+    });
+    // the second install is told the site the first one switched to
+    assert_eq!(
+        *ok.seen.lock().unwrap(),
+        vec![Some("site/1".into()), Some("site/2".into())]
+    );
+
+    let bad = Arc::new(Updating {
+        seen: Mutex::default(),
+        fail: true,
+    });
+    let tools = cx.new(|_| Tools::new(bad.clone()));
+    tools.update(cx, |t, _| t.set_site(Some("site/1".into())));
+    tools.update(cx, |t, cx| t.install_update(ToolKind::YtDlp, cx));
+    settle(cx, "failed", |cx| !tools.read_with(cx, |t, _| t.updating()));
+    tools.update(cx, |t, cx| t.install_update(ToolKind::YtDlp, cx));
+    settle(cx, "failed again", |cx| {
+        !tools.read_with(cx, |t, _| t.updating())
+    });
+    // a failed update never moves the pointer
+    assert_eq!(
+        *bad.seen.lock().unwrap(),
+        vec![Some("site/1".into()), Some("site/1".into())]
+    );
+}

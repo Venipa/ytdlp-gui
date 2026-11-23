@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use domain::{EngineError, ErrorCode, ToolEvent, ToolKind, ToolState, ToolStatus, ToolsApi};
+use domain::{
+    EngineError, ErrorCode, SiteUpdate, ToolEvent, ToolKind, ToolState, ToolStatus, ToolsApi,
+};
 use futures::StreamExt as _;
 use gpui::{Context, EventEmitter, Task};
 
@@ -22,6 +24,11 @@ pub enum ToolsEvent {
     },
     /// A tool was downloaded again.
     Reinstalled(ToolKind),
+    /// An update was installed and verified (`Ok`), or failed and left the old one in place.
+    Updated {
+        kind: ToolKind,
+        result: Result<SiteUpdate, EngineError>,
+    },
 }
 
 /// Tool statuses for the Welcome and Tools screens.
@@ -32,6 +39,9 @@ pub struct Tools {
     jobs: HashMap<ToolKind, Task<()>>,
     detect: Option<Task<()>>,
     retry_delay: Duration,
+    /// The updated yt-dlp site in use, if one was installed.
+    site: Option<String>,
+    updating: bool,
 }
 
 impl EventEmitter<ToolsEvent> for Tools {}
@@ -46,7 +56,42 @@ impl Tools {
             jobs: HashMap::new(),
             detect: None,
             retry_delay: RETRY_DELAY,
+            site: None,
+            updating: false,
         }
+    }
+
+    /// The updated site dir in use, set at start-up and after each update.
+    pub fn set_site(&mut self, site: Option<String>) {
+        self.site = site;
+    }
+
+    /// Whether an update is being installed.
+    pub fn updating(&self) -> bool {
+        self.updating
+    }
+
+    /// Installs the newest `kind` next to the one in use and verifies it; the answer comes as
+    /// [`ToolsEvent::Updated`]. Nothing switches here: the owner of the backend does that on `Ok`.
+    pub fn install_update(&mut self, kind: ToolKind, cx: &mut Context<Self>) {
+        if std::mem::replace(&mut self.updating, true) {
+            return;
+        }
+        let call = self.api.install_update(kind, self.site.clone());
+        cx.spawn(async move |this, cx| {
+            let result = call.await;
+            this.update(cx, |this, cx| {
+                this.updating = false;
+                if let Ok(update) = &result {
+                    this.site = Some(update.site.clone());
+                }
+                cx.emit(ToolsEvent::Updated { kind, result });
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
     }
 
     /// Overrides the retry wait (tests).

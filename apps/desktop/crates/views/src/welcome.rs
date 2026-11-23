@@ -69,7 +69,7 @@ fn choose_ffmpeg(cx: &mut App) {
 }
 
 /// The part of a version string that people read: `7.0.1-essentials_build-www.gyan.dev` is `7.0.1`.
-fn short_version(version: &str) -> &str {
+pub(crate) fn short_version(version: &str) -> &str {
     version
         .split(|c: char| c.is_whitespace() || c == '-' || c == '_')
         .next()
