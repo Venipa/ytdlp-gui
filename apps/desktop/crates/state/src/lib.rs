@@ -288,8 +288,12 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
     downloads.update(cx, |d, cx| d.load(cx));
     tools.update(cx, |t, cx| t.refresh(cx));
     let updates = {
-        let (settings, downloads, store, io) =
-            (settings.clone(), downloads.clone(), store.clone(), io.clone());
+        let (settings, downloads, store, io) = (
+            settings.clone(),
+            downloads.clone(),
+            store.clone(),
+            io.clone(),
+        );
         let folder = paths.cache.join("updates");
         let poll = scene.is_none();
         cx.new(|cx| {

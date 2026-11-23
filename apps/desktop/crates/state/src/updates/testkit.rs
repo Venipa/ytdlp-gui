@@ -8,16 +8,22 @@ use std::sync::{Arc, Mutex};
 
 use sha2::{Digest as _, Sha256};
 
+/// Served bodies by path, each with the length the response claims.
+type Files = Arc<Mutex<HashMap<String, (Vec<u8>, usize)>>>;
+
 /// A running fixture server; it lives until the process ends.
 pub struct Fixture {
     /// `http://127.0.0.1:<port>`.
     pub base: String,
-    files: Arc<Mutex<HashMap<String, (Vec<u8>, usize)>>>,
+    files: Files,
 }
 
 /// The lower-case hex sha256 of `bytes`.
 pub fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 impl Fixture {
@@ -30,7 +36,7 @@ impl Fixture {
     pub fn start_on(port: u16) -> std::io::Result<Self> {
         let listener = TcpListener::bind(("127.0.0.1", port))?;
         let base = format!("http://{}", listener.local_addr()?);
-        let files: Arc<Mutex<HashMap<String, (Vec<u8>, usize)>>> = Arc::default();
+        let files: Files = Arc::default();
         let served = files.clone();
         std::thread::spawn(move || {
             for stream in listener.incoming().flatten() {
@@ -74,17 +80,29 @@ impl Fixture {
     pub fn put(&self, path: &str, body: impl Into<Vec<u8>>) {
         let body = body.into();
         let claimed = body.len();
-        self.files.lock().unwrap().insert(path.to_string(), (body, claimed));
+        self.files
+            .lock()
+            .unwrap()
+            .insert(path.to_string(), (body, claimed));
     }
 
     /// Serves `body` at `path` but claims `claimed` bytes, so the connection breaks off early.
     pub fn put_truncated(&self, path: &str, body: impl Into<Vec<u8>>, claimed: usize) {
-        self.files.lock().unwrap().insert(path.to_string(), (body.into(), claimed));
+        self.files
+            .lock()
+            .unwrap()
+            .insert(path.to_string(), (body.into(), claimed));
     }
 
     /// Publishes one release `tag` with `assets` (name, bytes) and a `SHA256SUMS.txt` over them;
     /// `sums` overrides the checksums text (to test mismatches). Replaces the releases list.
-    pub fn release(&self, tag: &str, prerelease: bool, assets: &[(&str, &[u8])], sums: Option<&str>) {
+    pub fn release(
+        &self,
+        tag: &str,
+        prerelease: bool,
+        assets: &[(&str, &[u8])],
+        sums: Option<&str>,
+    ) {
         let mut listed = String::new();
         let mut entries = Vec::new();
         for (name, bytes) in assets {
@@ -104,6 +122,9 @@ impl Fixture {
             "tag_name": tag, "prerelease": prerelease, "draft": false,
             "html_url": format!("{}/releases/{tag}", self.base), "assets": entries,
         }]);
-        self.put(&format!("/repos/{}/releases", super::REPO), list.to_string());
+        self.put(
+            &format!("/repos/{}/releases", super::REPO),
+            list.to_string(),
+        );
     }
 }

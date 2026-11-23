@@ -43,7 +43,9 @@ impl Install {
             #[cfg(target_os = "macos")]
             Self::Bundle(bundle) => unpack_bundle(download, &beside(bundle, ".ytdlpd.app.update")),
             #[cfg(all(unix, not(target_os = "macos")))]
-            Self::AppImage(image) => stage_image(download, &beside(image, ".ytdlpd-update.AppImage")),
+            Self::AppImage(image) => {
+                stage_image(download, &beside(image, ".ytdlpd-update.AppImage"))
+            }
             _ => Ok(download.to_path_buf()),
         }
     }
@@ -86,7 +88,9 @@ fn detect() -> Install {
     let Ok(exe) = std::env::current_exe() else {
         return Install::Managed;
     };
-    let installed = exe.parent().is_some_and(|d| d.join("unins000.exe").exists());
+    let installed = exe
+        .parent()
+        .is_some_and(|d| d.join("unins000.exe").exists());
     // the fixture server (YTDLPD_UPDATES_API) lets a dev build walk the real install path
     match installed || std::env::var_os(super::API_ENV).is_some() {
         true => Install::Setup(exe),
@@ -163,7 +167,13 @@ fn setup(installer: &Path, exe: &Path, relaunch: bool) -> Result<()> {
         script.push_str(&format!("Start-Process -FilePath {}", ps_quote(exe)));
     }
     Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command"])
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
+            "-Command",
+        ])
         .arg(script)
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
@@ -194,7 +204,13 @@ fn after_exit(script: &str, prepared: &Path, target: &Path, relaunch: bool) -> R
 fn unpack_bundle(image: &Path, staged: &Path) -> Result<PathBuf> {
     let mount = tempfile::tempdir().context("cannot make a mount point")?;
     run(Command::new("/usr/bin/hdiutil")
-        .args(["attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint"])
+        .args([
+            "attach",
+            "-nobrowse",
+            "-readonly",
+            "-noautoopen",
+            "-mountpoint",
+        ])
         .arg(mount.path())
         .arg(image))
     .context("cannot open the disk image")?;

@@ -479,9 +479,9 @@ fn pause_for_update_marks_rows_and_they_resume_on_start(cx: &mut TestAppContext)
         |db, io| {
             let mut rows = seed_rows(Scene::Downloading, T0);
             rows.truncate(3);
-            for (row, reason) in rows
-                .iter_mut()
-                .zip([Some(state::UPDATE_REASON), Some("interrupted"), None])
+            for (row, reason) in
+                rows.iter_mut()
+                    .zip([Some(state::UPDATE_REASON), Some("interrupted"), None])
             {
                 row.status = Paused;
                 row.reason = reason.map(str::to_string);
@@ -489,7 +489,9 @@ fn pause_for_update_marks_rows_and_they_resume_on_start(cx: &mut TestAppContext)
             io.handle().block_on(db.seed_downloads(&rows)).unwrap();
         },
     );
-    settle(cx, "the update-paused row starts", |_| r.started().len() == 1);
+    settle(cx, "the update-paused row starts", |_| {
+        r.started().len() == 1
+    });
     let rows = r.downloads.read_with(cx, |d, _| d.rows().to_vec());
     assert_eq!(rows.iter().filter(|x| x.status == Paused).count(), 2);
 }

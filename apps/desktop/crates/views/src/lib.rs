@@ -12,6 +12,7 @@ mod root;
 mod rows;
 mod screens;
 mod toasts;
+mod update_line;
 mod welcome;
 mod workspace;
 

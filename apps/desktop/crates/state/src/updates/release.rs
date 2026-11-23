@@ -176,7 +176,10 @@ mod tests {
             },
         ];
         let tag = |c, cur: &str| pick(&list, c, &v(cur)).map(|(r, _)| r.tag_name.clone());
-        assert_eq!(tag(UpdateChannel::Stable, "0.1.0").as_deref(), Some("v0.2.0"));
+        assert_eq!(
+            tag(UpdateChannel::Stable, "0.1.0").as_deref(),
+            Some("v0.2.0")
+        );
         assert_eq!(
             tag(UpdateChannel::Beta, "0.1.0").as_deref(),
             Some("v0.3.0-beta.1")

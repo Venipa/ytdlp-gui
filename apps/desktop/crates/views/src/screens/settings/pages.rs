@@ -1,4 +1,4 @@
-//! The seven settings pages as sections of rows (see `layout`).
+//! The eight settings pages as sections of rows (see `layout`).
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -683,6 +683,164 @@ impl SettingsView {
                         })),
                     cx,
                 )],
+                cx,
+            ),
+        ]
+    }
+
+    /// Settings > Updates (owner pick 4A): channel, mode, Check now with the last check, the
+    /// current version, and what the updater found with its actions; notes are a link (5B).
+    pub(super) fn page_updates(&self, s: &Settings, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        use domain::{UpdateChannel, UpdateMode};
+        let updates = self.state.updates.clone();
+        let (state, checked, managed) = {
+            let u = updates.read(cx);
+            (u.state().clone(), u.last_checked(), !u.updates_itself())
+        };
+        let running = self.state.downloads.read(cx).count(|s| s.is_active());
+        let theme = *cx.theme();
+        let channel = self.chips(
+            "update-channel",
+            [
+                (
+                    "stable",
+                    "update-channel-stable",
+                    s.update_channel == UpdateChannel::Stable,
+                    Rc::new(|s: &mut Settings| s.update_channel = UpdateChannel::Stable) as Edit,
+                ),
+                (
+                    "beta",
+                    "update-channel-beta",
+                    s.update_channel == UpdateChannel::Beta,
+                    Rc::new(|s: &mut Settings| s.update_channel = UpdateChannel::Beta) as Edit,
+                ),
+            ],
+        );
+        let mode = self.chips(
+            "update-mode",
+            [
+                (
+                    "automatic",
+                    "update-mode-automatic",
+                    s.update_mode == UpdateMode::Automatic,
+                    Rc::new(|s: &mut Settings| s.update_mode = UpdateMode::Automatic) as Edit,
+                ),
+                (
+                    "manual",
+                    "update-mode-manual",
+                    s.update_mode == UpdateMode::Manual,
+                    Rc::new(|s: &mut Settings| s.update_mode = UpdateMode::Manual) as Edit,
+                ),
+            ],
+        );
+        let checking = state == state::UpdateState::Checking;
+        let check = {
+            let updates = updates.clone();
+            Button::new("update-check-now")
+                .outline()
+                .label(t!("update-check-now"))
+                .disabled(checking)
+                .on_click(move |_, _, cx| updates.update(cx, |u, cx| u.check(cx)))
+        };
+        let last = match (checking, checked) {
+            (true, _) => t!("update-checking"),
+            (false, Some(at)) => match format::when(at) {
+                (time, None) => t!("update-checked-today", time = time),
+                (time, Some(date)) => t!("update-checked", date = date, time = time),
+            },
+            (false, None) => t!("update-never-checked"),
+        };
+        let (title, detail) = crate::update_line::words(&state, s.update_channel, running)
+            .unwrap_or_else(|| match checking {
+                true => (t!("update-checking"), None),
+                false => (t!("update-up-to-date"), None),
+            });
+        let failed = matches!(state, state::UpdateState::Failed { .. });
+        let progress = match &state {
+            state::UpdateState::Downloading { done, total, .. } => Some(match total {
+                Some(total) => Rule::Fill(*done as f32 / (*total).max(1) as f32),
+                None => Rule::Pulse,
+            }),
+            state::UpdateState::Installing(_) => Some(Rule::Pulse),
+            _ => None,
+        };
+        let status = div()
+            .id("update-status")
+            .flex()
+            .flex_col()
+            .gap(px(4.))
+            .py(px(10.))
+            .child(
+                div()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .when(failed, |this| this.text_color(theme.danger))
+                    .child(title),
+            )
+            .children(detail.map(|d| {
+                div()
+                    .text_size(theme.text(Text::Small))
+                    .text_color(theme.muted_foreground)
+                    .child(d)
+            }))
+            .children(progress.map(|rule| div().pt(px(4.)).child(ProgressRule::new(rule))))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(8.))
+                    .pt(px(4.))
+                    .children(crate::update_line::actions("update-page", &updates, cx)),
+            )
+            .into_any_element();
+        let release = format!("https://github.com/{}/releases", state::updates::REPO);
+        vec![
+            section(
+                Some(t!("update-sec-options")),
+                vec![
+                    row(
+                        t!("update-channel"),
+                        Some(t!("update-channel-desc")),
+                        channel,
+                        cx,
+                    ),
+                    row(t!("update-mode"), Some(t!("update-mode-desc")), mode, cx),
+                ],
+                cx,
+            ),
+            section(
+                Some(t!("update-sec-status")),
+                vec![
+                    row(
+                        t!("update-current"),
+                        Some(last),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(12.))
+                            .child(
+                                div()
+                                    .font_features(tabular())
+                                    .child(state::updates::current_version()),
+                            )
+                            .child(check),
+                        cx,
+                    ),
+                    status,
+                    row(
+                        t!("update-release"),
+                        Some(match managed {
+                            true => t!("update-self-managed"),
+                            false => t!("update-release-desc"),
+                        }),
+                        Button::new("update-open-release")
+                            .outline()
+                            .label(t!("set-open"))
+                            .trailing("icons/square-arrow-out-up-right.svg")
+                            .on_click(move |_, _, cx| cx.open_url(&release)),
+                        cx,
+                    ),
+                ],
                 cx,
             ),
         ]

@@ -55,7 +55,11 @@ fn rig(cx: &mut TestAppContext, api: &str, mode: UpdateMode, channel: UpdateChan
     });
     let folder = tempfile::tempdir().unwrap();
     let launched: Arc<Mutex<Vec<(PathBuf, bool)>>> = Arc::default();
-    let (f, api, l) = (folder.path().to_path_buf(), api.to_string(), launched.clone());
+    let (f, api, l) = (
+        folder.path().to_path_buf(),
+        api.to_string(),
+        launched.clone(),
+    );
     let s = settings.clone();
     let updates = cx.new(|cx| {
         let mut u = Updates::new(s, downloads, store, io, f, api, false, cx);
@@ -114,9 +118,14 @@ fn manual_check_download_ready_relaunch(cx: &mut TestAppContext) {
 
     r.updates.update(cx, |u, cx| u.download(cx));
     assert!(matches!(state(cx, &r), UpdateState::Downloading { .. }));
-    settle(cx, "ready", |cx| matches!(state(cx, &r), UpdateState::Ready(_)));
+    settle(cx, "ready", |cx| {
+        matches!(state(cx, &r), UpdateState::Ready(_))
+    });
     let staged = r.folder.path().join(&name);
-    assert_eq!(sha256_hex(&std::fs::read(&staged).unwrap()), sha256_hex(&bytes));
+    assert_eq!(
+        sha256_hex(&std::fs::read(&staged).unwrap()),
+        sha256_hex(&bytes)
+    );
 
     r.updates.update(cx, |u, cx| u.relaunch(cx));
     assert!(matches!(state(cx, &r), UpdateState::Installing(_)));
@@ -129,9 +138,16 @@ fn automatic_mode_downloads_by_itself_and_install_on_quit_is_a_toggle(cx: &mut T
     let version = newer();
     let name = package(&version);
     fixture.release(&format!("v{version}"), false, &[(&name, b"pkg")], None);
-    let r = rig(cx, &fixture.base, UpdateMode::Automatic, UpdateChannel::Stable);
+    let r = rig(
+        cx,
+        &fixture.base,
+        UpdateMode::Automatic,
+        UpdateChannel::Stable,
+    );
     r.updates.update(cx, |u, cx| u.check(cx));
-    settle(cx, "ready", |cx| matches!(state(cx, &r), UpdateState::Ready(_)));
+    settle(cx, "ready", |cx| {
+        matches!(state(cx, &r), UpdateState::Ready(_))
+    });
     r.updates.update(cx, |u, cx| u.toggle_install_on_quit(cx));
     assert!(r.updates.read_with(cx, |u, _| u.install_on_quit()));
 }
@@ -144,7 +160,12 @@ fn checksum_mismatch_fails_closed_and_try_again_downloads_again(cx: &mut TestApp
     let tag = format!("v{version}");
     let wrong = format!("{}  {name}\n", "0".repeat(64));
     fixture.release(&tag, false, &[(&name, b"pkg")], Some(&wrong));
-    let r = rig(cx, &fixture.base, UpdateMode::Automatic, UpdateChannel::Stable);
+    let r = rig(
+        cx,
+        &fixture.base,
+        UpdateMode::Automatic,
+        UpdateChannel::Stable,
+    );
     r.updates.update(cx, |u, cx| u.check(cx));
     settle(cx, "failed", |cx| {
         matches!(state(cx, &r), UpdateState::Failed { .. })
@@ -175,7 +196,9 @@ fn checksum_mismatch_fails_closed_and_try_again_downloads_again(cx: &mut TestApp
     // fixed checksums: Try again gets it
     fixture.release(&tag, false, &[(&name, b"pkg")], None);
     r.updates.update(cx, |u, cx| u.retry(cx));
-    settle(cx, "ready", |cx| matches!(state(cx, &r), UpdateState::Ready(_)));
+    settle(cx, "ready", |cx| {
+        matches!(state(cx, &r), UpdateState::Ready(_))
+    });
 }
 
 #[gpui::test]
@@ -237,7 +260,9 @@ fn prereleases_only_on_beta_and_a_channel_switch_checks_again(cx: &mut TestAppCo
     r.settings.update(cx, |s, cx| {
         s.update(|s| s.update_channel = UpdateChannel::Beta, cx)
     });
-    settle(cx, "beta offers it", |cx| {
-        matches!(state(cx, &r), UpdateState::Available(ref rel) if rel.version == version)
-    });
+    settle(
+        cx,
+        "beta offers it",
+        |cx| matches!(state(cx, &r), UpdateState::Available(ref rel) if rel.version == version),
+    );
 }

@@ -187,7 +187,7 @@ impl Updates {
         cx.spawn(async move |this, cx| {
             if let Ok(Some(at)) = read.await {
                 this.update(cx, |this, cx| {
-                    this.last_checked = this.last_checked.or(at.parse().ok());
+                    this.last_checked = this.last_checked.or_else(|| at.parse().ok());
                     cx.notify();
                 })
                 .ok();
@@ -271,14 +271,21 @@ impl Updates {
         let Some(http) = self.http.clone() else {
             return self.set(failed(UpdateError::Check, None), cx);
         };
-        let (channel, url) = (self.wishes.0, format!("{}/repos/{REPO}/releases?per_page=30", self.api));
+        let (channel, url) = (
+            self.wishes.0,
+            format!("{}/repos/{REPO}/releases?per_page=30", self.api),
+        );
         let folder = self.folder.clone();
         self.set(UpdateState::Checking, cx);
         let work = self.io.spawn(async move {
             let found = find(&http, &url, channel).await;
             // a package an earlier run verified (only verified files get their final name) is ready at once
             let earlier = match &found {
-                Ok(Some(r)) => r.asset.as_ref().map(|a| folder.join(&a.name)).filter(|p| p.is_file()),
+                Ok(Some(r)) => r
+                    .asset
+                    .as_ref()
+                    .map(|a| folder.join(&a.name))
+                    .filter(|p| p.is_file()),
                 _ => None,
             };
             let staged = match earlier {
@@ -289,7 +296,8 @@ impl Updates {
         });
         self.task = Some(cx.spawn(async move |this, cx| {
             let (found, staged) = work.await.unwrap_or((Err(UpdateError::Check), None));
-            this.update(cx, |this, cx| this.checked(found, staged, cx)).ok();
+            this.update(cx, |this, cx| this.checked(found, staged, cx))
+                .ok();
         }));
     }
 
@@ -530,9 +538,11 @@ async fn fetch(
     folder: &Path,
     progress: &futures::channel::mpsc::UnboundedSender<(u64, Option<u64>)>,
 ) -> Result<PathBuf, UpdateError> {
-    let broke = |at: u64| move |e: reqwest::Error| {
-        log::warn!("updates: download broke off at {at} bytes: {e}");
-        UpdateError::Download { at }
+    let broke = |at: u64| {
+        move |e: reqwest::Error| {
+            log::warn!("updates: download broke off at {at} bytes: {e}");
+            UpdateError::Download { at }
+        }
     };
     let listed = http
         .get(sums)
@@ -553,7 +563,9 @@ async fn fetch(
         .await
         .and_then(|r| r.error_for_status())
         .map_err(broke(0))?;
-    let total = response.content_length().or((asset.size > 0).then_some(asset.size));
+    let total = response
+        .content_length()
+        .or_else(|| (asset.size > 0).then_some(asset.size));
     let disk = |e: std::io::Error| {
         log::warn!("updates: cannot keep the download: {e}");
         UpdateError::Download { at: 0 }
@@ -578,7 +590,11 @@ async fn fetch(
         progress.unbounded_send((done, total)).ok();
     }
     drop(file);
-    let got: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
+    let got: String = hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
     if got != expected {
         log::warn!("updates: {} does not match its checksum", asset.name);
         std::fs::remove_file(&part).ok();
