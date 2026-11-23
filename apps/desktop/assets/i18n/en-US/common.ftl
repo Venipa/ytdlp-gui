@@ -56,3 +56,9 @@ count-downloads =
         [one] { $count } download
        *[other] { $count } downloads
     }
+
+# Title bar (UI polish)
+app-wordmark = ytdlpd
+nav-downloads-tip = Downloads (Ctrl+1)
+nav-logs-tip = Logs (Ctrl+2)
+nav-settings-tip = Settings (Ctrl+3)

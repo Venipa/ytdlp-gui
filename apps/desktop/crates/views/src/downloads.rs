@@ -15,17 +15,19 @@ use domain::{
 };
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, App, ClipboardItem, Context, Entity, Pixels, Point, ScrollStrategy, SharedString,
-    Subscription, UniformListScrollHandle, Window, div, px, uniform_list,
+    AnyElement, App, ClipboardItem, Context, Entity, ExternalPaths, FocusHandle, Pixels, Point,
+    ScrollStrategy, SharedString, Subscription, UniformListScrollHandle, Window, div, px,
+    uniform_list,
 };
 use i18n::t;
 use state::{AppState, DownloadsEvent, IntakeEvent, ProbeState};
 use ui::{
-    ActiveTheme as _, Button, Chip, FORM_CONTEXT, Input, Scrollbar, Scroller, Submit, Text,
+    ActiveTheme as _, Button, Chip, FORM_CONTEXT, Input, MONO, Scrollbar, Scroller, Submit, Text,
     TokenInput, Vacancy,
 };
 
 use crate::format;
+use input::ROWS_CONTEXT;
 use crate::formats::Draft;
 use crate::os;
 use crate::toasts::{Kind, toast};
@@ -71,6 +73,9 @@ pub enum Key {
     Paste,
     FocusIntake,
     FocusSearch,
+    First,
+    Last,
+    Open,
 }
 
 /// The Downloads page.
@@ -103,8 +108,19 @@ pub struct Downloads {
     pub(crate) hidden: HashSet<DownloadId>,
     /// The ids in list order, for the arrow keys.
     order: Vec<DownloadId>,
+    /// The list line of each id in `order`.
+    order_lines: Vec<usize>,
     pub(crate) scroll: UniformListScrollHandle,
     bar: Entity<Scrollbar>,
+    /// The list takes the keys that act on its selected row while it holds focus.
+    pub(crate) list_focus: FocusHandle,
+    /// Scroll state of the detail panel and of its log tail.
+    pub(crate) detail_bar: Entity<Scrollbar>,
+    pub(crate) log_bar: Entity<Scrollbar>,
+    /// Whether the detail panel's Details section is open.
+    pub(crate) details_open: bool,
+    /// Whether an empty library already moved focus to the intake.
+    intake_offered: bool,
     free: Option<(u64, String)>,
     free_at: Option<Instant>,
     _subs: Vec<Subscription>,
@@ -114,10 +130,16 @@ impl Downloads {
     /// Builds the page over the registered state.
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let app = AppState::global(cx);
-        let intake = cx.new(|cx| Input::new(t!("dl-intake-hint"), cx).name("dl-intake-name"));
+        let intake = cx.new(|cx| {
+            Input::new(t!("dl-intake-hint"), cx)
+                .name("dl-intake-name")
+                .icon("icons/link.svg")
+                .clearable()
+        });
         let search = cx.new(|cx| {
             Input::new(t!("dl-search-hint"), cx)
                 .name("dl-search-name")
+                .compact()
                 .clearable()
         });
         let subs = vec![
@@ -137,7 +159,18 @@ impl Downloads {
         let bar = cx.new(|cx| {
             Scrollbar::new(scroll.0.borrow().base_handle.clone()).watching(cx.entity_id())
         });
+        let detail_bar = cx.new(|cx| {
+            Scrollbar::new(gpui::ScrollHandle::new()).watching(cx.entity_id())
+        });
+        let log_bar = cx.new(|cx| {
+            Scrollbar::new(gpui::ScrollHandle::new()).watching(cx.entity_id())
+        });
         let mut this = Self {
+            list_focus: cx.focus_handle().tab_stop(true),
+            detail_bar,
+            log_bar,
+            details_open: true,
+            intake_offered: false,
             app,
             intake,
             search,
@@ -155,6 +188,7 @@ impl Downloads {
             confirm: None,
             hidden: HashSet::new(),
             order: Vec::new(),
+            order_lines: Vec::new(),
             bar,
             scroll,
             free: None,
@@ -563,9 +597,25 @@ impl Downloads {
             None => 0,
             Some(i) => i.saturating_add_signed(by).min(self.order.len() - 1),
         };
-        self.selected = Some(self.order[next]);
-        self.scroll.scroll_to_item(next, ScrollStrategy::Nearest);
+        self.select_at(next, cx);
+    }
+
+    fn select_at(&mut self, at: usize, cx: &mut Context<Self>) {
+        let Some(id) = self.order.get(at) else { return };
+        self.selected = Some(*id);
+        // headers take lines too, so the list scrolls to the row's own line
+        if let Some(line) = self.line_of(*id) {
+            self.scroll.scroll_to_item(line, ScrollStrategy::Nearest);
+        }
         cx.notify();
+    }
+
+    /// Enter: selects the first row, or opens the finished file of the selected one.
+    fn open_selected(&mut self, cx: &mut Context<Self>) {
+        match self.selected {
+            None => self.select_at(0, cx),
+            Some(id) => self.open_file(id, cx),
+        }
     }
 
     fn delete_selected(&mut self, with_file: bool, cx: &mut Context<Self>) {
@@ -579,12 +629,21 @@ impl Downloads {
     /// Runs a keyboard action the Workspace forwards.
     pub(crate) fn key(&mut self, key: Key, window: &mut Window, cx: &mut Context<Self>) {
         match key {
-            Key::Next => self.step(1, cx),
-            Key::Previous => self.step(-1, cx),
+            Key::Next => {
+                self.step(1, cx);
+                window.focus(&self.list_focus, cx);
+            }
+            Key::Previous => {
+                self.step(-1, cx);
+                window.focus(&self.list_focus, cx);
+            }
             Key::TogglePause => self.toggle_pause(cx),
             Key::DeleteEntry => self.delete_selected(false, cx),
             Key::DeleteFile => self.delete_selected(true, cx),
             Key::Deselect => self.deselect(cx),
+            Key::First => self.select_at(0, cx),
+            Key::Last => self.select_at(self.order.len().saturating_sub(1), cx),
+            Key::Open => self.open_selected(cx),
             Key::Paste => {
                 if let Some(text) = cx.read_from_clipboard().and_then(|i| i.text()) {
                     self.intake
@@ -676,14 +735,23 @@ impl Downloads {
             lines.push(Line::Header("dl-group-history", history.len()));
             lines.extend(history.into_iter().map(Line::Row));
         }
-        self.order = lines
-            .iter()
-            .filter_map(|line| match line {
-                Line::Row(at) => rows.get(*at).map(|r| r.id),
-                Line::Header(..) => None,
-            })
-            .collect();
+        self.order.clear();
+        self.order_lines.clear();
+        for (n, line) in lines.iter().enumerate() {
+            if let Line::Row(at) = line
+                && let Some(row) = rows.get(*at)
+            {
+                self.order.push(row.id);
+                self.order_lines.push(n);
+            }
+        }
         lines
+    }
+
+    /// The list line of a download.
+    fn line_of(&self, id: DownloadId) -> Option<usize> {
+        let at = self.order.iter().position(|x| *x == id)?;
+        self.order_lines.get(at).copied()
     }
 
     fn chips(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -844,20 +912,71 @@ impl Downloads {
 
     fn intake_strip(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = *cx.theme();
+        let text = self.intake.read(cx).text().trim().to_owned();
+        let valid = !split_urls(&text).urls.is_empty();
+        let invalid = !text.is_empty() && !valid;
         div()
             .flex()
             .items_center()
             .gap_2()
-            .h(px(40.))
-            .child(div().flex_1().child(self.intake.clone()))
+            .h(theme.metrics.field)
+            .child(
+                div()
+                    .flex_1()
+                    .font_family(MONO)
+                    .child(self.intake.clone()),
+            )
+            .when(invalid, |this| {
+                this.child(
+                    div()
+                        .flex_none()
+                        .text_size(theme.text(Text::Small))
+                        .text_color(theme.muted_foreground)
+                        .child(t!("dl-intake-invalid")),
+                )
+            })
             .child(
                 Button::new("intake-download")
-                    .primary()
+                    .outline()
+                    .icon("icons/download.svg")
                     .label(t!("dl-download"))
+                    .disabled(!valid)
                     .on_click(cx.listener(|this, _, _, cx| this.submit(cx))),
             )
             .text_size(theme.text(Text::Body))
             .into_any_element()
+    }
+
+    /// Links dropped on the window: the text of dropped `.txt`/`.url` files is read for links.
+    fn dropped(&mut self, paths: &ExternalPaths, cx: &mut Context<Self>) {
+        use std::io::Read as _;
+        let mut urls: Vec<String> = Vec::new();
+        for path in paths.paths() {
+            let ext = path
+                .extension()
+                .map(|e| e.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            if !["txt", "url", "list", "csv", "md"].contains(&ext.as_str()) {
+                continue;
+            }
+            let mut text = String::new();
+            // shortcut: the first MiB of a file is read, links further down are ignored
+            let read = std::fs::File::open(path)
+                .and_then(|file| file.take(1 << 20).read_to_string(&mut text));
+            if let Err(error) = read {
+                log::warn!("downloads: cannot read dropped file {}: {error}", path.display());
+                continue;
+            }
+            for link in split_urls(&text.replace("URL=", " ")).urls {
+                if !urls.contains(&link) {
+                    urls.push(link);
+                }
+            }
+        }
+        match urls.is_empty() {
+            true => toast(cx, Kind::Info, t!("dl-drop-none"), None),
+            false => self.fill(&urls, cx),
+        }
     }
 }
 
@@ -894,12 +1013,17 @@ fn short_key(code: &str) -> &'static str {
 }
 
 impl Render for Downloads {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = *cx.theme();
         let (loaded, total) = {
             let d = self.app.downloads.read(cx);
             (d.loaded(), d.rows().len())
         };
+        // an empty library invites a paste: the intake has focus
+        if loaded && total == 0 && !std::mem::replace(&mut self.intake_offered, true) {
+            self.intake.update(cx, |input, cx| input.focus(window, cx));
+        }
+        let ring = self.list_focus.is_focused(window) && window.last_input_was_keyboard();
         let lines = Rc::new(self.lines(cx));
         let filter_text = self.search.read(cx).text().to_owned();
         let thumbs = self.app.settings.read(cx).get().show_thumbnails;
@@ -908,6 +1032,15 @@ impl Render for Downloads {
             (true, true) => Vacancy::new(t!("dl-empty"))
                 .icon("icons/download.svg")
                 .detail(t!("dl-empty-detail"))
+                .action(
+                    Button::new("empty-paste")
+                        .outline()
+                        .icon("icons/clipboard-paste.svg")
+                        .label(t!("dl-empty-paste"))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.key(Key::Paste, window, cx)
+                        })),
+                )
                 .spoken("downloads-empty")
                 .size_full()
                 .into_any_element(),
@@ -936,7 +1069,9 @@ impl Render for Downloads {
                             cx.processor(move |this, range: Range<usize>, _, cx| {
                                 range
                                     .filter_map(|at| {
-                                        items.get(at).map(|line| this.line(*line, thumbs, cx))
+                                        items
+                                            .get(at)
+                                            .map(|line| this.line(*line, thumbs, ring, cx))
                                     })
                                     .collect::<Vec<_>>()
                             }),
@@ -947,6 +1082,12 @@ impl Render for Downloads {
                     .into_any_element()
             }
         };
+        let list = div()
+            .id("downloads-list")
+            .size_full()
+            .key_context(ROWS_CONTEXT)
+            .track_focus(&self.list_focus)
+            .child(list);
         let selected = self.selected.and_then(|id| self.summary(id, cx));
         let card = self.card_view(cx);
         let banner = self.tools_banner(cx);
@@ -955,9 +1096,14 @@ impl Render for Downloads {
         let status = self.status_bar(cx);
 
         div()
+            .id("downloads-page")
             .size_full()
             .flex()
             .flex_col()
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| this.dropped(paths, cx)))
+            .drag_over::<ExternalPaths>(move |style, _, _, _| {
+                style.bg(theme.table_active)
+            })
             .child(
                 div()
                     .flex()

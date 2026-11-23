@@ -21,6 +21,9 @@ actions!(
         DeleteEntry,
         /// Delete the selected entry and its file (Shift+Del).
         DeleteFile,
+        /// Jump to the first or last row of the list (Home, End).
+        FirstRow,
+        LastRow,
         OpenSettings,
         ShowDownloads,
         ShowLogs,
@@ -32,6 +35,8 @@ actions!(
 
 /// The context of the workspace root.
 pub const WORKSPACE_CONTEXT: &str = "Workspace";
+/// The context of the focused download list: the keys that act on its selected row.
+pub const ROWS_CONTEXT: &str = "Rows";
 
 /// Every key binding, in precedence order: GPUI prefers the deepest matching context and,
 /// within one, the binding registered last, so the macOS set at the end overrides the shared one.
@@ -52,14 +57,17 @@ fn shared() -> Vec<KeyBinding> {
     let menu = Some(MENU_CONTEXT);
     let browsing =
         format!("{WORKSPACE_CONTEXT} && !{INPUT_CONTEXT} && !{MENU_CONTEXT} && !{FORM_CONTEXT}");
+    let rows = format!("{browsing} && {ROWS_CONTEXT}");
 
     vec![
         KeyBinding::new("down", SelectNext, Some(&browsing)),
         KeyBinding::new("up", SelectPrevious, Some(&browsing)),
-        KeyBinding::new("enter", Activate, Some(&browsing)),
-        KeyBinding::new("space", TogglePause, Some(&browsing)),
-        KeyBinding::new("delete", DeleteEntry, Some(&browsing)),
-        KeyBinding::new("shift-delete", DeleteFile, Some(&browsing)),
+        KeyBinding::new("home", FirstRow, Some(&rows)),
+        KeyBinding::new("end", LastRow, Some(&rows)),
+        KeyBinding::new("enter", Activate, Some(&rows)),
+        KeyBinding::new("space", TogglePause, Some(&rows)),
+        KeyBinding::new("delete", DeleteEntry, Some(&rows)),
+        KeyBinding::new("shift-delete", DeleteFile, Some(&rows)),
         KeyBinding::new("ctrl-v", PasteIntake, Some(&away_from_text)),
         KeyBinding::new("cmd-v", PasteIntake, Some(&away_from_text)),
         KeyBinding::new("ctrl-l", FocusIntake, Some(WORKSPACE_CONTEXT)),

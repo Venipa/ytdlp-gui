@@ -22,6 +22,9 @@ const CALL_WIDTH: f32 = 56.;
 /// Distance between the dots of a dotted track, and the dot size.
 const DOT_PITCH: f32 = 4.;
 const DOT: f32 = 1.;
+/// Where the probing pulse's clock starts.
+static PULSE_EPOCH: std::sync::LazyLock<std::time::Instant> =
+    std::sync::LazyLock::new(std::time::Instant::now);
 /// Thickness of the amber fill over the track.
 const FILL: f32 = 2.;
 
@@ -78,10 +81,11 @@ pub enum Rule {
     Solid,
     /// Failed: a solid red rule.
     Failed,
+    /// Reading the page: a short amber stretch travelling along the track.
+    Pulse,
 }
 
 /// The ruled line under a row, which is also its progress.
-// shortcut: the probing pulse is static, animate the tail dots when motion presets are wired.
 #[derive(IntoElement)]
 pub struct ProgressRule {
     rule: Rule,
@@ -100,7 +104,7 @@ impl RenderOnce for ProgressRule {
         let rule = self.rule;
         canvas(
             |_, _, _| (),
-            move |bounds, _, window, _| {
+            move |bounds, _, window, cx| {
                 let base = bounds.origin.y + bounds.size.height;
                 let at = |x: Pixels, w: Pixels, h: Pixels| gpui::Bounds {
                     origin: point(x, base - h),
@@ -117,8 +121,14 @@ impl RenderOnce for ProgressRule {
                             color,
                         ));
                     }
-                    Rule::Dotted | Rule::Fill(_) => {
-                        let mut x = bounds.origin.x;
+                    Rule::Dotted | Rule::Fill(_) | Rule::Pulse => {
+                        // the dots start where the fill ends, so an active row has one rule
+                        let mut x = match rule {
+                            Rule::Fill(done) => {
+                                bounds.origin.x + bounds.size.width * done.clamp(0., 1.)
+                            }
+                            _ => bounds.origin.x,
+                        };
                         let end = bounds.origin.x + bounds.size.width;
                         while x < end {
                             window.paint_quad(fill(
@@ -126,6 +136,26 @@ impl RenderOnce for ProgressRule {
                                 theme.muted_foreground.opacity(0.5),
                             ));
                             x += px(DOT_PITCH);
+                        }
+                        if rule == Rule::Pulse {
+                            // a run is 1.4 s; a reduced-motion setting leaves the stretch at rest
+                            let phase = match cx.reduce_motion() {
+                                true => 0.,
+                                false => {
+                                    window.request_animation_frame();
+                                    (PULSE_EPOCH.elapsed().as_secs_f32() / 1.4).fract()
+                                }
+                            };
+                            let len = bounds.size.width * 0.18;
+                            let from = bounds.origin.x - len + (bounds.size.width + len) * phase;
+                            let left = from.max(bounds.origin.x);
+                            let right = (from + len).min(bounds.origin.x + bounds.size.width);
+                            if right > left {
+                                window.paint_quad(fill(
+                                    at(left, right - left, px(FILL)),
+                                    theme.progress_bar,
+                                ));
+                            }
                         }
                         if let Rule::Fill(done) = rule {
                             let width = bounds.size.width * done.clamp(0., 1.);
