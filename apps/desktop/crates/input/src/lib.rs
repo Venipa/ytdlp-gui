@@ -72,6 +72,7 @@ fn shared() -> Vec<KeyBinding> {
         KeyBinding::new("cmd-v", PasteIntake, Some(&away_from_text)),
         KeyBinding::new("ctrl-l", FocusIntake, Some(WORKSPACE_CONTEXT)),
         KeyBinding::new("cmd-l", FocusIntake, Some(WORKSPACE_CONTEXT)),
+        KeyBinding::new("/", FocusSearch, Some(&away_from_text)),
         KeyBinding::new("ctrl-f", FocusSearch, Some(WORKSPACE_CONTEXT)),
         KeyBinding::new("cmd-f", FocusSearch, Some(WORKSPACE_CONTEXT)),
         KeyBinding::new("ctrl-,", OpenSettings, None),
@@ -126,6 +127,9 @@ fn shared() -> Vec<KeyBinding> {
         KeyBinding::new("escape", Dismiss, form),
         KeyBinding::new("tab", NextField, form),
         KeyBinding::new("shift-tab", PreviousField, form),
+        // everywhere else Tab walks the tab stops: nav, chips, rows, buttons
+        KeyBinding::new("tab", NextField, Some(WORKSPACE_CONTEXT)),
+        KeyBinding::new("shift-tab", PreviousField, Some(WORKSPACE_CONTEXT)),
     ]
 }
 

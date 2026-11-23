@@ -4,7 +4,8 @@
 use domain::{DownloadId, DownloadStatus, DownloadSummary, MediaKind};
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, Context, FontWeight, Hsla, MouseButton, MouseDownEvent, SharedString, div, px,
+    Animation, AnimationExt as _, AnyElement, Context, FontWeight, Hsla, MouseButton,
+    MouseDownEvent, SharedString, div, px,
 };
 use i18n::t;
 use ui::{
@@ -252,7 +253,7 @@ impl Downloads {
             .items_center()
             .gap_1()
             .px_1()
-            .bg(theme.background)
+            .bg(theme.background.blend(theme.table_hover))
             .invisible()
             .group_hover(SharedString::from(format!("row-{}", id.0)), |style| {
                 style.visible()
@@ -284,7 +285,9 @@ impl Downloads {
             .clone()
             .or_else(|| s.thumbnail_url.clone())
             .map(SharedString::from);
-        self.shell(s, thumbs, ring, cx)
+        let fade = self.fresh.contains_key(&id) && ui::motion::animates(cx);
+        let row = self
+            .shell(s, thumbs, ring, cx)
             .child(
                 div()
                     .relative()
@@ -372,8 +375,17 @@ impl Downloads {
                     )
                     .child(actions),
             )
-            .child(ProgressRule::new(rule(s)))
-            .into_any_element()
+            .child(ProgressRule::new(rule(s)));
+        match fade {
+            true => row
+                .with_animation(
+                    ("row-in", id.0 as usize),
+                    Animation::new(crate::downloads::FADE).with_easing(ui::ease_out_cubic),
+                    |this, delta| this.opacity(delta),
+                )
+                .into_any_element(),
+            false => row.into_any_element(),
+        }
     }
 
     /// The right-click menu of a row.
