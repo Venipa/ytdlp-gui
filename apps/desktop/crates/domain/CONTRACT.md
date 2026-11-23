@@ -63,3 +63,6 @@ Example: `cargo run --release -p storage --example seed -- 10000 [db]` (inserts 
 
 ## Additive settings keys (lane A3)
 `Settings.show_thumbnails: bool` (default false; compact rows are the inverse, `compact_mode` is kept in step), `Settings.background: String` (`solid` default | `translucent` | `blur`), `font_size` default now 12. `state::Hooks` (global, set by the binary when the engine is built in): `preview(&JobSpec) -> Result<String,String>` and `store_cookies(&data_dir, text) -> Result<PathBuf,String>`; views call them so `views` never links `engine`.
+
+## Additive settings keys (lane F2)
+`Settings.transparency: f32` (default 0.15; how see-through a non-solid window is, 0..1, the Appearance opacity slider is `1 - transparency`), `Settings.blur_ui: bool` (default false; frosted menus/dialogs, `ui::Look.blur`). `Settings.background` keeps `solid` | `translucent` | `blur` (blur = translucent plus the platform blur behind the window). `Settings.theme` now also takes a bundled theme file id (`catppuccin/mocha`, `nord`, ...; `assets/themes`), laid over Ledger dark; an unknown id falls back to Ledger dark.

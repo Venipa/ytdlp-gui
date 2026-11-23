@@ -79,10 +79,15 @@ pub struct WindowState {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    /// `system`, `dark`, `light` or a bundled theme file id such as `catppuccin/mocha`.
     pub theme: String,
     pub language: String,
     /// `solid`, `translucent` or `blur`.
     pub background: String,
+    /// How see-through a non-solid window is, 0 (opaque) to 1 (clear).
+    pub transparency: f32,
+    /// Whether menus, dialogs and floating controls are drawn as frosted glass.
+    pub blur_ui: bool,
     pub compact_mode: bool,
     /// Whether download rows show a thumbnail (ledger rows) instead of the compact style.
     pub show_thumbnails: bool,
@@ -122,6 +127,8 @@ impl Default for Settings {
             theme: "dark".into(),
             language: "en-US".into(),
             background: "solid".into(),
+            transparency: 0.15,
+            blur_ui: false,
             compact_mode: false,
             show_thumbnails: false,
             font_size: 12.0,
