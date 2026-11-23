@@ -250,3 +250,27 @@ Windows is the dev box: every phase is verified on Windows. macOS and Linux get 
 - Picks: 1A Ledger palette; 2A IBM Plex Sans + Mono; 3A radius 2 flat hairlines; 4A ruled progress line; 5A amber only for activity; 6A Lucide line icons; 7A solid window background by default; 8C 12px dense base; 9B subtle motion (detail panel slide 160 ms, new rows fade in, result card unfolds, reduced motion respected); 10 Ledger light confirmed.
 - Owner add-on: Settings > Appearance offers maple-style background mode (Solid default / Translucent / Blur = Mica/vibrancy) and text size steps (default 12px). Lane A3.
 - Status: in progress (A3 settings; lead applies 12px default + motion after A2/A3 merge).
+
+## UI polish (lane P-A: items 1-16, 25, 26 of F:\tmp\ytdlpd-rs\planning\ui-polish-spec.md; lane P-B does 17-24, 27)
+Status values per item; Ref is review until the lead sets done. Shots F:\tmp\ytdlpd-rs\shots\pa-*.png.
+
+| # | Item | Status | Ref |
+|---|------|--------|-----|
+| 1 | Title-bar nav: Lucide icons, hover/pressed/selected, rule under open page, amber count badge, Ctrl+1..3, tooltips with keys | in progress | review; 80bb9e9; pa-nav1 |
+| 2 | Wordmark mark, drag area, double-click maximise | in progress | review; pa-nav1 |
+| 3 | Settings SideNav icons + focus | in progress | `SideNav::icons` in ui; settings/mod.rs (lane P-B) must call it; focus ring done |
+| 4 | Smooth scroll: list, detail panel, log tail (Scroller + Scrollbar, maple glide pace) | in progress | review; pa-scroll-mid vs pa-scroll-rest; settings and logs pages belong to P-B |
+| 5 | Edge fade (`fade_ends`) on list and log tail | in progress | review |
+| 6 | Thumbnails on Artwork: cover 16:9, skeleton, icon fallback (film, music), disk cache | in progress | review; 1209186, 86ede18; pa-rows3, pa-card-real |
+| 7 | Thumbnail fixtures (6 jpg in assets/fixtures/thumbs, `--demo` rows) | in progress | review; pa-rows3 |
+| 8 | Row hover/pressed/selected, hover-revealed actions, context menu, Enter/Del keys | in progress | review; pa-detail1, pa-menu |
+| 9 | Fixed right-aligned columns, ellipsis titles | in progress | review; pa-keys |
+| 10 | One progress rule per row, dotted only past the fill | in progress | review |
+| 11 | Chip row and search field share one height | in progress | review; pa-detail1 |
+| 12 | Empty state with paste action, intake focused | in progress | review; pa-empty |
+| 13 | Intake: link icon, clear, mono, Download outline and disabled until a link, drag-drop of .txt/.url files | in progress | review; pa-card-probing; D-151 |
+| 14 | Result card <= 140 px, real thumb + duration pill, labelled chips, one primary, unfold | in progress | review; pa-card-real |
+| 15 | Detail panel: header, action row, collapsible details, wrapped log tail, delete only behind the ... menu + confirm | in progress | review; pa-detail1 |
+| 16 | Detail panel slides open in 160 ms without a list jump | in progress | review (motion not capturable in a still) |
+| 25 | Motion 9B: page crossfade 120 ms, new rows fade in, card unfold, panel slide; off under reduce-motion | in progress | review; D-152 |
+| 26 | Focus ring (1px ink-blue) on Button, Chip, SideNav, list row; Tab/Shift+Tab walk; list Up/Down/Home/End/Enter/Space/Del; `/` focuses search | in progress | review; pa-focus5, pa-keys; D-153 |
