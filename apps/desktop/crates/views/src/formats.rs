@@ -1,20 +1,58 @@
 //! The Choose formats modal over a probe's formats.
 
+use std::rc::Rc;
+
 use domain::{FormatInfo, Preset, ProbeResult};
 use gpui::prelude::*;
-use gpui::{AnyElement, Context, SharedString, div, px};
+use gpui::{AnyElement, Context, SharedString, Subscription, div, px};
 use i18n::t;
-use ui::{ActiveTheme as _, Button, MONO, Modal, Text, tabular};
+use ui::{ActiveTheme as _, Button, MONO, Modal, Radio, Text, tabular};
 
 use crate::downloads::{Card, Downloads};
 use crate::format;
 use crate::toasts::{Kind, toast};
 
-/// The ids picked in the modal.
+/// Keeps the open modal's keyboard listener alive; dropping the draft drops it. Every listener
+/// compares equal, so a draft compares by its picks.
+#[derive(Clone, Default)]
+pub struct Listener(
+    #[expect(
+        dead_code,
+        reason = "held so the listener lives exactly as long as the draft"
+    )]
+    Option<Rc<Subscription>>,
+);
+
+impl std::fmt::Debug for Listener {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Listener")
+    }
+}
+
+impl PartialEq for Listener {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+/// The ids picked in the modal, and which list the arrow keys move in.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Draft {
     pub video: Option<String>,
     pub audio: Option<String>,
+    /// The arrow keys move the audio pick instead of the video pick.
+    pub audio_active: bool,
+    keys: Listener,
+}
+
+/// The id one step from `current` in `ids` (the first when nothing is picked), kept inside the list.
+fn stepped(ids: &[String], current: Option<&String>, delta: i32) -> Option<String> {
+    let at = current.and_then(|c| ids.iter().position(|i| i == c));
+    let next = match at {
+        Some(at) => (at as i32 + delta).clamp(0, ids.len() as i32 - 1) as usize,
+        None => 0,
+    };
+    ids.get(next).cloned()
 }
 
 fn present(codec: &Option<String>) -> bool {
@@ -58,6 +96,7 @@ pub fn defaults(probe: &ProbeResult) -> Draft {
             .rev()
             .find(|f| has_audio(f) && !has_video(f))
             .map(|f| f.id.clone()),
+        ..Default::default()
     }
 }
 
@@ -78,9 +117,69 @@ impl Downloads {
     /// Opens the modal on the card's video.
     pub(crate) fn open_formats(&mut self, cx: &mut Context<Self>) {
         if let Card::Result(p) = self.card(cx) {
-            self.formats = Some(defaults(&p));
+            let this = cx.entity().downgrade();
+            let keys = cx.intercept_keystrokes(move |event, _, cx| {
+                let keystroke = &event.keystroke;
+                if keystroke.modifiers.modified() {
+                    return;
+                }
+                let handled = this
+                    .update(cx, |this, cx| this.formats_key(&keystroke.key, cx))
+                    .unwrap_or(false);
+                if handled {
+                    cx.stop_propagation();
+                }
+            });
+            let mut draft = defaults(&p);
+            draft.keys = Listener(Some(Rc::new(keys)));
+            self.formats = Some(draft);
             cx.notify();
         }
+    }
+
+    /// The ids of the two lists, best first, as the modal shows them.
+    fn format_ids(&self, cx: &mut Context<Self>) -> Option<(Vec<String>, Vec<String>)> {
+        let Card::Result(probe) = self.card(cx) else {
+            return None;
+        };
+        let ids = |video: bool| {
+            probe
+                .formats
+                .iter()
+                .rev()
+                .filter(|f| match video {
+                    true => has_video(f),
+                    false => has_audio(f) && !has_video(f),
+                })
+                .map(|f| f.id.clone())
+                .collect()
+        };
+        Some((ids(true), ids(false)))
+    }
+
+    /// A key while the modal is open; true when the modal took it.
+    fn formats_key(&mut self, key: &str, cx: &mut Context<Self>) -> bool {
+        let Some((video, audio)) = self.format_ids(cx) else {
+            return false;
+        };
+        let Some(draft) = self.formats.as_mut() else {
+            return false;
+        };
+        match key {
+            "down" | "up" => {
+                let delta = if key == "down" { 1 } else { -1 };
+                let (ids, slot) = match draft.audio_active {
+                    false => (video, &mut draft.video),
+                    true => (audio, &mut draft.audio),
+                };
+                *slot = stepped(&ids, slot.as_ref(), delta);
+            }
+            "tab" | "left" | "right" => draft.audio_active = !draft.audio_active,
+            "enter" => self.download_formats(cx),
+            _ => return false,
+        }
+        cx.notify();
+        true
     }
 
     /// Download with the picked formats.
@@ -106,11 +205,15 @@ impl Downloads {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = *cx.theme();
-        let pencil = theme.muted_foreground;
-        let picked = self.formats.as_ref().and_then(|d| match video {
-            true => d.video.clone(),
-            false => d.audio.clone(),
-        });
+        let muted = theme.muted_foreground;
+        let (picked, active) = self
+            .formats
+            .as_ref()
+            .map(|d| match video {
+                true => (d.video.clone(), !d.audio_active),
+                false => (d.audio.clone(), d.audio_active),
+            })
+            .unwrap_or_default();
         let cell = |w: f32, text: String| div().w(px(w)).flex_none().truncate().child(text);
         let mono = |w: f32, text: String| {
             div()
@@ -121,23 +224,41 @@ impl Downloads {
                 .text_size(theme.text(Text::Small))
                 .child(text)
         };
+        // sizes line up on their right edge
+        let size = |text: String| {
+            div()
+                .w(px(80.))
+                .flex_none()
+                .text_right()
+                .font_features(tabular())
+                .child(text)
+        };
         div()
             .flex()
             .flex_col()
-            .child(div().py_1().text_color(pencil).child(title))
+            .child(
+                div()
+                    .py_1()
+                    .text_color(match active {
+                        true => theme.foreground,
+                        false => muted,
+                    })
+                    .child(title),
+            )
             .child(
                 div()
                     .flex()
                     .h(px(32.))
                     .items_center()
-                    .text_color(pencil)
+                    .text_color(muted)
                     .text_size(theme.text(Text::Label))
+                    .child(div().w(px(28.)).flex_none())
                     .child(cell(60., t!("dl-col-id").to_string()))
                     .child(cell(60., t!("dl-col-ext").to_string()))
                     .child(cell(110., t!("dl-col-resolution").to_string()))
                     .child(cell(110., t!("dl-col-codec").to_string()))
-                    .child(cell(80., t!("dl-col-size").to_string()))
-                    .child(cell(120., t!("dl-col-note").to_string())),
+                    .child(div().flex_1().child(t!("dl-col-note")))
+                    .child(size(t!("dl-col-size").to_string())),
             )
             .children(formats.into_iter().map(|f| {
                 let resolution = match (f.width, f.height) {
@@ -151,8 +272,9 @@ impl Downloads {
                 .unwrap_or_default();
                 let id = f.id.clone();
                 let on = picked.as_deref() == Some(f.id.as_str());
+                let row_id = SharedString::from(format!("fmt-{video}-{}", f.id));
                 div()
-                    .id(SharedString::from(format!("fmt-{video}-{}", f.id)))
+                    .id(row_id.clone())
                     .flex()
                     .h(px(32.))
                     .items_center()
@@ -168,21 +290,30 @@ impl Downloads {
                                 false => &mut draft.audio,
                             };
                             *slot = Some(id.clone());
+                            draft.audio_active = !video;
                         }
                         cx.notify();
                     }))
+                    .child(div().w(px(28.)).flex_none().flex().justify_center().child(
+                        Radio::new(SharedString::from(format!("{row_id}-radio")), on).silent(),
+                    ))
                     .child(mono(60., f.id.clone()))
                     .child(cell(60., f.ext.clone().unwrap_or_default()))
                     .child(cell(110., resolution))
                     .child(mono(110., codec))
                     .child(
-                        div().w(px(80.)).flex_none().font_features(tabular()).child(
-                            f.filesize
-                                .map(|n| format::bytes(n as i64))
-                                .unwrap_or_default(),
-                        ),
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_color(muted)
+                            .child(f.note.clone().unwrap_or_default()),
                     )
-                    .child(cell(120., f.note.clone().unwrap_or_default()))
+                    .child(size(
+                        f.filesize
+                            .map(|n| format::bytes(n as i64))
+                            .unwrap_or_default(),
+                    ))
             }))
             .into_any_element()
     }
@@ -233,7 +364,22 @@ impl Downloads {
                                         .text_color(theme.muted_foreground)
                                         .child(t!("dl-formats-result")),
                                 )
-                                .child(div().font_family(MONO).child(result.clone())),
+                                .child(
+                                    div()
+                                        .px_2()
+                                        .py_0p5()
+                                        .rounded(theme.radius)
+                                        .bg(theme.secondary)
+                                        .font_family(MONO)
+                                        .text_size(theme.text(Text::Small))
+                                        .child(result.clone()),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_size(theme.text(Text::Label))
+                                .text_color(theme.muted_foreground)
+                                .child(t!("dl-formats-hint")),
                         ),
                 )
                 .action(
@@ -271,6 +417,16 @@ mod tests {
     }
 
     #[test]
+    fn arrow_steps_stay_inside_the_list() {
+        let ids: Vec<String> = ["a", "b", "c"].map(String::from).to_vec();
+        assert_eq!(stepped(&ids, None, 1), Some("a".into()));
+        assert_eq!(stepped(&ids, Some(&"a".into()), 1), Some("b".into()));
+        assert_eq!(stepped(&ids, Some(&"c".into()), 1), Some("c".into()));
+        assert_eq!(stepped(&ids, Some(&"a".into()), -1), Some("a".into()));
+        assert_eq!(stepped(&[], None, 1), None);
+    }
+
+    #[test]
     fn spec_joins_video_and_audio_unless_the_video_has_sound() {
         let probe = ProbeResult {
             formats: vec![
@@ -285,6 +441,7 @@ mod tests {
         let video_only = Draft {
             video: Some("137".into()),
             audio: Some("140".into()),
+            ..Default::default()
         };
         assert_eq!(spec(&video_only, &probe), "137+140");
         assert_eq!(spec(&Draft::default(), &probe), "");

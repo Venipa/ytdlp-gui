@@ -118,3 +118,4 @@ dl-notice-tools-action = Download them
 dl-status-bar-queued = { $running } running, { $paused } paused, { $queued } waiting
 dl-logs-copied = Log copied
 notify-finished = Download finished
+dl-formats-hint = Up and Down choose, Tab switches list, Enter downloads, Esc closes.
