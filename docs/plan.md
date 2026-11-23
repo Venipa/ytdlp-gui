@@ -14,7 +14,7 @@ Decisions are in `decisions.md` (D-nnn). Product in `product.md`, look in `desig
 ## Gates
 | Gate | After | Passes when | Status | Ref |
 |---|---|---|---|---|
-| G0 | Phase 0a | `bun run dev` opens a window with real fonts and tokens; fmt, clippy, tests green; git initialised; stubs for every crate exist | in progress | review: g0.png `F:	mpytdlpd-rsshotsg0.png` |
+| G0 | Phase 0a | `bun run dev` opens a window with real fonts and tokens; fmt, clippy, tests green; git initialised; stubs for every crate exist | in progress | review: shot F:/tmp/ytdlpd-rs/shots/g0.png, commits 6bbcd21..ca9453a |
 | G1 | Phase 0b | `domain` frozen as tag `contract-1`; engine spike (Windows): fixture file downloaded through the embedded interpreter in a `--engine-worker` child with progress and kill-tree cancel, time-boxed to 3 working days; `tools` ensure works. Failure on any of link/load, hook stability, kill-tree cancel, or worker start from a GUI-subsystem exe means switching to the worker.py fallback (D-007) and recording it | open | - |
 | G2 | Phase 2 | Vertical slice on real backends: paste, probe, download, open file; history survives restart | open | - |
 | G3 | Phase 4 | All "must" features work end to end on Windows; this is the 1.0-must line | open | - |
