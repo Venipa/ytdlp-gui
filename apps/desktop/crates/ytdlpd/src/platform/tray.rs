@@ -48,12 +48,12 @@ impl Tray {
             }));
             let icon = tray_icon::Icon::from_rgba(ICON.to_vec(), ICON_SIZE, ICON_SIZE)
                 .context("cannot build the tray icon")?;
-            let builder = TrayIconBuilder::new();
-            // the macOS menu bar tints a template image for light and dark
-            let builder = match cfg!(target_os = "macos") {
-                true => builder.with_icon_templated(icon),
-                false => builder.with_icon(icon),
-            };
+            // the macOS menu bar tints a template image for light and dark; the method exists only
+            // in macOS builds of tray-icon, so it is chosen at compile time
+            #[cfg(target_os = "macos")]
+            let builder = TrayIconBuilder::new().with_icon_templated(icon);
+            #[cfg(not(target_os = "macos"))]
+            let builder = TrayIconBuilder::new().with_icon(icon);
             builder
                 .with_tooltip(i18n::t!("tray-tooltip"))
                 .with_menu(Box::new(menu))
