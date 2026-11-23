@@ -187,18 +187,32 @@ impl Render for LogsView {
                             cx.processor(move |_, range: Range<usize>, _, cx| {
                                 let theme = *cx.theme();
                                 range
-                                    .filter_map(|at| items.get(at))
-                                    .map(|l| {
+                                    .filter_map(|at| items.get(at).map(|l| (at, l)))
+                                    .map(|(at, l)| {
                                         let tone = match rank(&l.level) {
                                             3 => theme.danger,
                                             2 => theme.progress_bar,
                                             _ => theme.muted_foreground,
                                         };
+                                        let line = format!(
+                                            "{} {} {}",
+                                            format::clock(l.at),
+                                            l.level,
+                                            l.message
+                                        );
                                         div()
+                                            .id(("log-line", at))
                                             .flex()
                                             .gap_3()
                                             .h(px(24.))
                                             .items_center()
+                                            .cursor_pointer()
+                                            .hover(|style| style.bg(theme.table_hover))
+                                            .on_click(move |_, _, cx| {
+                                                cx.write_to_clipboard(
+                                                    gpui::ClipboardItem::new_string(line.clone()),
+                                                )
+                                            })
                                             .font_family(MONO)
                                             .text_size(theme.text(Text::Small))
                                             .child(
@@ -210,9 +224,15 @@ impl Render for LogsView {
                                             )
                                             .child(
                                                 div()
-                                                    .w(px(44.))
+                                                    .w(px(52.))
                                                     .flex_none()
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap_1p5()
                                                     .text_color(tone)
+                                                    .child(
+                                                        div().size(px(6.)).rounded_full().bg(tone),
+                                                    )
                                                     .child(l.level.clone()),
                                             )
                                             .child(
