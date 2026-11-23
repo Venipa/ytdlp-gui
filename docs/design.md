@@ -3,7 +3,7 @@
 Direction name: **Ledger**. Dark is the default theme (owner's rule, D-034); light ("card stock") is a first-class second theme built in Phase 0b.
 
 ## Direction
-A downloads list is a ledger: numbered lines, ruled, written once and kept. Every row carries a **call number** (the job id, `0128`) in a fixed left column, and every row sits on a **ruled line**. The ruled line is the progress: a dotted track while waiting, an amber ink fill growing left to right while active, a solid quiet rule when done, a solid red rule when failed. That ruled-in ledger with call numbers is the one bold element. Everything else is quiet.
+A downloads list is a ledger: numbered lines, ruled, written once and kept. Every row carries a **call number** (the job id, `0128`) in a fixed left column, and every row sits on a **ruled line**. The ruled line is the progress: a dotted track while waiting (a paused row keeps a pencil hairline up to the share fetched), an amber ink fill growing left to right while active, a solid quiet rule when done, a solid red rule when failed. That ruled-in ledger with call numbers is the one bold element. Everything else is quiet.
 
 Why this is not the generic tell ("near-black plus one amber accent plus mono data labels"):
 - The bold element is structural and specific to the subject (numbered ledger lines whose rule is the progress), not a coloured accent or a hero input. There is no progress bar widget, no glow, no card grid.
@@ -25,8 +25,8 @@ Mapped to maple `ui::Theme` fields. No new Theme fields (D-039); ink-blue uses `
 | Paper / ink (text) | `#ECE5D8` | `#1D1A15` | `foreground`, `popover_foreground`, `overlay_foreground` |
 | Pencil (secondary text) | `#9C9384` | `#6B6253` | `muted_foreground`, `table_head_foreground` |
 | Primary button (inverse) | `#ECE5D8` fg `#15130F` | `#1D1A15` fg `#F2EDE3` | `primary`, `primary_foreground` |
-| Signal amber (activity only) | `#E9A23B` | `#A86400` | `progress_bar` |
-| Ink-blue (selection, focus, links) | `#8FB0D6` | `#2F4A6B` | `table_active_border` (solid); `selection` = ink at 30%; `table_active` = ink at 12%; `sidebar_accent` = ink at 12% |
+| Signal amber (activity only) | `#E9A23B` | `#8A4F00` | `progress_bar` |
+| Ink-blue (selection, focus, links) | `#8FB0D6` | `#2F4A6B` | `table_active_border` (solid); `selection` = ink at 30%; `table_active` = ink at 12%; `sidebar_accent` = ink at 18% |
 | Redaction red (danger) | `#E0584A` | `#B3261E` | `danger`; fill variant `#4A1E19` / `#F6D9D4` as row wash; `danger_foreground` `#1A0B09` / `#FFFFFF` |
 Derived alphas: `border` = paper at 14%; `secondary_hover` = paper at 7%; `secondary_active` = paper at 11%; `table_hover` = paper at 5%; `overlay` = black at 55%.
 Contrast: a unit test in `ui` (D-036) computes WCAG ratios from these tokens and fails below 4.5:1 for every text pair (paper/pencil/ink on ground and drawer, danger on ground, primary_foreground on primary), 3:1 for non-text (rules, focus ring). Expected from the palette: paper on umber about 14:1, pencil on umber about 6:1; amber is used for fills, rules and 13px medium text only. Verify numerically in Phase 0b; adjust the hex, not the test.
