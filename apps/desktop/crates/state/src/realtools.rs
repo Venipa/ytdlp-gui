@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use domain::{
-    EngineError, ErrorCode, ToolEvent, ToolKind, ToolSource, ToolState, ToolStatus, ToolsApi,
+    EngineError, ErrorCode, SiteUpdate, ToolEvent, ToolKind, ToolSource, ToolState, ToolStatus,
+    ToolsApi,
 };
 use futures::future::BoxFuture;
 use futures::stream::BoxStream;
@@ -55,6 +56,24 @@ fn missing(kind: ToolKind) -> ToolStatus {
         path: None,
         version: None,
     }
+}
+
+/// Runs `ytdlpd --self-test --site <dir>` in a throwaway process: the new yt-dlp must import from `site`.
+// shortcut: no timeout on the child, add one if a hang is ever seen.
+fn verify_site(site: &std::path::Path) -> anyhow::Result<()> {
+    use anyhow::Context as _;
+    let out = std::process::Command::new(std::env::current_exe().context("cannot find the app")?)
+        .arg("--self-test")
+        .arg("--site")
+        .arg(site)
+        .output()
+        .context("cannot start the self-test")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(())
 }
 
 /// Transient network trouble retries; a checksum problem fails closed and never retries.
@@ -117,6 +136,42 @@ impl ToolsApi for RealTools {
                     .map_err(|e| classify(&e)),
                 _ => Ok(None),
             }
+        });
+        async move {
+            job.await
+                .unwrap_or_else(|e| Err(EngineError::new(ErrorCode::Unknown, e.to_string())))
+        }
+        .boxed()
+    }
+
+    fn install_update(
+        &self,
+        kind: ToolKind,
+        active: Option<String>,
+    ) -> BoxFuture<'static, Result<SiteUpdate, EngineError>> {
+        let dirs = self.dirs.clone();
+        let job = self.handle.spawn(async move {
+            if kind != ToolKind::YtDlp {
+                return Err(EngineError::new(
+                    ErrorCode::Unknown,
+                    format!("{kind} has no update channel"),
+                ));
+            }
+            let update = ::tools::check_ytdlp_update(&dirs, None)
+                .await
+                .map_err(|e| classify(&e))?
+                .ok_or_else(|| EngineError::new(ErrorCode::Unknown, "no update found"))?;
+            let version = update.ytdlp.version.clone();
+            let active = active.map(PathBuf::from);
+            let installed =
+                ::tools::install_ytdlp_pair(&dirs, &update, active.as_deref(), verify_site)
+                    .await
+                    .map_err(|e| classify(&e))?;
+            Ok(SiteUpdate {
+                version,
+                site: installed.active.to_string_lossy().into_owned(),
+                previous: installed.previous.map(|p| p.to_string_lossy().into_owned()),
+            })
         });
         async move {
             job.await

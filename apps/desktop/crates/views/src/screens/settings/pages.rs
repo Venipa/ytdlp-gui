@@ -550,7 +550,10 @@ impl SettingsView {
         let version = tool.version.clone().unwrap_or_default();
         let detail = progress_text.unwrap_or_else(|| match version.is_empty() {
             true => note,
-            false => SharedString::from(format!("{version}  \u{b7}  {note}")),
+            false => SharedString::from(format!(
+                "{}  \u{b7}  {note}",
+                crate::welcome::short_version(&version)
+            )),
         });
         let failed = matches!(tool.state, ToolState::Failed(_));
         div()

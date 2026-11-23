@@ -87,8 +87,14 @@ impl SettingsView {
             .detach();
         cx.observe(&state.settings, |this, _, cx| this.settings_changed(cx))
             .detach();
-        cx.subscribe(&state.tools, |_, _, event: &ToolsEvent, cx| {
-            tool_toast(event, cx)
+        cx.subscribe(&state.tools, |this, _, event: &ToolsEvent, cx| {
+            tool_toast(event, cx);
+            if let ToolsEvent::Updated {
+                result: Ok(update), ..
+            } = event
+            {
+                this.ytdlp_version = Some(update.version.clone());
+            }
         })
         .detach();
         cx.observe(&state.tools, |this, tools, cx| {
@@ -505,16 +511,48 @@ fn tool_toast(event: &ToolsEvent, cx: &mut App) {
         ToolsEvent::UpdateChecked { kind, latest } => {
             let name = i18n::lookup(tool_key(*kind), None);
             match latest {
-                Ok(Some(version)) => (
-                    Kind::Info,
-                    t!(
+                Ok(Some(version)) => {
+                    let (kind, tools) = (*kind, AppState::global(cx).tools);
+                    let message = t!(
                         "set-tool-update-available",
                         name = &name,
                         version = version.clone()
-                    ),
-                ),
+                    );
+                    let install = std::rc::Rc::new(move |cx: &mut App| {
+                        tools.update(cx, |t, cx| t.install_update(kind, cx));
+                        toast(cx, Kind::Info, t!("set-tool-update-installing"), None);
+                    });
+                    toast(
+                        cx,
+                        Kind::Info,
+                        message,
+                        Some((t!("set-tool-update-install"), install)),
+                    );
+                    return;
+                }
                 Ok(None) => (Kind::Success, t!("set-tool-update-latest", name = &name)),
                 Err(_) => (Kind::Error, t!("set-tool-update-failed", name = &name)),
+            }
+        }
+        ToolsEvent::Updated { kind, result } => {
+            let name = i18n::lookup(tool_key(*kind), None);
+            match result {
+                Ok(update) => (
+                    Kind::Success,
+                    t!(
+                        "set-tool-update-done",
+                        name = &name,
+                        version = update.version.clone()
+                    ),
+                ),
+                Err(error) => (
+                    Kind::Error,
+                    t!(
+                        "set-tool-update-failed-kept",
+                        name = &name,
+                        reason = error.message.clone()
+                    ),
+                ),
             }
         }
         ToolsEvent::Reinstalled(kind) => {

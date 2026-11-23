@@ -46,6 +46,8 @@ pub struct EngineConfig {
 /// The real backend.
 pub struct EngineBackend {
     cfg: Arc<EngineConfig>,
+    /// The yt-dlp site new workers start with; starts as `cfg.site_updates`, moved by `set_site`.
+    site: Arc<std::sync::RwLock<Option<PathBuf>>>,
     next: AtomicU64,
     jobs: Arc<Mutex<HashMap<u64, WorkerHandle>>>,
 }
@@ -54,6 +56,7 @@ impl EngineBackend {
     /// Build a backend; nothing starts until the first probe or job.
     pub fn new(cfg: EngineConfig) -> Self {
         Self {
+            site: Arc::new(std::sync::RwLock::new(cfg.site_updates.clone())),
             cfg: Arc::new(cfg),
             next: AtomicU64::new(1),
             jobs: Default::default(),
@@ -114,12 +117,13 @@ impl Backend for EngineBackend {
         opts: ProbeOpts,
     ) -> BoxFuture<'static, Result<ProbeResult, EngineError>> {
         let cfg = self.cfg.clone();
+        let site = self.site.read().map(|s| s.clone()).unwrap_or_default();
         async move {
             let (tx, rx) = oneshot::channel();
             std::thread::spawn(move || {
                 let r = runtime::init(runtime::InitOptions {
                     home: cfg.python_home.clone(),
-                    site_updates: cfg.site_updates.clone(),
+                    site_updates: site,
                     sink: runtime::log_sink,
                 })
                 .map_err(|e| EngineError::new(ErrorCode::Unknown, e.to_string()))
@@ -141,11 +145,12 @@ impl Backend for EngineBackend {
         spec: JobSpec,
     ) -> BoxFuture<'static, Result<(JobHandle, BoxStream<'static, JobEvent>), EngineError>> {
         let (cfg, jobs) = (self.cfg.clone(), self.jobs.clone());
+        let site = self.site.read().map(|s| s.clone()).unwrap_or_default();
         let handle = self.next.fetch_add(1, Ordering::Relaxed);
         async move {
             let wc = WorkerConfig {
                 python_home: cfg.python_home.clone(),
-                site_updates: cfg.site_updates.clone(),
+                site_updates: site,
                 env: vec![],
             };
             let mut w = spawn_worker_with(&cfg.worker_exe, &spec, &cfg.env, &wc).map_err(|e| {
@@ -186,6 +191,13 @@ impl Backend for EngineBackend {
             Ok((JobHandle(handle), rx.boxed()))
         }
         .boxed()
+    }
+
+    fn set_site(&self, site: Option<PathBuf>) {
+        runtime::set_site(site.clone());
+        if let Ok(mut current) = self.site.write() {
+            *current = site;
+        }
     }
 
     fn kill(&self, handle: JobHandle) -> BoxFuture<'static, ()> {

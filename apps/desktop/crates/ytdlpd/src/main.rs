@@ -83,7 +83,7 @@ fn build_app(data_dir: Option<PathBuf>, demo: Option<&str>, cx: &mut App) -> sta
         let config = engine::EngineConfig {
             worker_exe: std::env::current_exe().unwrap_or_default(),
             python_home: None,
-            site_updates: Some(paths.data.join("python-site")),
+            site_updates: None,
             env: engine::spec::Env {
                 cache_dir: Some(paths.cache.join("yt-dlp").to_string_lossy().into_owned()),
                 // the JavaScript runtime travels in each job spec (settings, then the detected deno)

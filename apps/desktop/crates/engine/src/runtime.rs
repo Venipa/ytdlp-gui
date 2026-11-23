@@ -55,6 +55,15 @@ pub struct Runtime {
 
 static RUNTIME: OnceLock<Result<Runtime, InitError>> = OnceLock::new();
 static SINK: OnceLock<LogSink> = OnceLock::new();
+/// The updated yt-dlp site this process uses when `init` is not given one; set before the first `init`.
+static SITE: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+/// Remembers the updated yt-dlp site for the interpreter this process has yet to start.
+pub fn set_site(site: Option<PathBuf>) {
+    if let Ok(mut current) = SITE.lock() {
+        *current = site;
+    }
+}
 
 /// Default sink: the `log` crate, target `py`.
 pub fn log_sink(level: &str, msg: &str) {
@@ -109,7 +118,10 @@ pub fn init(opts: InitOptions) -> Result<&'static Runtime, InitError> {
             let t = Instant::now();
             let _ = SINK.set(opts.sink);
             let home = resolve_home(opts.home.as_deref())?;
-            start(&home, opts.site_updates.as_deref()).map_err(InitError::Python)?;
+            let site = opts
+                .site_updates
+                .or_else(|| SITE.lock().ok().and_then(|s| s.clone()));
+            start(&home, site.as_deref()).map_err(InitError::Python)?;
             Ok(Runtime {
                 home,
                 init_time: t.elapsed(),
