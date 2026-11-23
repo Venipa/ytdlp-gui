@@ -1,18 +1,19 @@
-//! The card under the intake: reading, result with the remembered preset, batch, playlist, failure.
+//! The card under the intake: reading, result with the remembered preset, playlist, failure;
+//! and the editor that several links open over the list.
 
 use std::sync::Arc;
 
-use domain::{AudioFormat, Preset, ProbeResult, VideoQuality};
+use domain::{AudioFormat, Preset, ProbeResult, VideoQuality, split_urls};
 use gpui::prelude::*;
 use gpui::{
-    Animation, AnimationExt as _, AnyElement, Context, FontWeight, SharedString, div, px, svg,
-    uniform_list,
+    Animation, AnimationExt as _, AnyElement, App, Context, FontWeight, SharedString, deferred,
+    div, px, svg, uniform_list,
 };
 use i18n::t;
 use state::ProbeState;
 use ui::{
-    ActiveTheme as _, Button, Checkbox, Chip, MONO, ProgressRule, Rule, Skeleton, Spinner, Text,
-    Thumbnail, ease_out_cubic, tabular,
+    ActiveTheme as _, Button, Checkbox, Chip, Dismiss, Kbd, LineNote, MONO, ProgressRule, Rule,
+    Skeleton, Spinner, Text, Thumbnail, ease_out_cubic, tabular,
 };
 
 use crate::downloads::{Card, Downloads, error_text};
@@ -41,13 +42,6 @@ const CARD_THUMB_NARROW: f32 = 64.;
 const LABEL: f32 = 52.;
 /// The tallest a one-link card gets, which its unfold opens to.
 const CARD_MAX: f32 = 220.;
-/// A batch line: the link, what became of it, its state icon (none while reading), dimmed.
-type BatchLine = (
-    String,
-    SharedString,
-    Option<(&'static str, gpui::Hsla)>,
-    bool,
-);
 /// Playlist rows shown before the list scrolls.
 const PLAYLIST_ROWS: usize = 8;
 
@@ -417,7 +411,8 @@ impl Downloads {
                     )
                     .into_any_element()
             }
-            Card::Batch => self.batch_card(shell(), cx),
+            // several links show in the editor over the list, so the list never moves for them
+            Card::Batch => return None,
             Card::Playlist(probe) => self.playlist_card(shell(), &probe, cx),
         }; // the card unfolds once as it appears: height and opacity over 160 ms
         let span = match ui::motion::animates(cx) {
@@ -456,127 +451,159 @@ impl Downloads {
             .on_click(cx.listener(|this, _, _, cx| this.download(cx)))
     }
 
-    fn batch_card(&self, shell: gpui::Div, cx: &mut Context<Self>) -> AnyElement {
+    /// What one line of the intake says at its end in the editor: the title once read, why it
+    /// will not download, or that it is not a link (a wrong line). Nothing before it is read.
+    fn line_note(&self, line: &str, cx: &App) -> LineNote {
+        let split = split_urls(line);
+        let Some(url) = split.urls.first() else {
+            return LineNote {
+                text: match split.invalid.is_empty() {
+                    true => SharedString::default(),
+                    false => t!("dl-batch-skipped"),
+                },
+                bad: !split.invalid.is_empty(),
+            };
+        };
+        let text = match self.app.probes.read(cx).get(url) {
+            None => SharedString::default(),
+            Some(ProbeState::Loading) => t!("dl-probing"),
+            Some(ProbeState::Failed(e)) => error_text(e.code),
+            Some(ProbeState::Ready(_)) if self.have(url, cx) => t!("dl-already"),
+            Some(ProbeState::Ready(p)) if p.is_playlist() => t!("dl-batch-playlist"),
+            Some(ProbeState::Ready(p)) => p.title.clone().unwrap_or_default().into(),
+        };
+        LineNote { text, bad: false }
+    }
+
+    /// How many links of the field a download would add: all but those already in the list,
+    /// those that failed to read and playlists (added on their own).
+    pub(crate) fn downloadable(&self, cx: &App) -> usize {
+        let probes = self.app.probes.read(cx);
+        split_urls(self.intake.read(cx).text())
+            .urls
+            .iter()
+            .filter(|url| match probes.get(url) {
+                None | Some(ProbeState::Loading) => true,
+                Some(ProbeState::Failed(_)) => false,
+                Some(ProbeState::Ready(p)) => !p.is_playlist() && !self.have(url, cx),
+            })
+            .count()
+    }
+
+    /// The editor of several links (D-220): it lies over the list at the field's width, so
+    /// nothing under it moves. A count head, the lines with what became of each, and the preset
+    /// with Download in its foot. Esc or a click outside folds it back into the field.
+    pub(crate) fn editor(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = *cx.theme();
         let muted = theme.muted_foreground;
-        let mut ready = 0;
-        // each line: the link, what became of it, and a state icon (None = still reading)
-        let mut lines: Vec<BatchLine> = Vec::new();
-        for url in &self.urls {
-            let (note, icon, dim) = match self.app.probes.read(cx).get(url) {
-                None | Some(ProbeState::Loading) => (t!("dl-probing"), None, true),
-                Some(ProbeState::Failed(e)) => (
-                    error_text(e.code),
-                    Some(("icons/circle-alert.svg", theme.danger)),
-                    true,
-                ),
-                Some(ProbeState::Ready(_)) if self.have(url, cx) => (
-                    t!("dl-already"),
-                    Some(("icons/circle-check.svg", muted)),
-                    true,
-                ),
-                Some(ProbeState::Ready(p)) if p.is_playlist() => (
-                    t!("dl-batch-playlist"),
-                    Some(("icons/list.svg", muted)),
-                    true,
-                ),
-                Some(ProbeState::Ready(p)) => {
-                    ready += 1;
-                    (
-                        p.title.clone().unwrap_or_default().into(),
-                        Some(("icons/download.svg", theme.foreground)),
-                        false,
-                    )
+        let text = self.intake.read(cx).text().to_owned();
+        // a link listed twice is downloaded once: its second line says so
+        let mut seen: Vec<String> = Vec::new();
+        let notes: Vec<LineNote> = text
+            .split('\n')
+            .map(|line| match split_urls(line).urls.into_iter().next() {
+                Some(url) if seen.contains(&url) => LineNote {
+                    text: t!("dl-intake-twice"),
+                    bad: false,
+                },
+                Some(url) => {
+                    seen.push(url);
+                    self.line_note(line, cx)
                 }
-            };
-            lines.push((domain::domain_of(url) + short_path(url), note, icon, dim));
-        }
-        lines.extend(self.skipped.iter().map(|word| {
-            (
-                word.clone(),
-                t!("dl-batch-skipped"),
-                Some(("icons/minus.svg", muted)),
-                true,
-            )
-        }));
-        shell
+                None => self.line_note(line, cx),
+            })
+            .collect();
+        let skipped = notes.iter().filter(|note| note.bad).count();
+        self.intake
+            .update(cx, |area, cx| area.set_notes(Some(notes), cx));
+        let split = split_urls(&text);
+        let count = self.downloadable(cx);
+        let bar = || {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .px(px(12.))
+                .py(px(6.))
+                .border_color(theme.border)
+        };
+        let head = bar()
+            .border_b_1()
+            .text_size(theme.text(Text::Small))
             .child(
                 div()
-                    .flex()
-                    .justify_between()
-                    .items_center()
-                    .child(div().font_weight(FontWeight::MEDIUM).child(t!(
-                        "dl-batch-title",
-                        count = self.urls.len() + self.skipped.len()
-                    )))
-                    .child(
-                        div()
-                            .flex()
-                            .gap(px(8.))
-                            .child(
-                                Button::new("batch-cancel")
-                                    .ghost()
-                                    .label(t!("dl-cancel"))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.intake.update(cx, |i, cx| i.set_text("", cx));
-                                        this.clear_card(cx);
-                                    })),
-                            )
-                            .child(self.download_button("batch-download", Some(ready), cx)),
-                    ),
+                    .font_weight(FontWeight::MEDIUM)
+                    .font_features(tabular())
+                    .child(t!("dl-batch-title", count = split.urls.len())),
             )
-            .child(self.preset_rows(div(), div(), cx))
+            .when(skipped > 0, |this| {
+                this.child(
+                    div()
+                        .text_color(muted)
+                        .font_features(tabular())
+                        .child(t!("dl-intake-skipped", count = skipped)),
+                )
+            })
+            .child(div().flex_1())
             .child(
                 div()
-                    .flex()
-                    .flex_col()
-                    .border_t_1()
-                    .border_color(theme.border)
-                    .children(lines.into_iter().enumerate().map(
-                        |(at, (label, note, icon, dim))| {
-                            div()
-                                .flex()
-                                .gap(px(12.))
-                                .h(px(32.))
-                                .items_center()
-                                .border_b_1()
-                                .border_color(theme.border)
-                                .child(
-                                    div().w(px(16.)).flex_none().flex().justify_center().child(
-                                        match icon {
-                                            Some((path, color)) => svg()
-                                                .path(icons::path(path))
-                                                .size(px(14.))
-                                                .text_color(color)
-                                                .into_any_element(),
-                                            None => Spinner::new(("batch-reading", at))
-                                                .into_any_element(),
-                                        },
-                                    ),
-                                )
-                                .child(
-                                    div()
-                                        .w(px(280.))
-                                        .flex_none()
-                                        .truncate()
-                                        .font_family(MONO)
-                                        .text_size(theme.text(Text::Small))
-                                        .text_color(muted)
-                                        .child(label),
-                                )
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .truncate()
-                                        .text_color(if dim { muted } else { theme.foreground })
-                                        .child(note),
-                                )
-                        },
-                    )),
+                    .min_w_0()
+                    .truncate()
+                    .text_color(muted)
+                    .child(t!("dl-intake-editor-keys")),
+            );
+        let foot = bar()
+            .border_t_1()
+            .child(div().text_color(muted).child(t!("dl-batch-preset")))
+            .child(
+                div()
+                    .px(px(8.))
+                    .rounded(theme.radius)
+                    .border_1()
+                    .border_color(theme.table_active_border)
+                    .bg(theme.table_active)
+                    .text_size(theme.text(Text::Small))
+                    .child(format::preset_label(self.preset)),
             )
-            .into_any_element()
+            .child(div().flex_1())
+            .child(Kbd::new("enter"))
+            .child(
+                Button::new("editor-download")
+                    .primary()
+                    .icon("icons/download.svg")
+                    .label(t!("dl-download-count", count = count))
+                    .disabled(count == 0)
+                    .on_click(cx.listener(|this, _, _, cx| this.submit(cx))),
+            );
+        deferred(
+            div()
+                .id("intake-editor")
+                .role(gpui::accesskit::Role::Group)
+                .aria_label(t!("dl-intake-editor-name"))
+                .absolute()
+                .top(theme.metrics.field + px(4.))
+                .left_0()
+                .right_0()
+                .flex()
+                .flex_col()
+                .rounded(theme.radius)
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.popover)
+                .text_color(theme.popover_foreground)
+                .shadow_lg()
+                // a click on the editor never reaches the rows under it
+                .occlude()
+                .on_mouse_down_out(cx.listener(|this, _, _, cx| this.close_editor(cx)))
+                .on_action(cx.listener(|this, _: &Dismiss, _, cx| this.close_editor(cx)))
+                .child(head)
+                .child(div().px(px(12.)).py(px(8.)).child(self.intake.clone()))
+                .child(foot),
+        )
+        .with_priority(1)
+        .into_any_element()
     }
+
     fn playlist_card(
         &self,
         shell: gpui::Div,
@@ -738,10 +765,4 @@ impl Downloads {
             )
             .into_any_element()
     }
-}
-
-/// The path part of a link, to tell links of one site apart.
-fn short_path(url: &str) -> &str {
-    let rest = url.split_once("://").map_or(url, |(_, r)| r);
-    rest.find(['/', '?']).map_or("", |at| &rest[at..])
 }

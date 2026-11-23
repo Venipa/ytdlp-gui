@@ -22,10 +22,13 @@ dl-choose-formats = Choose formats
 dl-cancel = Cancel
 dl-probing = Reading the page
 dl-already = Already in your downloads
-dl-batch-title = { $count } links
+dl-batch-title = { $count ->
+    [one] { $count } link
+   *[other] { $count } links
+}
 dl-batch-preset = Preset
 dl-batch-ready = Ready
-dl-batch-skipped = Skipped, not a link
+dl-batch-skipped = Not a link, skipped
 dl-playlist-title = { $count } videos in { $title }
 dl-select-all = Select all
 dl-select-none = Select none
@@ -125,7 +128,11 @@ dl-formats-hint = Up and Down choose, Tab switches list, Enter downloads, Esc cl
 
 # UI polish (lane P-A)
 dl-intake-invalid = Needs a full link
-dl-intake-count = { $count } links captured
+dl-intake-more = +{ $count }
+dl-intake-skipped = { $count } skipped
+dl-intake-twice = Listed above, downloaded once
+dl-intake-editor-name = Links to download
+dl-intake-editor-keys = Shift+Enter adds a line, Esc closes
 dl-drop-none = No links in the dropped files
 dl-empty-paste = Paste from clipboard
 dl-detail-section = Details
