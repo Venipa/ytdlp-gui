@@ -16,3 +16,4 @@ welcome-missing = Missing
 welcome-progress = { $done } of { $total }
 welcome-own-ffmpeg = Use my own ffmpeg
 welcome-continue = Continue
+welcome-continue-wait = Waiting for yt-dlp and ffmpeg
