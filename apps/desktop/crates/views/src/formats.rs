@@ -173,6 +173,9 @@ impl Downloads {
                     true => (audio, &mut draft.audio),
                 };
                 *slot = stepped(&ids, slot.as_ref(), delta);
+                if let Some(at) = slot.as_ref().and_then(|s| ids.iter().position(|i| i == s)) {
+                    self.format_scroll[usize::from(draft.audio_active)].scroll_to_item(at);
+                }
             }
             "tab" | "left" | "right" => draft.audio_active = !draft.audio_active,
             "enter" => self.download_formats(cx),
@@ -260,61 +263,71 @@ impl Downloads {
                     .child(div().flex_1().child(t!("dl-col-note")))
                     .child(size(t!("dl-col-size").to_string())),
             )
-            .children(formats.into_iter().map(|f| {
-                let resolution = match (f.width, f.height) {
-                    (Some(w), Some(h)) => format!("{w}x{h}"),
-                    _ => f.abr.map(|a| format!("{a:.0} kbps")).unwrap_or_default(),
-                };
-                let codec = match video {
-                    true => f.vcodec.clone(),
-                    false => f.acodec.clone(),
-                }
-                .unwrap_or_default();
-                let id = f.id.clone();
-                let on = picked.as_deref() == Some(f.id.as_str());
-                let row_id = SharedString::from(format!("fmt-{video}-{}", f.id));
+            .child(
                 div()
-                    .id(row_id.clone())
-                    .flex()
-                    .h(px(32.))
-                    .items_center()
-                    .cursor_pointer()
-                    .when(on, |this| this.bg(theme.table_active))
-                    .hover(|style| style.bg(theme.table_hover))
-                    .border_b_1()
-                    .border_color(theme.table_row_border)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(draft) = this.formats.as_mut() {
-                            let slot = match video {
-                                true => &mut draft.video,
-                                false => &mut draft.audio,
-                            };
-                            *slot = Some(id.clone());
-                            draft.audio_active = !video;
+                    .id(SharedString::from(format!("fmt-scroll-{video}")))
+                    .max_h(px(224.))
+                    .overflow_y_scroll()
+                    .track_scroll(&self.format_scroll[usize::from(!video)])
+                    .children(formats.into_iter().map(|f| {
+                        let resolution = match (f.width, f.height) {
+                            (Some(w), Some(h)) => format!("{w}x{h}"),
+                            _ => f.abr.map(|a| format!("{a:.0} kbps")).unwrap_or_default(),
+                        };
+                        let codec = match video {
+                            true => f.vcodec.clone(),
+                            false => f.acodec.clone(),
                         }
-                        cx.notify();
-                    }))
-                    .child(div().w(px(28.)).flex_none().flex().justify_center().child(
-                        Radio::new(SharedString::from(format!("{row_id}-radio")), on).silent(),
-                    ))
-                    .child(mono(60., f.id.clone()))
-                    .child(cell(60., f.ext.clone().unwrap_or_default()))
-                    .child(cell(110., resolution))
-                    .child(mono(110., codec))
-                    .child(
+                        .unwrap_or_default();
+                        let id = f.id.clone();
+                        let on = picked.as_deref() == Some(f.id.as_str());
+                        let row_id = SharedString::from(format!("fmt-{video}-{}", f.id));
                         div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_color(muted)
-                            .child(f.note.clone().unwrap_or_default()),
-                    )
-                    .child(size(
-                        f.filesize
-                            .map(|n| format::bytes(n as i64))
-                            .unwrap_or_default(),
-                    ))
-            }))
+                            .id(row_id.clone())
+                            .flex()
+                            .h(px(32.))
+                            .items_center()
+                            .cursor_pointer()
+                            .when(on, |this| this.bg(theme.table_active))
+                            .hover(|style| style.bg(theme.table_hover))
+                            .border_b_1()
+                            .border_color(theme.table_row_border)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(draft) = this.formats.as_mut() {
+                                    let slot = match video {
+                                        true => &mut draft.video,
+                                        false => &mut draft.audio,
+                                    };
+                                    *slot = Some(id.clone());
+                                    draft.audio_active = !video;
+                                }
+                                cx.notify();
+                            }))
+                            .child(
+                                div().w(px(28.)).flex_none().flex().justify_center().child(
+                                    Radio::new(SharedString::from(format!("{row_id}-radio")), on)
+                                        .silent(),
+                                ),
+                            )
+                            .child(mono(60., f.id.clone()))
+                            .child(cell(60., f.ext.clone().unwrap_or_default()))
+                            .child(cell(110., resolution))
+                            .child(mono(110., codec))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_color(muted)
+                                    .child(f.note.clone().unwrap_or_default()),
+                            )
+                            .child(size(
+                                f.filesize
+                                    .map(|n| format::bytes(n as i64))
+                                    .unwrap_or_default(),
+                            ))
+                    })),
+            )
             .into_any_element()
     }
 
