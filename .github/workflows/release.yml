@@ -21,11 +21,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: windows-x64, os: windows-latest, script: pwsh scripts/package-windows.ps1 -Arch x64, glob: "dist/*-setup.exe" }
-          - { name: macos-arm64, os: macos-15, script: bash scripts/package-macos.sh, glob: "dist/*.dmg" }
-          - { name: macos-x64, os: macos-15-intel, script: bash scripts/package-macos.sh, glob: "dist/*.dmg" }
-          - { name: linux-x64, os: ubuntu-22.04, script: bash scripts/package-linux.sh, glob: "dist/*.AppImage" }
-          - { name: linux-arm64, os: ubuntu-22.04-arm, script: bash scripts/package-linux.sh, glob: "dist/*.AppImage" }
+          - { name: windows-x64, os: windows-latest, script: pwsh scripts/package-windows.ps1 -Arch x64, glob: "dist/ytdlpd-*-setup.exe" }
+          - { name: macos-arm64, os: macos-15, script: bash scripts/package-macos.sh, glob: "dist/ytdlpd-*.dmg" }
+          - { name: macos-x64, os: macos-15-intel, script: bash scripts/package-macos.sh, glob: "dist/ytdlpd-*.dmg" }
+          - { name: linux-x64, os: ubuntu-22.04, script: bash scripts/package-linux.sh, glob: "dist/ytdlpd-*.AppImage" }
+          - { name: linux-arm64, os: ubuntu-22.04-arm, script: bash scripts/package-linux.sh, glob: "dist/ytdlpd-*.AppImage" }
     steps:
       - uses: actions/checkout@v7
       - name: rust toolchain
