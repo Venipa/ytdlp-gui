@@ -3,7 +3,7 @@
 Direction name: **Ledger**. Dark is the default theme (owner's rule, D-034); light ("card stock") is a first-class second theme built in Phase 0b.
 
 ## Direction
-A downloads list is a ledger: numbered lines, ruled, written once and kept. Every row carries a **call number** (the job id, `0128`) in a fixed left column, and every row sits on a **ruled line**. The ruled line is the progress: a dotted track while waiting (a paused row keeps a pencil hairline up to the share fetched), an amber ink fill growing left to right while active, a solid quiet rule when done, a solid red rule when failed. That ruled-in ledger with call numbers is the one bold element. Everything else is quiet.
+A downloads list is a ledger: numbered lines, ruled, written once and kept. Every row carries a **call number** (the job id, `0128`) in a fixed left column, and every row sits on a **ruled line**. Every row sits on one plain hairline divider, the list wide; a row whose work is moving adds the ruled progress line over it: an amber ink fill growing left to right along a faint amber track while active, a travelling amber stretch while the page is read. A still row (waiting, paused, done, failed, cancelled) shows its state in words, never as a partial line (D-193). That ruled-in ledger with call numbers is the one bold element. Everything else is quiet.
 
 Why this is not the generic tell ("near-black plus one amber accent plus mono data labels"):
 - The bold element is structural and specific to the subject (numbered ledger lines whose rule is the progress), not a coloured accent or a hero input. There is no progress bar widget, no glow, no card grid.
@@ -26,8 +26,8 @@ Mapped to maple `ui::Theme` fields. No new Theme fields (D-039); ink-blue uses `
 | Pencil (secondary text) | `#9C9384` | `#6B6253` | `muted_foreground`, `table_head_foreground` |
 | Primary button (inverse) | `#ECE5D8` fg `#15130F` | `#1D1A15` fg `#F2EDE3` | `primary`, `primary_foreground` |
 | Signal amber (activity only) | `#E9A23B` | `#8A4F00` | `progress_bar` |
-| Ink-blue (selection, focus, links) | `#8FB0D6` | `#2F4A6B` | `table_active_border` (solid); `selection` = ink at 30%; `table_active` = ink at 12%; `sidebar_accent` = ink at 18% |
-| Redaction red (danger) | `#E0584A` | `#B3261E` | `danger`; fill variant `#4A1E19` / `#F6D9D4` as row wash; `danger_foreground` `#1A0B09` / `#FFFFFF` |
+| Ink-blue (selection, focus, links) | `#8FB0D6` | `#2F4A6B` | `table_active_border` (solid); `selection` = ink at 30%; `table_active` = ink at 12%; `sidebar_accent` = ink at 26% |
+| Redaction red (danger) | `#E86A58` (5.9:1 on umber, 5.3:1 on a hovered row) | `#B3261E` | `danger`; fill variant `#4A1E19` / `#F6D9D4` as row wash; `danger_foreground` `#1A0B09` / `#FFFFFF` |
 Derived alphas: `border` = paper at 14%; `secondary_hover` = paper at 7%; `secondary_active` = paper at 11%; `table_hover` = paper at 5%; `overlay` = black at 55%.
 Contrast: a unit test in `ui` (D-036) computes WCAG ratios from these tokens and fails below 4.5:1 for every text pair (paper/pencil/ink on ground and drawer, danger on ground, primary_foreground on primary), 3:1 for non-text (rules, focus ring). Expected from the palette: paper on umber about 14:1, pencil on umber about 6:1; amber is used for fills, rules and 13px medium text only. Verify numerically in Phase 0b; adjust the hex, not the test.
 Open item for Phase 0b: check which field `ui` reads for the focus ring and make it ink-blue (amber means activity, so it must not be the focus colour); check that the danger button variant reads `danger` as its fill.
@@ -58,12 +58,14 @@ Built on maple `Metrics::new(14)`. Radius 2px via `ThemeOverrides.radius` (rows,
 ## Ledger rule states
 | Row state | Rule under the row | Row text |
 |---|---|---|
-| queued, paused | dotted 1px in `border` colour | pencil status ("Waiting", "Paused") |
-| probing | dotted, tail dots pulse (reduced-motion: static) | "Reading the page" |
+| every row | one 1px divider in `border` colour, the list wide (D-193) | |
+| queued | divider only | pencil "Waiting" |
+| paused | divider only | pencil "Paused" with the pause glyph and the share fetched as a percentage |
+| probing | faint amber track inside the gutters with a travelling amber stretch (reduced-motion: at rest) | "Reading the page" |
 | downloading, processing | faint amber track the row wide with a solid 3px amber fill from the left to the progress point (D-185) | amber percent, tabular |
-| completed | solid 1px in `border` colour | quiet; ink-blue only when selected |
-| failed | solid 1px `danger` | danger text and icon, plus a one-line cause and one action |
-| cancelled | dotted | pencil "Cancelled" |
+| completed | divider only | pencil "Done" with a check glyph |
+| failed | divider only (no red rule) | danger alert glyph and the short reason ("No connection"); the full message in its tooltip and the detail panel |
+| cancelled | divider only | pencil "Cancelled" |
 Gpui dashed-border support is unverified: Phase 0b spike; fallback is a custom element painting 1px quads.
 
 ## Motion
@@ -125,12 +127,12 @@ Each tool row: name, version (tabular), state; progress as the same ledger rule.
 |             youtube.com                          Downloading             62%     |
 |        ....................======================  (amber fill = 62%)          |
 |  0130  [th] A long lecture recording             1080p   1.2 GB   Paused         |
-|        ..........................................  (dotted)                     |
+|  ------------------------------------------------  (hairline, list wide)         |
 |  0129  [th] Archived clip                        720p    88 MB    Yesterday      |
-|        ------------------------------------------  (solid)                      |
+|  ------------------------------------------------  (hairline, list wide)         |
 |  0127  [th] Broken link                          -       -        Failed         |
 |             Sign in needed. Add cookies in Settings.            [Try again]      |
-|        ------------------------------------------  (solid red)                   |
+|  ------------------------------------------------  (hairline; red words only)    |
 |  ------------------------------------------------------------------------------ |
 |  2 running, 1 paused                                       412 GB free on D:     |
 +----------------------------------------------------------------------------------+
@@ -282,7 +284,7 @@ Verified against `E:\git\ytm-maple-rs\apps\desktop\crates\ui\src` (file list rea
 | Tabs | exists but horizontal only (no vertical tabs); not used for Settings |
 | Table | exists, full-featured but music-shaped and heavy; used only for Choose formats |
 | Virtual list | none; use gpui `uniform_list` directly (as maple) |
-| `ProgressRule` (ledger rule: dotted track, amber fill, solid, danger, indeterminate pulse) | build (lane A) |
+| `ProgressRule` (ledger rule: amber fill on a faint track, travelling pulse, plain hairline) | build (lane A) |
 | `CallNumber` (4-digit mono) | build |
 | `Thumbnail` (gpui img + Skeleton + 16:9 crop; replaces music `Artwork` use) | build |
 | `Chip` (filter chip with count, selected state) | build |
