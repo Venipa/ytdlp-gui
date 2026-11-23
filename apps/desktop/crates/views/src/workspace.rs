@@ -102,6 +102,14 @@ impl Workspace {
         match scene.unwrap_or("downloads") {
             "welcome" => router::navigate(Destination::Welcome, cx),
             "logs" => router::navigate(Destination::Logs, cx),
+            other if other.starts_with("update-") => {
+                if let Some(state) = crate::update_line::scene(other) {
+                    app.updates.update(cx, |u, cx| u.show(state, cx));
+                }
+                if other == "update-page" {
+                    router::navigate(Destination::Settings(SettingsPage::Updates), cx);
+                }
+            }
             other if !other.starts_with("settings-") => {
                 downloads.update(cx, |d, cx| d.show_scene(other, cx))
             }
@@ -119,6 +127,8 @@ impl Workspace {
         cx.observe(&app.tools, |this, _, cx| this.route(cx))
             .detach();
         cx.observe(&app.downloads, |_, _, cx| cx.notify()).detach();
+        // the sidebar's update line follows the updater
+        cx.observe(&app.updates, |_, _, cx| cx.notify()).detach();
         // the sidebar's tools block follows every tool state, not only what routing acts on
         cx.observe(&app.tools, |_, _, cx| cx.notify()).detach();
         // and the yt-dlp version Settings asks the engine for
@@ -324,6 +334,7 @@ impl Workspace {
             .child(settings)
             .children(pages)
             .child(div().flex_1())
+            .children(crate::update_line::update_line(&self.app, rail, window, cx))
             .child(self.tools_block(rail, window, cx))
             .into_any_element()
     }

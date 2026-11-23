@@ -1,0 +1,51 @@
+# The app updater: sidebar update line and Settings > Updates.
+set-page-updates = Updates
+update-available = Version { $version } is available
+update-stable = Stable channel
+update-beta = Beta channel
+update-stable-size = Stable channel, { $size }
+update-beta-size = Beta channel, { $size }
+update-download = Download
+update-notes = Notes
+update-notes-github = Release notes on GitHub
+update-downloading = Downloading { $version }
+update-progress = { $done } of { $total }
+update-ready = Version { $version } is ready
+update-will-pause = { $count ->
+    [one] 1 download will pause and resume after relaunch.
+   *[other] { $count } downloads will pause and resume after relaunch.
+}
+update-relaunch = Relaunch to update
+update-on-quit = Install when I quit
+update-installing = Installing { $version }
+update-try-again = Try again
+update-err-offline = Couldn't check for updates
+update-err-offline-detail = You appear to be offline.
+update-err-check-detail = GitHub didn't answer with a list of releases.
+update-err-download = Update download failed
+update-err-download-detail = The connection was interrupted at { $at }.
+update-err-checksum = Checksum mismatch
+update-err-checksum-detail = The download didn't match its checksum. Nothing was installed.
+update-err-install = Couldn't start the installer
+update-err-install-detail = Nothing was installed.
+update-line-label = Update: { $state }
+update-channel = Release channel
+update-channel-desc = Beta includes pre-releases.
+update-channel-stable = Stable
+update-channel-beta = Beta
+update-mode = Updates
+update-mode-desc = Automatic downloads in the background. Manual asks first.
+update-mode-automatic = Automatic
+update-mode-manual = Manual
+update-current = Current version
+update-checked = Last checked { $date } at { $time }
+update-checked-today = Last checked today at { $time }
+update-never-checked = Not checked yet
+update-checking = Checking for updates…
+update-up-to-date = ytdlpd is up to date.
+update-check-now = Check now
+update-release = Release on GitHub
+update-release-desc = Release notes and every download.
+update-self-managed = This copy does not update itself; Download opens the release page.
+update-sec-status = Status
+update-sec-options = Options

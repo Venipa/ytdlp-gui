@@ -454,6 +454,49 @@ fn restart_recovery_resume_on_start(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn pause_for_update_marks_rows_and_they_resume_on_start(cx: &mut TestAppContext) {
+    use DownloadStatus::*;
+    // relaunching for an update pauses running and queued rows with the reason `update`
+    let r = rig(cx, |s| s.concurrent_global = 1, |_, _| {});
+    let a = r.enqueue(cx, "https://a.com/1");
+    let b = r.enqueue(cx, "https://b.org/1");
+    settle(cx, "a started", |_| r.started().len() == 1);
+    let done = r.downloads.update(cx, |d, cx| d.pause_for_update(cx));
+    cx.run_until_parked();
+    drop(done);
+    for id in [a, b] {
+        let row = r.row(cx, id);
+        assert_eq!(
+            (row.status, row.status_reason.as_deref()),
+            (Paused, Some(state::UPDATE_REASON))
+        );
+    }
+
+    // the next start resumes them even with resume_on_start off; user-paused and interrupted rows wait
+    let r = rig(
+        cx,
+        |s| s.resume_on_start = false,
+        |db, io| {
+            let mut rows = seed_rows(Scene::Downloading, T0);
+            rows.truncate(3);
+            for (row, reason) in
+                rows.iter_mut()
+                    .zip([Some(state::UPDATE_REASON), Some("interrupted"), None])
+            {
+                row.status = Paused;
+                row.reason = reason.map(str::to_string);
+            }
+            io.handle().block_on(db.seed_downloads(&rows)).unwrap();
+        },
+    );
+    settle(cx, "the update-paused row starts", |_| {
+        r.started().len() == 1
+    });
+    let rows = r.downloads.read_with(cx, |d, _| d.rows().to_vec());
+    assert_eq!(rows.iter().filter(|x| x.status == Paused).count(), 2);
+}
+
+#[gpui::test]
 fn notify_rate(cx: &mut TestAppContext) {
     let r = rig(cx, |_| {}, |_, _| {});
     let ids: Vec<_> = (1..=3)

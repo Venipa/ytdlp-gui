@@ -55,6 +55,21 @@ pub fn short_link(url: &str, max: usize) -> String {
     }
 }
 
+/// `at_ms` in local time as `HH:MM`, plus its date when it is not today.
+pub fn when(at_ms: i64) -> (String, Option<String>) {
+    let zone = jiff::tz::TimeZone::system();
+    let Ok(at) = jiff::Timestamp::from_millisecond(at_ms) else {
+        return (String::new(), None);
+    };
+    let at = at.to_zoned(zone.clone());
+    let today = jiff::Timestamp::now().to_zoned(zone).date();
+    let time = at.strftime("%H:%M").to_string();
+    (
+        time,
+        (at.date() != today).then(|| at.strftime("%Y-%m-%d").to_string()),
+    )
+}
+
 pub fn clock(at_ms: i64) -> String {
     jiff::Timestamp::from_millisecond(at_ms)
         .map(|t| {

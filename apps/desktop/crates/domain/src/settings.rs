@@ -66,6 +66,24 @@ pub struct ToolPaths {
     pub deno: Option<String>,
 }
 
+/// Which GitHub releases the app updates to: `stable` (latest release) or `beta` (pre-releases too).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateChannel {
+    #[default]
+    Stable,
+    Beta,
+}
+
+/// `automatic` downloads a found update in the background; `manual` asks first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateMode {
+    #[default]
+    Automatic,
+    Manual,
+}
+
 /// Remembered window geometry.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WindowState {
@@ -119,6 +137,8 @@ pub struct Settings {
     pub start_minimized: bool,
     pub window: Option<WindowState>,
     pub detail_panel_width: f32,
+    pub update_channel: UpdateChannel,
+    pub update_mode: UpdateMode,
 }
 
 impl Default for Settings {
@@ -164,6 +184,8 @@ impl Default for Settings {
             start_minimized: false,
             window: None,
             detail_panel_width: 360.0,
+            update_channel: UpdateChannel::Stable,
+            update_mode: UpdateMode::Automatic,
         }
     }
 }

@@ -106,6 +106,14 @@ impl SettingsView {
             }
         })
         .detach();
+        cx.observe(&state.updates, |_, _, cx| cx.notify()).detach();
+        cx.observe(&state.downloads, |this, _, cx| {
+            // the ready update names how many downloads a relaunch pauses
+            if this.navigation.read(cx).current() == Destination::Settings(SettingsPage::Updates) {
+                cx.notify()
+            }
+        })
+        .detach();
         cx.observe(&state.tools, |this, tools, cx| {
             this.remember_custom_tools(&tools, cx);
             cx.notify()
@@ -622,6 +630,7 @@ pub(crate) fn page_icon(page: SettingsPage) -> &'static str {
         SettingsPage::Network => "icons/radio.svg",
         SettingsPage::Tools => "icons/settings.svg",
         SettingsPage::Appearance => "icons/palette.svg",
+        SettingsPage::Updates => "icons/circle-arrow-down.svg",
         SettingsPage::About => "icons/info.svg",
     }
 }
@@ -661,6 +670,7 @@ impl Render for SettingsView {
             SettingsPage::Network => self.page_network(&s, cx),
             SettingsPage::Tools => self.page_tools(cx),
             SettingsPage::Appearance => self.page_appearance(&s, cx),
+            SettingsPage::Updates => self.page_updates(&s, cx),
             SettingsPage::About => self.page_about(cx),
         };
         let notice = broken.then(|| {
