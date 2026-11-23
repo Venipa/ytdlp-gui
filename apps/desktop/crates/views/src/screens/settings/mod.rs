@@ -837,10 +837,26 @@ impl SettingsView {
 
     fn page_tools(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let statuses = self.state.tools.read(cx).all().to_vec();
+        // the four tools people act on always show, even before the first check reports
+        let always = [
+            ToolKind::YtDlp,
+            ToolKind::Ffmpeg,
+            ToolKind::Ffprobe,
+            ToolKind::Deno,
+        ];
         let mut rows: Vec<AnyElement> = ToolKind::ALL
             .iter()
-            .filter_map(|kind| statuses.iter().find(|s| s.kind == *kind))
-            .map(|tool| self.tool_row(tool, cx))
+            .filter_map(|kind| match statuses.iter().find(|s| s.kind == *kind) {
+                Some(s) => Some(s.clone()),
+                None => always.contains(kind).then_some(ToolStatus {
+                    kind: *kind,
+                    state: ToolState::Missing,
+                    source: None,
+                    path: None,
+                    version: None,
+                }),
+            })
+            .map(|tool| self.tool_row(&tool, cx))
             .collect();
         rows.push(Notice::new(t!("set-page-tools"), t!("set-long-paths")).into_any_element());
         rows
@@ -937,7 +953,8 @@ impl SettingsView {
                     .child(div().w(px(110.)).child(i18n::lookup(tool_key(kind), None)))
                     .child(
                         div()
-                            .w(px(100.))
+                            .w(px(170.))
+                            .truncate()
                             .font_features(tabular())
                             .text_color(theme.muted_foreground)
                             .child(tool.version.clone().unwrap_or_default()),
