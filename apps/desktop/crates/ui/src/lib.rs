@@ -59,6 +59,7 @@ mod switch;
 mod switch_row;
 mod table;
 mod tabs;
+mod text_area;
 mod theme;
 mod themed;
 mod time;
@@ -168,6 +169,10 @@ pub use table::{
     rank, show_listing, shown_listing, table,
 };
 pub use tabs::{TabBar, Tabs};
+pub use text_area::{
+    LineDown, LineUp, MAX_LINES, Newline, Pasted, SelectLineDown, SelectLineUp, TEXT_AREA_CONTEXT,
+    TextArea, unix_lines,
+};
 pub use theme::{
     ActiveTheme, BACKDROP_TRANSPARENCY, COMPOSITOR_OPACITY, CoverFill, Look, MAX_FONT,
     MAX_LYRICS_SCALE, MAX_TRANSPARENCY, MIN_FONT, MIN_LYRICS_SCALE, Theme, ThemeKind,
