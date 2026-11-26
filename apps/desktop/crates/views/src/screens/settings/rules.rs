@@ -21,6 +21,7 @@ pub(super) struct RuleEditor {
     draft: SiteRule,
     pattern: Entity<Input>,
     test: Entity<Input>,
+    outtmpl: Entity<Input>,
 }
 
 fn kind_name(kind: MatchKind) -> SharedString {
@@ -103,6 +104,18 @@ impl SettingsView {
             input
         });
         let test = cx.new(|cx| Input::new("rule-test-hint", cx).clearable());
+        let outtmpl = cx.new(|cx| {
+            let mut input = Input::new("rule-file-name-hint", cx)
+                .name("rule-file-name")
+                .clearable();
+            input.set_text(draft.outtmpl.clone().unwrap_or_default(), cx);
+            input
+        });
+        cx.observe(&outtmpl, |this, input, cx| {
+            let text = input.read(cx).text().trim().to_owned();
+            this.draft(|d| d.outtmpl = (!text.is_empty()).then_some(text), cx);
+        })
+        .detach();
         cx.observe(&pattern, |this, input, cx| {
             let text = input.read(cx).text().to_owned();
             if let Some(editor) = &mut this.rule_editor {
@@ -122,6 +135,7 @@ impl SettingsView {
             draft,
             pattern,
             test,
+            outtmpl,
         });
         cx.notify();
     }
@@ -131,6 +145,26 @@ impl SettingsView {
             edit(&mut editor.draft);
         }
         cx.notify();
+    }
+
+    /// Asks for the folder the drafted rule saves to.
+    fn choose_rule_folder(&self, cx: &mut Context<Self>) {
+        let picked = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: None,
+        });
+        cx.spawn(async move |this, cx| {
+            if let Ok(Ok(Some(paths))) = picked.await
+                && let Some(path) = paths.first()
+            {
+                let dir = path.to_string_lossy().into_owned();
+                this.update(cx, |this, cx| this.draft(|d| d.output_dir = Some(dir), cx))
+                    .ok();
+            }
+        })
+        .detach();
     }
 
     fn save_rule(&mut self, cx: &mut Context<Self>) {
@@ -512,6 +546,45 @@ impl SettingsView {
             cx,
         ));
         if !fallback {
+            let folder = div()
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .child(self.value_box(
+                    match &draft.output_dir {
+                        Some(dir) => SharedString::from(dir.clone()),
+                        None => t!("rule-folder-default", dir = s.output_dir.clone()),
+                    },
+                    cx,
+                ))
+                .child(
+                    Button::new("rule-folder-choose")
+                        .outline()
+                        .label(t!("set-choose"))
+                        .on_click(cx.listener(|this, _, _, cx| this.choose_rule_folder(cx))),
+                )
+                .when(draft.output_dir.is_some(), |this| {
+                    this.child(
+                        Button::new("rule-folder-reset")
+                            .ghost()
+                            .label(t!("rule-default"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.draft(|d| d.output_dir = None, cx)
+                            })),
+                    )
+                });
+            rows.push(stacked(
+                t!("rule-folder"),
+                Some(t!("rule-folder-desc")),
+                folder,
+                cx,
+            ));
+            rows.push(stacked(
+                t!("rule-file-name"),
+                Some(t!("rule-file-name-desc", template = s.outtmpl.clone())),
+                div().font_family(MONO).child(editor.outtmpl.clone()),
+                cx,
+            ));
             // the draft stands in for its own place in the list, so the test shows what saving does
             let mut rules = s.site_rules.clone();
             match editor.at {

@@ -168,10 +168,11 @@ impl AppState {
             .js_runtime
             .or_else(|| found(domain::ToolKind::Deno).map(|p| ("deno".to_string(), p)));
         let s = self.settings.read(cx).get();
-        spec.fix = match domain::rule_for(&s.site_rules, url) {
-            Some((_, rule)) => rule.fix,
-            None => s.default_fix,
-        };
+        apply_rule(
+            &mut spec,
+            domain::rule_for(&s.site_rules, url),
+            s.default_fix,
+        );
         spec
     }
 
@@ -179,6 +180,75 @@ impl AppState {
     pub fn shutdown(&self, cx: &mut App) -> Task<()> {
         self.settings.update(cx, |s, _| s.save_now());
         self.downloads.update(cx, |d, cx| d.shutdown(cx))
+    }
+}
+
+/// What the matching site rule sets on a new download: its fix (`default_fix` when no rule
+/// matches), and its folder and file name template where it sets them.
+fn apply_rule(
+    spec: &mut domain::JobSpec,
+    rule: Option<(usize, &domain::SiteRule)>,
+    default_fix: Option<domain::Fix>,
+) {
+    let Some((_, rule)) = rule else {
+        spec.fix = default_fix;
+        return;
+    };
+    spec.fix = rule.fix;
+    if let Some(dir) = &rule.output_dir {
+        spec.output_dir = dir.clone();
+    }
+    if let Some(outtmpl) = &rule.outtmpl
+        && spec.playlist_index.is_none()
+    {
+        spec.outtmpl = outtmpl.clone();
+    }
+}
+
+#[cfg(test)]
+mod rule_tests {
+    use super::apply_rule;
+    use domain::{Fix, SiteRule};
+
+    #[test]
+    fn a_rule_sets_folder_and_name_else_defaults_stay() {
+        let base = crate::AppSettings::detached(Default::default(), Default::default()).job_spec(
+            "https://a.com/v",
+            domain::Preset::DEFAULT,
+            "",
+            None,
+        );
+        let rule = SiteRule {
+            output_dir: Some("/x".into()),
+            outtmpl: Some("%(id)s.%(ext)s".into()),
+            ..Default::default()
+        };
+
+        let mut spec = base.clone();
+        apply_rule(&mut spec, Some((0, &rule)), Some(Fix::Repair));
+        assert_eq!(
+            (spec.output_dir.as_str(), spec.outtmpl.as_str(), spec.fix),
+            ("/x", "%(id)s.%(ext)s", None)
+        );
+
+        let mut entry = base.clone();
+        entry.playlist_index = Some(1);
+        apply_rule(&mut entry, Some((0, &rule)), None);
+        assert_eq!(
+            (entry.output_dir.as_str(), &entry.outtmpl),
+            ("/x", &base.outtmpl)
+        );
+
+        let mut plain = base.clone();
+        apply_rule(&mut plain, Some((0, &SiteRule::default())), None);
+        assert_eq!(
+            (&plain.output_dir, &plain.outtmpl),
+            (&base.output_dir, &base.outtmpl)
+        );
+
+        let mut none = base;
+        apply_rule(&mut none, None, Some(Fix::Repair));
+        assert_eq!(none.fix, Some(Fix::Repair));
     }
 }
 
