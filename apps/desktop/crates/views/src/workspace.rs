@@ -626,10 +626,14 @@ impl Render for Workspace {
                     .window_control_area(WindowControlArea::Drag)
                     .on_mouse_down(
                         MouseButton::Left,
-                        cx.listener(|this, event: &MouseDownEvent, window, _| {
+                        cx.listener(|this, event: &MouseDownEvent, window, cx| {
                             match event.click_count {
                                 1 => this.grabbed = true,
-                                2 => window.zoom_window(),
+                                // stop: Windows would toggle the caption again and undo the zoom
+                                2 => {
+                                    cx.stop_propagation();
+                                    window.zoom_window();
+                                }
                                 _ => {}
                             }
                         }),

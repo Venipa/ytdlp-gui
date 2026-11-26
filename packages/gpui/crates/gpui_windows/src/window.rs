@@ -950,8 +950,13 @@ impl PlatformWindow for WindowsWindow {
 
     fn zoom(&self) {
         unsafe {
+            // Toggles, like zoom on macOS, X11 and Wayland.
             if IsWindowVisible(self.0.hwnd).as_bool() {
-                ShowWindowAsync(self.0.hwnd, SW_MAXIMIZE).ok().log_err();
+                let show = match self.0.state.is_maximized() {
+                    true => SW_RESTORE,
+                    false => SW_MAXIMIZE,
+                };
+                ShowWindowAsync(self.0.hwnd, show).ok().log_err();
             } else if let Some(mut status) = self.state.initial_placement.take() {
                 status.state = WindowOpenState::Maximized;
                 self.state.initial_placement.set(Some(status));

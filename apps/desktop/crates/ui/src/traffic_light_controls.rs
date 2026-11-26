@@ -173,13 +173,15 @@ impl RenderOnce for TrafficLightControls {
                             })
                     })
                     // The system handles a press on its own maximize, which a screen reader cannot
-                    // reach, so the click action zooms the window itself. Zooming never restores,
-                    // so Restore gets no click action.
-                    .when(control == Control::Maximize && control.system(), |this| {
-                        this.on_a11y_action(gpui::accesskit::Action::Click, |_, window, _| {
-                            window.zoom_window()
-                        })
-                    })
+                    // reach, so the click action zooms (or restores) the window itself.
+                    .when(
+                        matches!(control, Control::Maximize | Control::Restore) && control.system(),
+                        |this| {
+                            this.on_a11y_action(gpui::accesskit::Action::Click, |_, window, _| {
+                                window.zoom_window()
+                            })
+                        },
+                    )
             }));
         controls.style().refine(&overrides);
         controls
