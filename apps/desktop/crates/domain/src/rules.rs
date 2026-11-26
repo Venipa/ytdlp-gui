@@ -65,6 +65,12 @@ pub struct SiteRule {
     pub clipboard: Option<ClipAction>,
     pub preset: Option<Preset>,
     pub fix: Option<Fix>,
+    /// The folder matching downloads are saved to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_dir: Option<String>,
+    /// The yt-dlp output template for matching single downloads (playlist entries keep theirs).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outtmpl: Option<String>,
 }
 
 impl SiteRule {
