@@ -322,28 +322,34 @@ impl Render for LogsView {
             .flex_col()
             .size_full()
             .child(
+                // a narrow page wraps the search and buttons onto lines of their own rather
+                // than running them off the edge
                 div()
                     .flex()
                     .flex_none()
+                    .flex_wrap()
                     .items_center()
                     .justify_between()
                     .gap(theme.metrics.pad)
                     .px(theme.metrics.gutter)
                     .py(px(12.))
-                    .child(div().flex().gap(px(6.)).children(chips.map(|(key, least)| {
-                        Chip::new(key, i18n::lookup(key, None))
-                            .selected(self.least == least)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.least = least;
-                                cx.notify();
-                            }))
-                    })))
+                    .child(div().flex().flex_none().gap(px(6.)).children(chips.map(
+                        |(key, least)| {
+                            Chip::new(key, i18n::lookup(key, None))
+                                .selected(self.least == least)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.least = least;
+                                    cx.notify();
+                                }))
+                        },
+                    )))
                     .child(
                         div()
                             .flex()
+                            .flex_wrap()
                             .gap(px(8.))
                             .items_center()
-                            .child(div().w(px(220.)).child(self.search.clone()))
+                            .child(div().w(px(220.)).flex_none().child(self.search.clone()))
                             .child(
                                 Button::new("logs-job")
                                     .outline()
