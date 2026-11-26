@@ -246,12 +246,9 @@ impl Downloads {
 
     // ---- intake -------------------------------------------------------------------------
 
-    /// Puts links into the field and starts reading them.
+    /// Adds links to the field, after what it already holds, and starts reading them.
     pub(crate) fn fill(&mut self, urls: &[String], cx: &mut Context<Self>) {
-        let text = urls.join(
-            "
-",
-        );
+        let text = appended(self.intake.read(cx).text(), urls.iter().map(String::as_str));
         self.last_text.clone_from(&text);
         self.intake.update(cx, |input, cx| input.set_text(text, cx));
         self.begin(cx);
@@ -872,8 +869,9 @@ impl Downloads {
             Key::Open => self.open_selected(cx),
             Key::Paste => {
                 if let Some(text) = cx.read_from_clipboard().and_then(|i| i.text()) {
-                    self.intake
-                        .update(cx, |input, cx| input.set_text(one_per_line(&text), cx));
+                    let lines = one_per_line(&text);
+                    let text = appended(self.intake.read(cx).text(), lines.lines());
+                    self.intake.update(cx, |input, cx| input.set_text(text, cx));
                 }
                 self.intake.update(cx, |input, cx| input.focus(window, cx));
             }
@@ -1609,6 +1607,25 @@ impl Render for Downloads {
     }
 }
 
+/// `current`'s lines, then each of `new` not already there, one to a line: links added to a
+/// field that holds some join them instead of replacing them.
+fn appended<'a>(current: &str, new: impl IntoIterator<Item = &'a str>) -> String {
+    let mut lines: Vec<&str> = current
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    for line in new.into_iter().map(str::trim) {
+        if !line.is_empty() && !lines.contains(&line) {
+            lines.push(line);
+        }
+    }
+    lines.join(
+        "
+",
+    )
+}
+
 /// Every whitespace-separated word of `text` on a line of its own.
 /// Every whitespace-separated word of a line that holds a link on a line of its own; a line
 /// without one stays whole, so a stray sentence is one skipped line.
@@ -1625,6 +1642,23 @@ fn one_per_line(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn added_links_join_the_field_without_repeats() {
+        assert_eq!(
+            super::appended(
+                "https://a.example/1
+",
+                ["https://b.example/2", "https://a.example/1"]
+            ),
+            "https://a.example/1
+https://b.example/2"
+        );
+        assert_eq!(
+            super::appended("", ["https://a.example/1"]),
+            "https://a.example/1"
+        );
+    }
+
     #[test]
     fn a_paste_splits_links_and_keeps_a_stray_line_whole() {
         assert_eq!(
