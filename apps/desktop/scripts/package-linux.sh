@@ -20,6 +20,16 @@ mkdir -p "$appdir/usr/bin" "$appdir/usr/lib/ytdlpd" "$appdir/usr/share/doc/ytdlp
 cp "$bin" "$appdir/usr/bin/ytdlpd"
 cp -R "runtime/$triple/python" "$appdir/usr/lib/ytdlpd/python"
 cp "$repo/THIRD-PARTY.md" "$repo/LICENSE" "$appdir/usr/share/doc/ytdlpd/"
+# Bundle every linked lib a distro may lack (found by the exe's $ORIGIN/../lib rpath). The AppImage
+# excludelist names the base libs every system has (glibc, libX11, GL, ...): those stay out.
+# shortcut: only libs the exe links; a dlopen'd lib (vulkan loader) still comes from the system.
+excl="$out/excludelist"
+[ -s "$excl" ] || curl -fsSL -o "$excl" https://raw.githubusercontent.com/AppImageCommunity/pkg2appimage/master/excludelist
+ldd "$bin" | awk '$2 == "=>" && $3 ~ /^\// { print $1, $3 }' | while read -r name path; do
+  case "$name" in libpython*) continue ;; esac
+  sed 's/#.*//; s/[[:space:]]*$//' "$excl" | grep -qxF "$name" || cp -L "$path" "$appdir/usr/lib/"
+done
+ls "$appdir/usr/lib/libxkbcommon-x11.so.0" >/dev/null
 icon=assets/linux/ytdlpd.png
 [ -f "$icon" ] || icon=assets/tray/icon-64.png
 cp "$icon" "$appdir/ytdlpd.png"

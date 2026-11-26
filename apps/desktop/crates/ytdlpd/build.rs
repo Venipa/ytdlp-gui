@@ -67,7 +67,12 @@ fn python_runtime() {
         for rel in if cfg!(target_os = "macos") {
             vec!["@executable_path/../Frameworks"]
         } else {
-            vec!["$ORIGIN/../lib/ytdlpd/python/lib", "$ORIGIN/python/lib"]
+            // $ORIGIN/../lib: the system libs the AppImage bundles (libxkbcommon-x11, ...)
+            vec![
+                "$ORIGIN/../lib/ytdlpd/python/lib",
+                "$ORIGIN/../lib",
+                "$ORIGIN/python/lib",
+            ]
         } {
             println!("cargo:rustc-link-arg=-Wl,-rpath,{rel}");
         }
