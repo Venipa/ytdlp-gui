@@ -18,7 +18,7 @@ use crate::time::tabular;
 pub const MONO: &str = "IBM Plex Mono";
 
 /// Width of the call-number column.
-const CALL_WIDTH: f32 = 56.;
+pub const CALL_WIDTH: f32 = 56.;
 /// Where the probing pulse's clock starts.
 static PULSE_EPOCH: std::sync::LazyLock<std::time::Instant> =
     std::sync::LazyLock::new(std::time::Instant::now);
@@ -466,7 +466,8 @@ impl RenderOnce for TokenInput {
             })
             .flex()
             .flex_1()
-            .min_w_0()
+            // never narrower than its field, so a crowded bar wraps it instead of overlapping it
+            .min_w(px(SEARCH_MIN))
             .justify_end()
             .items_center()
             .gap(px(6.))

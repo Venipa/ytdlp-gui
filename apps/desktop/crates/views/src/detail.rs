@@ -153,7 +153,14 @@ impl Downloads {
         )
     }
 
-    pub(crate) fn detail_panel(&self, s: &DownloadSummary, cx: &mut Context<Self>) -> AnyElement {
+    /// The details of `s`, beside the list under the link field and filters. `fill`: the page is
+    /// too narrow for both, so the panel takes the list's place until it is closed.
+    pub(crate) fn detail_panel(
+        &self,
+        s: &DownloadSummary,
+        fill: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let theme = *cx.theme();
         let pencil = theme.muted_foreground;
         let id = s.id;
@@ -455,37 +462,33 @@ impl Downloads {
         );
         let panel = Panel::new("detail-panel", Side::Right, px(PANEL))
             .limits(px(280.), px(WIDEST))
+            .fill(fill)
             .border_color(theme.border)
-            // over the list it is frosted glass when the blur setting is on, else solid
-            .map(|panel| match ui::blurring(cx) {
-                true => ui::glass(panel, cx),
-                false => panel.bg(theme.background),
-            })
+            .bg(theme.background)
             .child(div().size_full().child(body));
-        // the panel opens by growing out of the window's edge; at rest the cap is the widest it
-        // can be dragged to, so resizing is untouched
+        // in the flow beside the list, never over it: the list narrows (its columns fold) as the
+        // panel grows out of the edge
         let span = match ui::motion::animates(cx) {
             true => SLIDE,
             false => Duration::from_millis(1),
         };
         div()
             .id("detail-slide")
-            // a click on the panel's empty room stays on the panel, never on the row under it
-            .occlude()
-            .flex_none()
+            .flex()
             .h_full()
             .overflow_hidden()
-            // laid over the list: pinned to the right edge with a shadow to lift it
-            .absolute()
-            .top_0()
-            .right_0()
-            .bottom_0()
-            .shadow_lg()
+            .map(|this| match fill {
+                true => this.flex_1().min_w_0(),
+                false => this.flex_none(),
+            })
             .child(panel)
             .with_animation(
-                "detail-slide",
+                ("detail-slide", usize::from(fill)),
                 Animation::new(span).with_easing(ease_out_cubic),
-                |this, delta| this.max_w(px(WIDEST * delta)),
+                move |this, delta| match fill {
+                    true => this.opacity(delta),
+                    false => this.max_w(px(WIDEST * delta)),
+                },
             )
             .into_any_element()
     }

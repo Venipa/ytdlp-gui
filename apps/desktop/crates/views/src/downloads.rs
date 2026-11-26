@@ -129,6 +129,10 @@ pub struct Downloads {
     pub(crate) details_open: bool,
     /// Whether an empty library already moved focus to the intake.
     intake_offered: bool,
+    /// The page's width as last laid out; the list's columns and where the details go follow it.
+    page_width: Pixels,
+    /// Links on the clipboard, offered in a strip under the link field until added or put away.
+    clip_offer: Option<Vec<String>>,
     /// Every id the list has shown, and the ones that arrived lately and fade in.
     known: HashSet<DownloadId>,
     pub(crate) fresh: std::collections::HashMap<DownloadId, Instant>,
@@ -201,6 +205,8 @@ impl Downloads {
             log_bar,
             details_open: true,
             intake_offered: false,
+            page_width: Pixels::ZERO,
+            clip_offer: None,
             known: HashSet::new(),
             fresh: std::collections::HashMap::new(),
             app,
@@ -325,24 +331,8 @@ impl Downloads {
                 self.fill(&urls, cx);
             }
             IntakeEvent::Offer(urls) => {
-                let urls = urls.clone();
-                let intake = self.app.intake.clone();
-                let message = match urls.len() {
-                    1 => t!("dl-toast-clip-one", link = format::short_link(&urls[0], 36)),
-                    n => t!("dl-toast-clip-many", count = n),
-                };
-                toast(
-                    cx,
-                    Kind::Info,
-                    message,
-                    Some((
-                        t!("dl-toast-clip-add"),
-                        Rc::new(move |cx: &mut App| {
-                            let urls = urls.clone();
-                            intake.update(cx, |i, cx| i.add(&urls, cx));
-                        }),
-                    )),
-                );
+                self.clip_offer = Some(urls.clone());
+                cx.notify();
             }
         }
     }
@@ -1022,21 +1012,29 @@ impl Downloads {
             })
             .collect();
         let downloads = self.app.downloads.read(cx);
+        // a narrow page puts the search on a line of its own rather than under the chips
         div()
             .flex()
+            .flex_wrap()
             .items_center()
             .justify_between()
             .gap(theme.metrics.pad)
             .text_size(theme.text(Text::Label))
-            .child(div().flex().gap(px(6.)).children(chips.map(|(chip, key)| {
-                Chip::new(key, i18n::lookup(key, None))
-                    .count(downloads.count(|s| chip.matches(s)))
-                    .selected(self.chip == chip)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.chip = chip;
-                        cx.notify();
-                    }))
-            })))
+            .child(
+                div()
+                    .flex()
+                    .flex_none()
+                    .gap(px(6.))
+                    .children(chips.map(|(chip, key)| {
+                        Chip::new(key, i18n::lookup(key, None))
+                            .count(downloads.count(|s| chip.matches(s)))
+                            .selected(self.chip == chip)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.chip = chip;
+                                cx.notify();
+                            }))
+                    })),
+            )
             .child(
                 TokenInput::new(&self.search, tokens)
                     .spoken("dl-search-region", t!("dl-search-name")),
@@ -1159,8 +1157,8 @@ impl Downloads {
         div()
             .flex()
             .flex_none()
-            .justify_between()
             .items_center()
+            .whitespace_nowrap()
             .h(theme.metrics.control)
             .px(theme.metrics.gutter)
             .border_t_1()
@@ -1191,6 +1189,15 @@ impl Downloads {
                             .on_click(cx.listener(move |this, _, _, cx| this.all(resume, cx)))
                     })),
             )
+            // notices live here, in the flow, so nothing is laid over the rows
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_w_0()
+                    .px(px(16.))
+                    .children(crate::toasts::inline(cx)),
+            )
             .children(self.free.as_ref().map(|(free, drive)| {
                 let size = format::bytes(*free as i64);
                 t!(
@@ -1200,6 +1207,60 @@ impl Downloads {
                 )
             }))
             .into_any_element()
+    }
+
+    /// The clipboard's links, offered right under the link field they would fill.
+    fn clip_strip(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let urls = self.clip_offer.clone()?;
+        let theme = *cx.theme();
+        let message = match urls.len() {
+            1 => t!("dl-toast-clip-one", link = format::short_link(&urls[0], 48)),
+            n => t!("dl-toast-clip-many", count = n),
+        };
+        Some(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .h(theme.metrics.field)
+                .px(px(10.))
+                .rounded(theme.radius)
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.secondary)
+                .text_size(theme.text(Text::Small))
+                .child(
+                    gpui::svg()
+                        .path(icons::path("icons/info.svg"))
+                        .size(px(14.))
+                        .flex_none()
+                        .text_color(theme.muted_foreground),
+                )
+                .child(div().flex_1().min_w_0().truncate().child(message))
+                .child(
+                    Button::new("clip-add")
+                        .primary()
+                        .small()
+                        .label(t!("dl-toast-clip-add"))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.clip_offer = None;
+                            let urls = urls.clone();
+                            this.app.intake.update(cx, |i, cx| i.add(&urls, cx));
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    Button::new("clip-later")
+                        .ghost()
+                        .small()
+                        .label(t!("dl-clip-not-now"))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.clip_offer = None;
+                            cx.notify();
+                        })),
+                )
+                .into_any_element(),
+        )
     }
 
     fn intake_strip(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
@@ -1358,11 +1419,25 @@ impl Render for Downloads {
             ring: keyboard && self.list_focus.is_focused(window),
             within: keyboard && self.list_focus.contains_focused(window, cx),
         };
-        // the detail panel is a sheet over the list, so the rows keep their full width
-        let cols = crate::rows::Columns::for_width(window.viewport_size().width);
+        let thumbs = self.app.settings.read(cx).get().show_thumbnails;
+        let gutter = theme.metrics.gutter;
+        // the page's width, measured as it was laid out (the window's until the first layout)
+        let page = match self.page_width {
+            w if w > Pixels::ZERO => w,
+            _ => window.viewport_size().width,
+        };
+        let open = self.selected.and_then(|id| self.summary(id, cx));
+        // the details sit beside the list while both fit, else they take the list's place
+        let side = px(crate::detail::PANEL) + px(1.);
+        let fill =
+            open.is_some() && f32::from(page - side) < crate::rows::Columns::least(gutter, thumbs);
+        let list_width = match (&open, fill) {
+            (Some(_), false) => page - side,
+            _ => page,
+        };
+        let cols = crate::rows::Columns::for_width(list_width, gutter, thumbs);
         let lines = Rc::new(self.lines(cx));
         let filter_text = self.search.read(cx).text().to_owned();
-        let thumbs = self.app.settings.read(cx).get().show_thumbnails;
         let list = match (lines.is_empty(), total == 0) {
             (true, _) if !loaded => div().into_any_element(),
             // the empty list is the drop target, so it is drawn as one: a dashed bounded zone
@@ -1454,7 +1529,6 @@ impl Render for Downloads {
             .when(focus.ring && self.selected.is_none(), |this| {
                 this.child(ui::focus_ring(cx))
             });
-        let selected = self.selected.and_then(|id| self.summary(id, cx));
         // the card gives a list row back where the list drops its format column
         // the editor says what became of each link itself, and nothing under it may move
         let card = match self.editing {
@@ -1466,58 +1540,67 @@ impl Render for Downloads {
         let confirm = self.confirm_view(cx);
         let status = self.status_bar(cx);
 
+        let measured = cx.entity().downgrade();
+        let clip = self.clip_strip(cx);
         div()
             .id("downloads-page")
+            .relative()
             .size_full()
             .flex()
             .flex_col()
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| this.dropped(paths, cx)))
             .drag_over::<ExternalPaths>(move |style, _, _, _| style.bg(theme.table_active))
+            // measures the page as laid out; a new width lays the rows out again
+            .child(
+                gpui::canvas(
+                    move |bounds, _, cx| {
+                        if let Some(page) = measured.upgrade() {
+                            page.update(cx, |this, cx| {
+                                if this.page_width != bounds.size.width {
+                                    this.page_width = bounds.size.width;
+                                    cx.notify();
+                                }
+                            });
+                        }
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .size_full(),
+            )
+            // the link field, offer, card and filters keep the page's full width
             .child(
                 div()
-                    .relative()
+                    .flex()
+                    .flex_col()
+                    .flex_none()
+                    .gap(px(12.))
+                    .px(gutter)
+                    .pt(px(12.))
+                    .pb(px(12.))
+                    .child(
+                        div()
+                            .key_context(FORM_CONTEXT)
+                            .on_action(cx.listener(|this, _: &Submit, _, cx| this.submit(cx)))
+                            .child(self.intake_strip(window, cx)),
+                    )
+                    .children(clip)
+                    .children(card)
+                    .children(banner)
+                    .child(self.chips(cx)),
+            )
+            // the list, and beside it (or in its place) the details
+            .child(
+                div()
                     .flex()
                     .flex_1()
                     .min_h_0()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .flex_none()
-                                    .gap(px(12.))
-                                    .px(theme.metrics.gutter)
-                                    .pt(px(12.))
-                                    .pb(px(12.))
-                                    .child(
-                                        div()
-                                            .key_context(FORM_CONTEXT)
-                                            .on_action(cx.listener(|this, _: &Submit, _, cx| {
-                                                this.submit(cx)
-                                            }))
-                                            .child(self.intake_strip(window, cx)),
-                                    )
-                                    .children(card)
-                                    .children(banner)
-                                    .child(self.chips(cx)),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_h_0()
-                                    .border_t_1()
-                                    .border_color(theme.border)
-                                    .child(list),
-                            ),
-                    )
-                    .children(selected.map(|row| self.detail_panel(&row, cx)))
-                    // toasts lie over the list, just above the status bar, out of the flow
-                    .children(crate::toasts::layer(cx)),
+                    .border_t_1()
+                    .border_color(theme.border)
+                    .when(!fill, |this| {
+                        this.child(div().flex_1().min_w_0().h_full().child(list))
+                    })
+                    .children(open.map(|row| self.detail_panel(&row, fill, cx))),
             )
             .child(status)
             .children(menu)

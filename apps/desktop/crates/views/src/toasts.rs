@@ -142,6 +142,77 @@ pub fn layer(cx: &App) -> Option<Entity<ToastLayer>> {
     cx.try_global::<Handle>().map(|handle| handle.0.clone())
 }
 
+/// The newest toast as one line for a status bar (Downloads lays nothing over its list): its
+/// glyph, words, button, "+N" for the others and a close button. A pointer over it holds the
+/// clock, as over the stack.
+pub fn inline(cx: &App) -> Option<gpui::AnyElement> {
+    let layer = layer(cx)?;
+    let state = layer.read(cx);
+    let live: Vec<&Item> = state.items.iter().filter(|item| !item.leaving).collect();
+    let item = *live.last()?;
+    let more = live.len() - 1;
+    let theme = *cx.theme();
+    let id = item.id;
+    let (icon, tone) = match item.kind {
+        Kind::Info => ("icons/info.svg", theme.foreground),
+        Kind::Success => ("icons/circle-check.svg", theme.foreground),
+        Kind::Error => ("icons/circle-alert.svg", theme.danger),
+    };
+    let hover = layer.clone();
+    let acted = layer.clone();
+    let closed = layer.clone();
+    Some(
+        div()
+            .id(("notice", id as usize))
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .min_w_0()
+            .text_color(tone)
+            .on_hover(move |hovered: &bool, _, cx| {
+                hover.update(cx, |layer, cx| {
+                    layer.hovered = *hovered;
+                    cx.notify();
+                })
+            })
+            .child(
+                gpui::svg()
+                    .path(icons::path(icon))
+                    .size(px(12.))
+                    .flex_none()
+                    .text_color(tone),
+            )
+            .child(div().min_w_0().truncate().child(item.message.clone()))
+            .children(item.action.clone().map(|(label, act)| {
+                ui::Button::new(("notice-act", id as usize))
+                    .ghost()
+                    .small()
+                    .label(label)
+                    .on_click(move |_, _, cx| {
+                        act(cx);
+                        acted.update(cx, |layer, cx| layer.dismiss(id, cx));
+                    })
+            }))
+            .when(more > 0, |this| {
+                this.child(
+                    div()
+                        .flex_none()
+                        .text_color(theme.muted_foreground)
+                        .child(i18n::t!("notice-more", count = more)),
+                )
+            })
+            .child(
+                ui::Button::new(("notice-close", id as usize))
+                    .ghost()
+                    .small()
+                    .icon("icons/x.svg")
+                    .tooltip("common-dismiss")
+                    .on_click(move |_, _, cx| closed.update(cx, |layer, cx| layer.dismiss(id, cx))),
+            )
+            .into_any_element(),
+    )
+}
+
 /// Shows a toast, with an optional button (`Undo`, `Show in folder`).
 pub fn toast(
     cx: &mut App,

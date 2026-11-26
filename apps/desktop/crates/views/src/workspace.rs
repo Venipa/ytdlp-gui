@@ -709,8 +709,8 @@ impl Render for Workspace {
                             .flex_1()
                             .min_w_0()
                             .child(self.page(current, cx))
-                            // toasts lie over the page's bottom right; Downloads hangs them above
-                            // its status bar itself
+                            // toasts lie over the page's bottom right; Downloads shows them as a
+                            // line in its status bar instead, so nothing covers its rows
                             .when(current != Destination::Downloads, |this| {
                                 this.child(self.toasts.clone())
                             }),

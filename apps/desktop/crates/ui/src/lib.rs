@@ -118,7 +118,8 @@ pub use lattice::Lattice;
 pub use layout::{ALWAYS, MIN_CONTENT, ROOMY, Room, SNUG, VAST, WIDE};
 pub use lazy::Lazy;
 pub use ledger::{
-    CallNumber, Chip, MONO, ProgressRule, Rule, Thumbnail, TokenInput, grouped, nav_item,
+    CALL_WIDTH, CallNumber, Chip, MONO, ProgressRule, Rule, Thumbnail, TokenInput, grouped,
+    nav_item,
 };
 pub use level_meter::LevelMeter;
 pub use linger::{Linger, lingers};

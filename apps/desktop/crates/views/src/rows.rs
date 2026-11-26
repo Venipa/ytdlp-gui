@@ -25,6 +25,19 @@ const SIZE: f32 = 72.;
 const SPEED: f32 = 72.;
 const ETA: f32 = 44.;
 const GAP: f32 = 12.;
+const FORMAT: f32 = 88.;
+/// The status column, and its narrowest form.
+const STATUS: f32 = 190.;
+const STATUS_NARROW: f32 = 150.;
+/// The row's "⋯" button at its end.
+const MENU: f32 = 24.;
+/// The ledger row's thumbnail.
+const THUMB: f32 = 72.;
+/// The least a title keeps before a column folds away.
+const TITLE_MIN: f32 = 180.;
+/// The site name after the title, and the gap before it.
+const SITE: f32 = 104.;
+const SITE_GAP: f32 = 8.;
 
 /// The row height of the list (headers included, the list is uniform).
 fn height(thumbs: bool) -> gpui::Pixels {
@@ -80,8 +93,6 @@ fn short_reason(text: &str) -> SharedString {
     SharedString::from(first.trim_end_matches('.').to_string())
 }
 
-type Act = fn(&mut Downloads, DownloadId, &mut Context<Downloads>);
-
 /// Where keyboard focus sits, as the list's rows need to know it.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct ListFocus {
@@ -92,26 +103,84 @@ pub(crate) struct ListFocus {
     pub within: bool,
 }
 
-/// Which columns a row has room for: the list drops the format, then the speed, then the call
-/// number as it gets narrower, so the title keeps room to be read.
+/// Which columns a row has room for. As the list gets narrower, speed and time left fold into
+/// the status ("18% · 0:08"), then the format goes, then the site name, then the status
+/// narrows, then the call number goes, so the title keeps `TITLE_MIN` and no cell ever overlaps
+/// or wraps.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Columns {
     pub call: bool,
     pub format: bool,
     pub speed: bool,
+    /// The site name beside the title (ledger rows carry it under the title, at no width).
+    pub site: bool,
     /// The width of the status column.
     pub status: f32,
+    pub thumbs: bool,
 }
 
 impl Columns {
-    /// The columns for a list `width` wide.
-    pub(crate) fn for_width(width: gpui::Pixels) -> Self {
-        let w = f32::from(width);
-        Self {
-            call: w >= 560.,
-            format: w >= 900.,
-            speed: w >= 720.,
-            status: if w >= 720. { 190. } else { 150. },
+    /// Every set the list can use, widest first.
+    fn steps(thumbs: bool) -> [Self; 6] {
+        let set = |call, format, speed, site, status| Self {
+            call,
+            format,
+            speed,
+            site,
+            status,
+            thumbs,
+        };
+        [
+            set(true, true, true, true, STATUS),
+            set(true, true, false, true, STATUS),
+            set(true, false, false, true, STATUS),
+            set(true, false, false, false, STATUS),
+            set(true, false, false, false, STATUS_NARROW),
+            set(false, false, false, false, STATUS_NARROW),
+        ]
+    }
+
+    /// The width a row with these columns needs, gutters included.
+    pub(crate) fn need(self, gutter: f32) -> f32 {
+        let cell = |on: bool, width: f32| if on { width + GAP } else { 0. };
+        2. * gutter
+            + cell(self.call, ui::CALL_WIDTH)
+            + cell(self.thumbs, THUMB)
+            + TITLE_MIN
+            + match self.site && !self.thumbs {
+                true => SITE_GAP + SITE,
+                false => 0.,
+            }
+            + cell(self.format, FORMAT)
+            + SIZE
+            + GAP
+            + cell(self.speed, SPEED + GAP + ETA)
+            + self.status
+            + GAP
+            + MENU
+    }
+
+    /// The narrowest a list can be and still show whole rows.
+    pub(crate) fn least(gutter: gpui::Pixels, thumbs: bool) -> f32 {
+        Self::steps(thumbs)[5].need(f32::from(gutter))
+    }
+
+    /// The richest columns that fit a list `width` wide.
+    pub(crate) fn for_width(width: gpui::Pixels, gutter: gpui::Pixels, thumbs: bool) -> Self {
+        let (w, gutter) = (f32::from(width), f32::from(gutter));
+        let steps = Self::steps(thumbs);
+        steps
+            .into_iter()
+            .find(|c| c.need(gutter) <= w)
+            .unwrap_or(steps[5])
+    }
+
+    /// The status width of a row: rows that never move (History) take the speed and time-left
+    /// room too, so a failure reason reads whole.
+    fn status_for(self, still: bool) -> f32 {
+        match self.speed && still {
+            true => self.status + SPEED + GAP + ETA + GAP,
+            false => self.status,
         }
     }
 }
@@ -179,8 +248,8 @@ impl Downloads {
                 .when(right, |this| this.text_right())
                 .child(i18n::lookup(key, None))
         };
-        // only rows in progress have a speed to show
-        let speed = cols.speed && key == "dl-group-progress";
+        // only rows in progress have a speed to show; History gives that room to the status
+        let still = key != "dl-group-progress";
         div()
             .flex()
             .flex_none()
@@ -209,15 +278,12 @@ impl Downloads {
                 this.child(caption("dl-col-format", 88., false))
             })
             .child(caption("dl-col-size", SIZE, true))
-            .when(cols.speed, |this| match speed {
-                true => this
-                    .child(caption("dl-col-speed", SPEED, true))
-                    .child(caption("dl-col-eta", ETA, true)),
-                false => this
-                    .child(div().w(px(SPEED)).flex_none())
-                    .child(div().w(px(ETA)).flex_none()),
+            .when(cols.speed && !still, |this| {
+                this.child(caption("dl-col-speed", SPEED, true))
+                    .child(caption("dl-col-eta", ETA, true))
             })
-            .child(caption("dl-col-status", cols.status, true))
+            .child(caption("dl-col-status", cols.status_for(still), true))
+            .child(div().w(px(MENU)).flex_none())
             .into_any_element()
     }
 
@@ -296,119 +362,33 @@ impl Downloads {
         (size, speed, eta)
     }
 
-    /// The icon buttons a hovered row shows for what its state allows, 28 px each with a
-    /// tooltip. They sit left of the status cell, over the size, speed and time-left cells, so
-    /// the state words stay in sight. `shown` brings them out without a hover (the selected row
-    /// while keyboard focus is in the list), so Tab reaches them.
-    fn row_actions(
-        &self,
-        s: &DownloadSummary,
-        cols: Columns,
-        shown: bool,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let theme = *cx.theme();
-        let id = s.id;
-        let button = |key: &'static str,
-                      icon: &'static str,
-                      tip: &'static str,
-                      act: Act,
-                      cx: &mut Context<Self>| {
-            Button::new((key, id.0 as usize))
-                .ghost()
-                .icon(icon)
-                .tooltip(tip)
-                .on_click(cx.listener(move |this, _, _, cx| act(this, id, cx)))
-        };
-        let has_file = s.file_path.is_some() && !s.file_missing;
-        let mut buttons = Vec::new();
-        match s.status {
-            DownloadStatus::Paused => buttons.push(button(
-                "a-resume",
-                "icons/play.svg",
-                "dl-resume",
-                |t, id, cx| t.resume(id, cx),
-                cx,
-            )),
-            DownloadStatus::Failed | DownloadStatus::Cancelled => buttons.push(button(
-                "a-retry",
-                "icons/rotate-cw.svg",
-                "dl-try-again",
-                |t, id, cx| t.retry(id, cx),
-                cx,
-            )),
-            DownloadStatus::Completed => {}
-            _ => buttons.push(button(
-                "a-pause",
-                "icons/pause.svg",
-                "dl-pause",
-                |t, id, cx| t.pause(id, cx),
-                cx,
-            )),
-        }
-        if !s.status.is_terminal() {
-            buttons.push(button(
-                "a-cancel",
-                "icons/x.svg",
-                "dl-cancel-download",
-                |t, id, cx| t.cancel(id, cx),
-                cx,
-            ));
-        }
-        if has_file && s.status == DownloadStatus::Completed {
-            buttons.push(button(
-                "a-open",
-                "icons/external-link.svg",
-                "dl-open",
-                |t, id, cx| t.open_file(id, cx),
-                cx,
-            ));
-        }
-        if has_file {
-            buttons.push(button(
-                "a-folder",
-                "icons/folder-open.svg",
-                "dl-show-folder",
-                |t, id, cx| t.show_folder(id, cx),
-                cx,
-            ));
-        }
-        if s.status == DownloadStatus::Completed {
-            buttons.push(button(
-                "a-link",
-                "icons/link.svg",
-                "dl-copy-link",
-                |t, id, cx| t.copy_link(id, cx),
-                cx,
-            ));
-        }
-        // cover the whole of the cells under the buttons, so no number shows half cut
-        let cover = match cols.speed {
-            true => SPEED + GAP + ETA + 8.,
-            false => SIZE + 8.,
-        };
+    /// The row's "⋯" button: it opens the row's menu (as a right-click does) under itself. A
+    /// hovered row shows it; the selected row keeps it in sight while keyboard focus is in the
+    /// list, so Tab reaches it. Its room is always kept, so nothing moves or is covered.
+    fn row_menu_button(&self, id: DownloadId, shown: bool, cx: &mut Context<Self>) -> AnyElement {
         div()
-            .absolute()
-            .right(theme.metrics.gutter + px(cols.status + 4.))
-            .top_0()
-            .bottom_0()
+            .w(px(MENU))
+            .flex_none()
             .flex()
-            .items_center()
             .justify_end()
-            .min_w(px(cover))
-            .gap(px(2.))
-            .px(px(4.))
-            .bg(theme.background.blend(match self.selected == Some(id) {
-                true => theme.table_active,
-                false => theme.table_hover,
-            }))
             .when(!shown, |this| {
                 this.invisible()
                     .group_hover(SharedString::from(format!("row-{}", id.0)), |style| {
                         style.visible()
                     })
             })
-            .children(buttons)
+            .child(
+                Button::new(("row-more", id.0 as usize))
+                    .ghost()
+                    .small()
+                    .icon("icons/ellipsis.svg")
+                    .tooltip("dl-row-more")
+                    .on_click(cx.listener(move |this, event: &gpui::ClickEvent, _, cx| {
+                        cx.stop_propagation();
+                        this.menu = Some((event.position(), id));
+                        cx.notify();
+                    })),
+            )
             .into_any_element()
     }
 
@@ -427,7 +407,11 @@ impl Downloads {
         let (size, speed, eta) = self.numbers(s, cx);
         let percent = percent(s);
         let title = s.title.clone().unwrap_or_else(|| s.url.clone());
-        let actions = self.row_actions(s, cols, selected && focus.within, cx);
+        let more = self.row_menu_button(id, selected && focus.within, cx);
+        let still = s.status.is_terminal();
+        // speed and time left folded away: the time left rides after the percent, the speed in
+        // the status tooltip
+        let folded = !cols.speed && !eta.is_empty();
         let thumb = s
             .thumbnail_path
             .clone()
@@ -485,15 +469,17 @@ impl Downloads {
                                     })
                                     .child(title),
                             )
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .max_w(px(160.))
-                                    .truncate()
-                                    .text_size(theme.text(Text::Small))
-                                    .text_color(muted)
-                                    .child(s.domain.clone()),
-                            ),
+                            .when(cols.site || thumbs, |this| {
+                                this.child(
+                                    div()
+                                        .flex_none()
+                                        .max_w(px(SITE))
+                                        .truncate()
+                                        .text_size(theme.text(Text::Small))
+                                        .text_color(muted)
+                                        .child(s.domain.clone()),
+                                )
+                            }),
                     )
                     .when(cols.format, |this| {
                         this.child(
@@ -515,7 +501,7 @@ impl Downloads {
                             .text_color(muted)
                             .child(size),
                     )
-                    .when(cols.speed, |this| {
+                    .when(cols.speed && !still, |this| {
                         let cell = |width: f32, text: String| {
                             div()
                                 .w(px(width))
@@ -526,12 +512,13 @@ impl Downloads {
                                 .text_color(muted)
                                 .child(text)
                         };
-                        this.child(cell(SPEED, speed)).child(cell(ETA, eta))
+                        this.child(cell(SPEED, speed.clone()))
+                            .child(cell(ETA, eta.clone()))
                     })
                     .child(
                         div()
                             .id(("status", id.0 as usize))
-                            .w(px(cols.status))
+                            .w(px(cols.status_for(still)))
                             .flex_none()
                             .flex()
                             .justify_end()
@@ -539,6 +526,9 @@ impl Downloads {
                             .gap(px(8.))
                             .text_color(tone)
                             .when_some(why, |this, why| this.tip_label(why, Perch::Below))
+                            .when(folded, |this| {
+                                this.tip_label(SharedString::from(speed.clone()), Perch::Below)
+                            })
                             .child(
                                 div()
                                     .flex()
@@ -559,17 +549,21 @@ impl Downloads {
                                     .child(div().min_w_0().truncate().child(status)),
                             )
                             .when_some(percent, |this, share| {
+                                let share = format!("{:.0}%", share * 100.);
                                 this.child(
                                     div()
-                                        .w(px(36.))
                                         .flex_none()
+                                        .whitespace_nowrap()
                                         .text_right()
                                         .font_features(tabular())
-                                        .child(format!("{:.0}%", share * 100.)),
+                                        .map(|cell| match folded {
+                                            true => cell.child(format!("{share} · {eta}")),
+                                            false => cell.w(px(36.)).child(share),
+                                        }),
                                 )
                             }),
                     )
-                    .child(actions),
+                    .child(more),
             )
             // one plain hairline divides every row the list wide; only work in motion adds the
             // ruled progress line over it, inside the gutters
@@ -750,12 +744,30 @@ mod tests {
     }
 
     #[test]
-    fn columns_drop_as_the_list_narrows() {
-        let wide = Columns::for_width(px(1240.));
-        assert!(wide.call && wide.format && wide.speed);
-        let mid = Columns::for_width(px(760.));
-        assert!(mid.call && !mid.format && mid.speed);
-        let narrow = Columns::for_width(px(480.));
-        assert!(!narrow.call && !narrow.format && !narrow.speed && narrow.status < mid.status);
+    fn columns_fold_in_order_and_every_row_fits() {
+        let gutter = px(16.);
+        for thumbs in [false, true] {
+            let wide = Columns::for_width(px(1240.), gutter, thumbs);
+            assert!(wide.call && wide.format && wide.speed);
+            // the owner's case: 1292 window, details open (list about 745 wide)
+            let mid = Columns::for_width(px(745.), gutter, false);
+            assert!(mid.call && mid.site && !mid.format && !mid.speed, "{mid:?}");
+            // 1100 window, details open (list about 550): the title keeps its room, the site goes
+            let tight = Columns::for_width(px(553.), gutter, false);
+            assert!(!tight.site && !tight.format, "{tight:?}");
+            // at every width from the least up, the chosen row fits, and columns only ever
+            // come back as the list widens
+            let least = Columns::least(gutter, thumbs).ceil() as i32;
+            let mut last = Columns::for_width(px(least as f32), gutter, thumbs);
+            for w in least..=2000 {
+                let cols = Columns::for_width(px(w as f32), gutter, thumbs);
+                assert!(cols.need(16.) <= w as f32, "{w}: {cols:?}");
+                assert!(
+                    cols.need(16.) >= last.need(16.),
+                    "{w}: shrank while widening"
+                );
+                last = cols;
+            }
+        }
     }
 }
