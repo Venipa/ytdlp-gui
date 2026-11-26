@@ -13,8 +13,8 @@ const plural = (n: number, one: string) => `${num(n)} ${one}${n === 1 ? '' : 's'
 // The three rows that are downloading in the capture: their rule's top edge and the share already drawn.
 const moving = [
   { top: '24.69%', from: '10%', dur: '9s' },
-  { top: '28.66%', from: '25%', dur: '7s' },
-  { top: '32.63%', from: '18%', dur: '11s' },
+  { top: '28.66%', from: '19%', dur: '7s' },
+  { top: '32.63%', from: '14%', dur: '11s' },
 ];
 
 const features = [
