@@ -32,6 +32,7 @@ Settings open from the sidebar; each page is listed under it. Changes apply at o
 - **Subtitles**: download subtitles, which languages (`en, de, pt-BR`), and whether to embed them in the video file.
 - **Embedding**: embed the thumbnail as cover art, the metadata (title, uploader, date) and chapter marks.
 - **SponsorBlock**: for YouTube, **Mark** or **Remove** sponsor segments, and choose which categories (sponsor, intro, outro, self promotion, interaction reminder, preview or recap, off-topic music).
+- **Converting**: **Encoder** chooses how the [fixes](#fixes) that convert run: **Automatic** uses the graphics chip when ffmpeg has it and the processor otherwise.
 
 ## Network
 
@@ -59,11 +60,16 @@ Each download, and each link preview, only gets the cookies for its own site (pl
 
 Rules decide, per site, what happens to its links. A rule matches a **domain with its subdomains** (`youtube.com` also covers `music.youtube.com`), a **URL start** (`https://www.twitch.tv/videos/`) or a **regex**, and sets:
 
-- **Clipboard**: add a copied link automatically, ask, or ignore it.
-- **Format**: the preset its links are added with, unless you pick another one yourself.
-- **Fix after download**: one of the fixes below.
+- **When a link is copied**: add it automatically, ask, or ignore it.
+- **When it downloads**: the **Format** its links are added with (unless you pick another one yourself), the folder it is **Saved to**, its **File name** (a yt-dlp template for single videos, with an example of the result) and a **Fix after download** (one of the fixes below).
 
-The first switched-on rule that matches wins; **Everything else** holds the defaults. The editor's **Test a link** field shows which rule a link gets before you save.
+Anything a rule leaves on **Default** follows the Downloads and Formats settings. The first switched-on rule that matches wins; **Everything else** holds the defaults. Each rule in the list says only what it changes.
+
+![Settings, Site rules: four numbered rules, each with how it matches and what it changes, an Everything else row with the defaults, and Add rule.](../../assets/shots/settings-rules.webp)
+
+**Edit** opens the rule on its own page, back to the list with **‹ Site rules**. Its **Test a link** field, right under the match, shows which rule a link gets before you save.
+
+![A site rule open for editing: Links (match and Test a link), When a link is copied, and When it downloads with format, folder, file name with an example, and fix.](../../assets/shots/settings-rule-editor.webp)
 
 ### Fixes
 
@@ -75,7 +81,7 @@ The first switched-on rule that matches wins; **Everything else** holds the defa
 | Normalize audio | Even loudness for music and podcasts. |
 | Smaller file | Re-encodes to HEVC: about half the size, slower. |
 
-**Encoder** chooses how converting runs: **Automatic** uses the graphics chip when ffmpeg has it and the processor otherwise.
+How fixes that convert run (graphics chip or processor) is set under [Formats](#formats), **Converting**.
 
 ## Tools
 
