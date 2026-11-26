@@ -11,7 +11,8 @@ use gpui::{
 use i18n::t;
 use input::{
     DeleteEntry, DeleteFile, FirstRow, FocusIntake, FocusSearch, LastRow, OpenSettings,
-    PasteIntake, ShowDownloads, ShowLogs, ShowSettings, TogglePause, WORKSPACE_CONTEXT,
+    PasteIntake, ShowDownloads, ShowLogs, ShowSettings, TickAll, TickNext, TickPrevious,
+    TogglePause, WORKSPACE_CONTEXT,
 };
 use router::{Destination, Navigation, NavigationEvent, SettingsPage};
 use state::AppState;
@@ -597,6 +598,11 @@ impl Render for Workspace {
             .on_action(cx.listener(|this, _: &Deselect, w, cx| this.key(Key::Deselect, w, cx)))
             .on_action(cx.listener(|_, _: &NextField, w, cx| w.focus_next(cx)))
             .on_action(cx.listener(|_, _: &PreviousField, w, cx| w.focus_prev(cx)))
+            .on_action(cx.listener(|this, _: &TickAll, w, cx| this.key(Key::TickAll, w, cx)))
+            .on_action(cx.listener(|this, _: &TickNext, w, cx| this.key(Key::TickNext, w, cx)))
+            .on_action(
+                cx.listener(|this, _: &TickPrevious, w, cx| this.key(Key::TickPrevious, w, cx)),
+            )
             .on_action(cx.listener(|this, _: &FirstRow, w, cx| this.key(Key::First, w, cx)))
             .on_action(cx.listener(|this, _: &LastRow, w, cx| this.key(Key::Last, w, cx)))
             .on_action(cx.listener(|this, _: &Activate, w, cx| this.key(Key::Open, w, cx)))

@@ -22,6 +22,11 @@ actions!(
         DeleteEntry,
         /// Delete the selected entry and its file (Shift+Del).
         DeleteFile,
+        /// Tick every row the list shows, or untick them all (Ctrl+A).
+        TickAll,
+        /// Tick the next or previous row too (Shift+Down, Shift+Up).
+        TickNext,
+        TickPrevious,
         /// Jump to the first or last row of the list (Home, End).
         FirstRow,
         LastRow,
@@ -63,6 +68,10 @@ fn shared() -> Vec<KeyBinding> {
     vec![
         KeyBinding::new("down", SelectNext, Some(&browsing)),
         KeyBinding::new("up", SelectPrevious, Some(&browsing)),
+        KeyBinding::new("shift-down", TickNext, Some(&browsing)),
+        KeyBinding::new("shift-up", TickPrevious, Some(&browsing)),
+        KeyBinding::new("ctrl-a", TickAll, Some(&browsing)),
+        KeyBinding::new("cmd-a", TickAll, Some(&browsing)),
         KeyBinding::new("home", FirstRow, Some(&rows)),
         KeyBinding::new("end", LastRow, Some(&rows)),
         KeyBinding::new("enter", Activate, Some(&rows)),

@@ -176,3 +176,39 @@ fix-normalize = Normalize audio
 fix-normalize-desc = Even loudness for music and podcasts.
 fix-smaller = Smaller file
 fix-smaller-desc = Re-encodes to HEVC: about half the size, slower.
+
+## bulk select
+dl-tick-row = Select { $title }
+dl-tick-group = Select every row in { $group }
+dl-tick-all = Select every row shown
+dl-bulk-count = { $count } selected
+dl-bulk-pause = Pause { $count }
+dl-bulk-resume = Resume { $count }
+dl-bulk-retry = Try again { $count }
+dl-bulk-cancel = Cancel { $count }
+dl-bulk-copy = { $count ->
+    [one] Copy 1 link
+   *[other] Copy { $count } links
+}
+dl-bulk-remove = Remove { $count } from list
+dl-bulk-delete = { $count ->
+    [one] Delete 1 file
+   *[other] Delete { $count } files
+}
+dl-bulk-clear = Clear
+dl-bulk-keep = Keep
+dl-bulk-remove-title = { $count ->
+    [one] Remove this download from the list?
+   *[other] Remove { $count } downloads from the list?
+}
+dl-bulk-remove-detail = Their files stay on your disk.
+dl-bulk-delete-title = { $count ->
+    [one] Delete this file?
+   *[other] Delete { $count } files?
+}
+dl-bulk-delete-detail = The files are deleted from your disk and the downloads leave the list.
+dl-copied-links = { $count ->
+    [one] Link copied
+   *[other] { $count } links copied
+}
+dl-toast-deleted-many = { $count } entries deleted

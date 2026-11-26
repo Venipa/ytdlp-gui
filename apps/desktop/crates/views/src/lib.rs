@@ -11,6 +11,7 @@ mod os;
 mod root;
 mod rows;
 mod screens;
+mod ticks;
 mod toasts;
 mod update_line;
 mod welcome;

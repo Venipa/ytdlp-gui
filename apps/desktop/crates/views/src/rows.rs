@@ -9,8 +9,8 @@ use gpui::{
 };
 use i18n::t;
 use ui::{
-    ActiveTheme as _, Button, CallNumber, Menu, MenuItem, Modal, Perch, Popup, ProgressRule, Rule,
-    Text, Thumbnail, Tipped as _, tabular,
+    ActiveTheme as _, Button, CallNumber, Checkbox, Menu, MenuItem, Modal, Perch, Popup,
+    ProgressRule, Rule, Text, Thumbnail, Tipped as _, tabular,
 };
 
 use crate::downloads::{Downloads, Line, error_text_of};
@@ -31,6 +31,8 @@ const STATUS: f32 = 190.;
 const STATUS_NARROW: f32 = 150.;
 /// The row's "⋯" button at its end.
 const MENU: f32 = 24.;
+/// The slot of the row's select box at its start, always kept so nothing moves.
+const TICK: f32 = 18.;
 /// The ledger row's thumbnail.
 const THUMB: f32 = 72.;
 /// The least a title keeps before a column folds away.
@@ -144,6 +146,8 @@ impl Columns {
     pub(crate) fn need(self, gutter: f32) -> f32 {
         let cell = |on: bool, width: f32| if on { width + GAP } else { 0. };
         2. * gutter
+            + TICK
+            + GAP
             + cell(self.call, ui::CALL_WIDTH)
             + cell(self.thumbs, THUMB)
             + TITLE_MIN
@@ -250,7 +254,36 @@ impl Downloads {
         };
         // only rows in progress have a speed to show; History gives that room to the status
         let still = key != "dl-group-progress";
+        // the group's box ticks (or unticks) every row the group shows
+        let group: Vec<DownloadId> = {
+            let store = self.app.downloads.read(cx);
+            self.order
+                .iter()
+                .copied()
+                .filter(|id| {
+                    store
+                        .get(*id)
+                        .is_some_and(|s| s.status.is_terminal() == still)
+                })
+                .collect()
+        };
+        let all = self.ticks.has_all(&group);
+        let name = SharedString::from(format!("group-{key}"));
+        let tick = self.tick_slot(
+            name.clone(),
+            Checkbox::new(("tick-group", usize::from(still)), all)
+                .name(t!(
+                    "dl-tick-group",
+                    group = i18n::lookup(key, None).to_string()
+                ))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.ticks.all(&group);
+                    cx.notify();
+                })),
+        );
         div()
+            .group(name)
             .flex()
             .flex_none()
             .items_end()
@@ -261,6 +294,7 @@ impl Downloads {
             .pb(px(6.))
             .text_size(theme.text(Text::Label))
             .text_color(theme.muted_foreground)
+            .child(tick)
             .child(
                 div()
                     .flex()
@@ -296,7 +330,9 @@ impl Downloads {
     ) -> gpui::Stateful<gpui::Div> {
         let theme = *cx.theme();
         let id = s.id;
-        let selected = self.selected == Some(id);
+        // while rows are ticked the details stay closed, so no row wears the open look
+        let selected = self.selected == Some(id) && self.ticks.is_empty();
+        let ticked = self.ticks.contains(id);
         div()
             .id(("row", id.0 as usize))
             .group(SharedString::from(format!("row-{}", id.0)))
@@ -307,7 +343,8 @@ impl Downloads {
             .h(height(thumbs))
             .w_full()
             .cursor_pointer()
-            .when(!selected, |this| {
+            .when(ticked && !selected, |this| this.bg(theme.table_active))
+            .when(!selected && !ticked, |this| {
                 this.hover(|style| style.bg(theme.table_hover))
                     .active(|style| style.bg(theme.secondary_hover))
             })
@@ -325,11 +362,22 @@ impl Downloads {
             })
             .on_click(
                 cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
-                    // only a plain left click (or Enter) opens the sheet; right click is the menu
+                    // only a left click (or Enter) acts; right click is the menu
                     if !event.standard_click() {
                         return;
                     }
-                    this.selected = Some(id);
+                    // Shift ticks a range, Ctrl (Cmd) one row; once anything is ticked a plain
+                    // click ticks too. Only a plain click with nothing ticked opens the details.
+                    let keys = event.modifiers();
+                    if keys.shift {
+                        this.ticks.range(&this.order, this.selected, id);
+                        this.selected = Some(id);
+                    } else if keys.secondary() || !this.ticks.is_empty() {
+                        this.ticks.toggle(id);
+                        this.selected = (!this.ticks.is_empty()).then_some(id);
+                    } else {
+                        this.selected = Some(id);
+                    }
                     window.focus(&this.list_focus, cx);
                     cx.notify();
                 }),
@@ -360,6 +408,22 @@ impl Downloads {
             _ => (String::new(), String::new()),
         };
         (size, speed, eta)
+    }
+
+    /// The slot of a select box: the box shows while its line is hovered, and on every line
+    /// once anything is ticked.
+    fn tick_slot(&self, group: SharedString, tick: Checkbox) -> AnyElement {
+        let shown = !self.ticks.is_empty();
+        div()
+            .w(px(TICK))
+            .flex_none()
+            .flex()
+            .items_center()
+            .when(!shown, |this| {
+                this.invisible().group_hover(group, |style| style.visible())
+            })
+            .child(tick)
+            .into_any_element()
     }
 
     /// The row's "⋯" button: it opens the row's menu (as a right-click does) under itself. A
@@ -408,6 +472,18 @@ impl Downloads {
         let percent = percent(s);
         let title = s.title.clone().unwrap_or_else(|| s.url.clone());
         let more = self.row_menu_button(id, selected && focus.within, cx);
+        let tick = self.tick_slot(
+            SharedString::from(format!("row-{}", id.0)),
+            Checkbox::new(("tick", id.0 as usize), self.ticks.contains(id))
+                .name(t!("dl-tick-row", title = title.as_str()))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.ticks.toggle(id);
+                    this.selected = (!this.ticks.is_empty()).then_some(id);
+                    window.focus(&this.list_focus, cx);
+                    cx.notify();
+                })),
+        );
         let still = s.status.is_terminal();
         // speed and time left folded away: the time left rides after the percent, the speed in
         // the status tooltip
@@ -443,6 +519,7 @@ impl Downloads {
                     .items_center()
                     .gap(px(GAP))
                     .px(theme.metrics.gutter)
+                    .child(tick)
                     .when(cols.call, |this| {
                         this.child(CallNumber::new(id.0).selected(selected))
                     })
@@ -584,7 +661,7 @@ impl Downloads {
                     .bottom_0()
                     .child(ProgressRule::new(rule))
             }))
-            .when(selected && focus.ring, |this| {
+            .when(self.selected == Some(id) && focus.ring, |this| {
                 this.child(ui::focus_ring(cx))
             });
         match fade {
@@ -686,6 +763,46 @@ impl Downloads {
                     cx.notify();
                 },
             )),
+        )
+    }
+
+    /// The one confirmation of a bulk removal or file deletion.
+    pub(crate) fn bulk_confirm_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (files, ids) = self.bulk_confirm.as_ref()?;
+        let n = ids.len();
+        let (title, detail, label) = match files {
+            true => (
+                t!("dl-bulk-delete-title", count = n),
+                t!("dl-bulk-delete-detail"),
+                t!("dl-bulk-delete", count = n),
+            ),
+            false => (
+                t!("dl-bulk-remove-title", count = n),
+                t!("dl-bulk-remove-detail"),
+                t!("dl-bulk-remove", count = n),
+            ),
+        };
+        let close = |this: &mut Downloads, cx: &mut Context<Downloads>| {
+            this.bulk_confirm = None;
+            cx.notify();
+        };
+        Some(
+            Modal::new("confirm-bulk", title)
+                .detail(detail)
+                .on_dismiss(cx.listener(move |this, _, _, cx| close(this, cx)))
+                .action(
+                    Button::new("bulk-keep")
+                        .ghost()
+                        .label(t!("dl-bulk-keep"))
+                        .on_click(cx.listener(move |this, _, _, cx| close(this, cx))),
+                )
+                .action(
+                    Button::new("bulk-go")
+                        .destructive()
+                        .label(label)
+                        .on_click(cx.listener(|this, _, _, cx| this.bulk_confirmed(cx))),
+                )
+                .into_any_element(),
         )
     }
 

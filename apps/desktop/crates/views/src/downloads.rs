@@ -22,8 +22,8 @@ use gpui::{
 use i18n::t;
 use state::{AppState, DownloadsEvent, IntakeEvent, ProbeState};
 use ui::{
-    ActiveTheme as _, Button, Chip, FORM_CONTEXT, Input, Kbd, Scrollbar, Scroller, Submit, Text,
-    TextArea, TokenInput, Vacancy,
+    ActiveTheme as _, Button, Checkbox, Chip, FORM_CONTEXT, Input, Kbd, Scrollbar, Scroller,
+    Submit, Text, TextArea, TokenInput, Vacancy,
 };
 
 use crate::format;
@@ -66,7 +66,7 @@ pub enum Line {
 }
 
 /// A keyboard action of the page, as forwarded by the Workspace.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Key {
     Next,
     Previous,
@@ -80,6 +80,37 @@ pub enum Key {
     First,
     Last,
     Open,
+    TickAll,
+    TickNext,
+    TickPrevious,
+}
+
+/// What the selection bar does to the ticked rows; each acts on the rows it fits.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Bulk {
+    Pause,
+    Resume,
+    Retry,
+    Cancel,
+    Copy,
+    Remove,
+    Delete,
+}
+
+impl Bulk {
+    /// Whether the action applies to a row in this state.
+    pub(crate) fn fits(self, s: &DownloadSummary) -> bool {
+        let status = s.status;
+        match self {
+            Bulk::Pause => !status.is_terminal() && status != DownloadStatus::Paused,
+            Bulk::Resume => status == DownloadStatus::Paused,
+            Bulk::Retry => matches!(status, DownloadStatus::Failed | DownloadStatus::Cancelled),
+            Bulk::Cancel => !status.is_terminal(),
+            Bulk::Copy => true,
+            Bulk::Remove => !status.is_active(),
+            Bulk::Delete => !status.is_active() && s.file_path.is_some(),
+        }
+    }
 }
 
 /// The Downloads page.
@@ -112,10 +143,14 @@ pub struct Downloads {
     pub(crate) menu: Option<(Point<Pixels>, DownloadId)>,
     /// A delete-file confirmation.
     pub(crate) confirm: Option<DownloadId>,
+    /// The rows ticked for a bulk action.
+    pub(crate) ticks: crate::ticks::Ticks,
+    /// A bulk removal (`false`) or file deletion (`true`) waiting for its one confirmation.
+    pub(crate) bulk_confirm: Option<(bool, Vec<DownloadId>)>,
     /// Entries hidden while their undo toast is up.
     pub(crate) hidden: HashSet<DownloadId>,
     /// The ids in list order, for the arrow keys.
-    order: Vec<DownloadId>,
+    pub(crate) order: Vec<DownloadId>,
     /// The list line of each id in `order`.
     order_lines: Vec<usize>,
     pub(crate) scroll: UniformListScrollHandle,
@@ -226,6 +261,8 @@ impl Downloads {
             playlist_off: HashSet::new(),
             menu: None,
             confirm: None,
+            ticks: Default::default(),
+            bulk_confirm: None,
             hidden: HashSet::new(),
             order: Vec::new(),
             order_lines: Vec::new(),
@@ -733,24 +770,40 @@ impl Downloads {
 
     /// Hides the entry and removes it for good when the undo toast runs out.
     pub(crate) fn delete_entry(&mut self, id: DownloadId, cx: &mut Context<Self>) {
-        match self.summary(id, cx) {
-            Some(s) if !s.status.is_active() => {}
-            _ => return,
+        self.delete_entries(vec![id], cx);
+    }
+
+    /// Hides the entries that are not running and removes them for good when the one undo
+    /// toast runs out.
+    pub(crate) fn delete_entries(&mut self, ids: Vec<DownloadId>, cx: &mut Context<Self>) {
+        let ids: Vec<DownloadId> = ids
+            .into_iter()
+            .filter(|id| self.summary(*id, cx).is_some_and(|s| !s.status.is_active()))
+            .collect();
+        if ids.is_empty() {
+            return;
         }
-        self.hidden.insert(id);
-        if self.selected == Some(id) {
+        self.hidden.extend(&ids);
+        if self.selected.is_some_and(|id| ids.contains(&id)) {
             self.selected = None;
         }
+        let message = match ids.len() {
+            1 => t!("dl-toast-deleted"),
+            n => t!("dl-toast-deleted-many", count = n),
+        };
         let undo = cx.entity();
+        let back = ids.clone();
         toast(
             cx,
             Kind::Info,
-            t!("dl-toast-deleted"),
+            message,
             Some((
                 t!("dl-undo"),
                 Rc::new(move |cx: &mut App| {
                     undo.update(cx, |this, cx| {
-                        this.hidden.remove(&id);
+                        for id in &back {
+                            this.hidden.remove(id);
+                        }
                         cx.notify();
                     })
                 }),
@@ -759,8 +812,10 @@ impl Downloads {
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(UNDO).await;
             this.update(cx, |this, cx| {
-                if this.hidden.remove(&id) {
-                    this.app.downloads.update(cx, |d, cx| d.delete(id, cx));
+                for id in ids {
+                    if this.hidden.remove(&id) {
+                        this.app.downloads.update(cx, |d, cx| d.delete(id, cx));
+                    }
                 }
             })
             .ok();
@@ -779,27 +834,103 @@ impl Downloads {
 
     /// Deletes the file, then the entry.
     pub(crate) fn delete_file(&mut self, id: DownloadId, cx: &mut Context<Self>) {
+        self.delete_files(vec![id], cx);
+    }
+
+    /// Deletes each file, then its entry; an entry whose file cannot go stays.
+    pub(crate) fn delete_files(&mut self, ids: Vec<DownloadId>, cx: &mut Context<Self>) {
         self.confirm = None;
-        let Some(summary) = self.summary(id, cx) else {
-            return;
-        };
-        if let Some(path) = &summary.file_path {
-            match std::fs::remove_file(path) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => {
-                    log::warn!("downloads: cannot delete {path}: {error}");
-                    toast(cx, Kind::Error, t!("dl-toast-delete-failed"), None);
-                    cx.notify();
-                    return;
+        let mut failed = false;
+        for id in ids {
+            let Some(summary) = self.summary(id, cx) else {
+                continue;
+            };
+            if let Some(path) = &summary.file_path {
+                match std::fs::remove_file(path) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => {
+                        log::warn!("downloads: cannot delete {path}: {error}");
+                        failed = true;
+                        continue;
+                    }
                 }
             }
+            if self.selected == Some(id) {
+                self.selected = None;
+            }
+            self.app.downloads.update(cx, |d, cx| d.delete(id, cx));
         }
-        if self.selected == Some(id) {
-            self.selected = None;
+        if failed {
+            toast(cx, Kind::Error, t!("dl-toast-delete-failed"), None);
         }
-        self.app.downloads.update(cx, |d, cx| d.delete(id, cx));
         cx.notify();
+    }
+
+    /// The ticked rows, in list order.
+    pub(crate) fn ticked(&self, cx: &App) -> Vec<DownloadSummary> {
+        self.ticks
+            .ids(&self.order)
+            .into_iter()
+            .filter_map(|id| self.summary(id, cx))
+            .collect()
+    }
+
+    /// Runs a selection-bar action on the ticked rows it fits; Remove and Delete files ask
+    /// first. The ticks clear once it is done.
+    pub(crate) fn bulk(&mut self, act: Bulk, cx: &mut Context<Self>) {
+        let rows: Vec<DownloadSummary> = self
+            .ticked(cx)
+            .into_iter()
+            .filter(|s| act.fits(s))
+            .collect();
+        if rows.is_empty() {
+            return;
+        }
+        let ids: Vec<DownloadId> = rows.iter().map(|s| s.id).collect();
+        match act {
+            Bulk::Remove | Bulk::Delete => {
+                self.bulk_confirm = Some((act == Bulk::Delete, ids));
+                cx.notify();
+                return;
+            }
+            Bulk::Copy => {
+                let links: Vec<&str> = rows.iter().map(|s| s.url.as_str()).collect();
+                cx.write_to_clipboard(ClipboardItem::new_string(links.join("\n")));
+                toast(
+                    cx,
+                    Kind::Success,
+                    t!("dl-copied-links", count = links.len()),
+                    None,
+                );
+            }
+            Bulk::Pause | Bulk::Resume | Bulk::Retry | Bulk::Cancel => {
+                self.app.downloads.update(cx, |d, cx| {
+                    for id in ids {
+                        match act {
+                            Bulk::Pause => d.pause(id, cx),
+                            Bulk::Resume => d.resume(id, cx),
+                            Bulk::Retry => d.retry(id, cx),
+                            _ => d.cancel(id, cx),
+                        }
+                    }
+                });
+            }
+        }
+        self.ticks.clear();
+        cx.notify();
+    }
+
+    /// The one confirmation of a bulk removal or file deletion went through.
+    pub(crate) fn bulk_confirmed(&mut self, cx: &mut Context<Self>) {
+        let Some((files, ids)) = self.bulk_confirm.take() else {
+            return;
+        };
+        self.ticks.clear();
+        match files {
+            true => self.delete_files(ids, cx),
+            false => self.delete_entries(ids, cx),
+        }
     }
 
     /// Closes the detail panel.
@@ -860,10 +991,36 @@ impl Downloads {
                 self.step(-1, cx);
                 window.focus(&self.list_focus, cx);
             }
+            // with rows ticked, the keys act on those
+            Key::TogglePause if !self.ticks.is_empty() => {
+                let running = self.ticked(cx).iter().any(|s| Bulk::Pause.fits(s));
+                self.bulk(if running { Bulk::Pause } else { Bulk::Resume }, cx);
+            }
+            Key::DeleteEntry if !self.ticks.is_empty() => self.bulk(Bulk::Remove, cx),
+            Key::DeleteFile if !self.ticks.is_empty() => self.bulk(Bulk::Delete, cx),
+            Key::Deselect if !self.ticks.is_empty() => {
+                self.ticks.clear();
+                cx.notify();
+            }
             Key::TogglePause => self.toggle_pause(cx),
             Key::DeleteEntry => self.delete_selected(false, cx),
             Key::DeleteFile => self.delete_selected(true, cx),
             Key::Deselect => self.deselect(cx),
+            Key::TickAll => {
+                self.ticks.all(&self.order);
+                cx.notify();
+            }
+            Key::TickNext | Key::TickPrevious => {
+                let by = if key == Key::TickNext { 1 } else { -1 };
+                if let Some(id) = self.ticks.extend(&self.order, self.selected, by) {
+                    self.selected = Some(id);
+                    if let Some(line) = self.line_of(id) {
+                        self.scroll.scroll_to_item(line, ScrollStrategy::Nearest);
+                    }
+                }
+                window.focus(&self.list_focus, cx);
+                cx.notify();
+            }
             Key::First => self.select_at(0, cx),
             Key::Last => self.select_at(self.order.len().saturating_sub(1), cx),
             Key::Open => self.open_selected(cx),
@@ -969,6 +1126,10 @@ impl Downloads {
             lines.push(Line::Header("dl-group-history", history.len()));
             lines.extend(history.into_iter().map(Line::Row));
         }
+        let store = self.app.downloads.read(cx);
+        let hidden = &self.hidden;
+        self.ticks
+            .retain(|id| !hidden.contains(&id) && store.get(id).is_some());
         self.order.clear();
         self.order_lines.clear();
         for (n, line) in lines.iter().enumerate() {
@@ -1036,6 +1197,112 @@ impl Downloads {
             .child(
                 TokenInput::new(&self.search, tokens)
                     .spoken("dl-search-region", t!("dl-search-name")),
+            )
+            .into_any_element()
+    }
+
+    /// The status bar while rows are ticked: how many, and what can be done to them, each
+    /// action saying how many rows it touches.
+    fn selection_bar(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = *cx.theme();
+        let ticked = self.ticked(cx);
+        let count = |act: Bulk| ticked.iter().filter(|s| act.fits(s)).count();
+        let button = |id: &'static str, act: Bulk, icon: &'static str, label: SharedString| {
+            Button::new(id)
+                .ghost()
+                .small()
+                .icon(icon)
+                .label(label)
+                .disabled(count(act) == 0)
+                .on_click(cx.listener(move |this, _, _, cx| this.bulk(act, cx)))
+        };
+        let all = self.ticks.has_all(&self.order);
+        div()
+            .flex()
+            .flex_none()
+            .flex_wrap()
+            .items_center()
+            .gap(px(4.))
+            .min_h(theme.metrics.control)
+            .px(theme.metrics.gutter)
+            .border_t_1()
+            .border_color(theme.border)
+            .bg(theme.secondary)
+            .whitespace_nowrap()
+            .text_size(theme.text(Text::Body))
+            .font_features(ui::tabular())
+            .child(
+                Checkbox::new("tick-every", all)
+                    .name(t!("dl-tick-all"))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.ticks.all(&this.order);
+                        cx.notify();
+                    })),
+            )
+            .child(
+                div()
+                    .ml(px(8.))
+                    .mr(px(8.))
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .child(t!("dl-bulk-count", count = ticked.len())),
+            )
+            .child(button(
+                "bulk-pause",
+                Bulk::Pause,
+                "icons/pause.svg",
+                t!("dl-bulk-pause", count = count(Bulk::Pause)),
+            ))
+            .child(button(
+                "bulk-resume",
+                Bulk::Resume,
+                "icons/play.svg",
+                t!("dl-bulk-resume", count = count(Bulk::Resume)),
+            ))
+            .child(button(
+                "bulk-retry",
+                Bulk::Retry,
+                "icons/rotate-cw.svg",
+                t!("dl-bulk-retry", count = count(Bulk::Retry)),
+            ))
+            .child(button(
+                "bulk-cancel",
+                Bulk::Cancel,
+                "icons/x.svg",
+                t!("dl-bulk-cancel", count = count(Bulk::Cancel)),
+            ))
+            .child(div().w(px(1.)).h(px(16.)).mx(px(4.)).bg(theme.border))
+            .child(button(
+                "bulk-copy",
+                Bulk::Copy,
+                "icons/link.svg",
+                t!("dl-bulk-copy", count = count(Bulk::Copy)),
+            ))
+            .child(button(
+                "bulk-remove",
+                Bulk::Remove,
+                "icons/trash-2.svg",
+                t!("dl-bulk-remove", count = count(Bulk::Remove)),
+            ))
+            .child(
+                button(
+                    "bulk-delete",
+                    Bulk::Delete,
+                    "icons/trash-2.svg",
+                    t!("dl-bulk-delete", count = count(Bulk::Delete)),
+                )
+                .text_color(theme.danger),
+            )
+            .child(div().flex_1())
+            .child(
+                Button::new("bulk-clear")
+                    .ghost()
+                    .small()
+                    .icon("icons/x.svg")
+                    .label(t!("dl-bulk-clear"))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.ticks.clear();
+                        cx.notify();
+                    })),
             )
             .into_any_element()
     }
@@ -1424,7 +1691,10 @@ impl Render for Downloads {
             w if w > Pixels::ZERO => w,
             _ => window.viewport_size().width,
         };
-        let open = self.selected.and_then(|id| self.summary(id, cx));
+        let open = match self.ticks.is_empty() {
+            true => self.selected.and_then(|id| self.summary(id, cx)),
+            false => None,
+        };
         // the details sit beside the list while both fit, else they take the list's place
         let side = px(crate::detail::PANEL) + px(1.);
         let fill =
@@ -1536,7 +1806,11 @@ impl Render for Downloads {
         let banner = self.tools_banner(cx);
         let menu = self.row_menu(cx);
         let confirm = self.confirm_view(cx);
-        let status = self.status_bar(cx);
+        let status = match self.ticks.is_empty() {
+            true => self.status_bar(cx),
+            false => self.selection_bar(cx),
+        };
+        let bulk_confirm = self.bulk_confirm_view(cx);
 
         let measured = cx.entity().downgrade();
         let clip = self.clip_strip(cx);
@@ -1603,6 +1877,7 @@ impl Render for Downloads {
             .child(status)
             .children(menu)
             .children(confirm)
+            .children(bulk_confirm)
             .children(self.formats_modal(cx))
     }
 }
