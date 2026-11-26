@@ -1,20 +1,23 @@
 //! The Site rules page: rules matched by domain (with subdomains), URL prefix or regex decide what
-//! the clipboard watch does, which preset a download uses and which fix runs after it. The first
-//! switched-on match wins; "Everything else" holds the defaults. An editor with a link tester
-//! edits one rule at a time.
+//! the clipboard watch does, and the preset, folder, file name and fix of a download. The first
+//! switched-on match wins; "Everything else" holds the defaults. A rule opens on its own page,
+//! grouped by when its settings act: which links, when a link is copied, when it downloads.
+
+use std::str::FromStr as _;
+use std::time::Duration;
 
 use domain::{ClipAction, Fix, MatchKind, Preset, Settings, SiteRule, check_pattern, rule_for};
 use gpui::prelude::*;
-use gpui::{AnyElement, Context, Entity, SharedString, Window, div, px};
+use gpui::{AnyElement, Context, Entity, SharedString, Task, Window, div, px};
 use i18n::t;
 use ui::{ActiveTheme as _, Button, Chip, Input, MONO, Switch, Text};
 
 use super::SettingsView;
-use super::layout::{row, section, stacked};
+use super::layout::{section, stacked};
 use crate::format;
 
 /// The rule being edited; `at` is its place in the list, `None` for a new rule, and `fallback`
-/// marks the "Everything else" row.
+/// marks the "Everything else" row. `example` is the file name an example link would get.
 pub(super) struct RuleEditor {
     at: Option<usize>,
     fallback: bool,
@@ -22,6 +25,9 @@ pub(super) struct RuleEditor {
     pattern: Entity<Input>,
     test: Entity<Input>,
     outtmpl: Entity<Input>,
+    example: Option<Result<String, String>>,
+    example_wait: Option<Task<()>>,
+    example_task: Option<Task<()>>,
 }
 
 fn kind_name(kind: MatchKind) -> SharedString {
@@ -41,31 +47,84 @@ fn pattern_hint(kind: MatchKind) -> &'static str {
     }
 }
 
-fn clip_name(action: Option<ClipAction>) -> SharedString {
+fn clip_name(action: ClipAction) -> SharedString {
     match action {
-        None => t!("rule-default"),
-        Some(ClipAction::Add) => t!("rule-clip-add"),
-        Some(ClipAction::Ask) => t!("rule-clip-ask"),
-        Some(ClipAction::Ignore) => t!("rule-clip-ignore"),
+        ClipAction::Add => t!("rule-clip-add"),
+        ClipAction::Ask => t!("rule-clip-ask"),
+        ClipAction::Ignore => t!("rule-clip-ignore"),
     }
 }
 
-/// "Clipboard: add · Video 1080p · Fix: Compatible" for a rule row.
+/// What the clipboard watch does with links no rule claims.
+fn fallback_clip(s: &Settings) -> ClipAction {
+    match s.clipboard_auto_add {
+        true => ClipAction::Add,
+        false => ClipAction::Ask,
+    }
+}
+
+/// The preset downloads get when no rule picks one: the remembered one.
+fn default_preset(s: &Settings) -> Preset {
+    Preset::from_str(&s.last_preset).unwrap_or(Preset::DEFAULT)
+}
+
+/// "Video 1080p" / "Audio mp3": a preset named so video and audio "best" differ.
+fn preset_summary(preset: Preset) -> String {
+    let label = format::preset_label(preset);
+    match preset {
+        Preset::Video(_) => t!("rule-sum-video", q = label).to_string(),
+        Preset::Audio(_) => t!("rule-sum-audio", a = label).to_string(),
+        Preset::Custom => label,
+    }
+}
+
+/// Only what `rule` changes, in words: "Saves to D:/Streams · Own file name · Fix: Edit-friendly".
 fn summary(rule: &SiteRule) -> SharedString {
-    let preset = rule
-        .preset
-        .map(format::preset_label)
-        .unwrap_or_else(|| t!("rule-default").to_string());
-    let fix = rule
-        .fix
-        .map(format::fix_name)
-        .unwrap_or_else(|| t!("rule-fix-none").to_string());
-    t!(
-        "rule-summary",
-        clipboard = clip_name(rule.clipboard).to_string(),
-        preset = preset,
-        fix = fix
-    )
+    let mut parts: Vec<String> = vec![];
+    if let Some(action) = rule.clipboard {
+        parts.push(clip_summary(action));
+    }
+    if let Some(preset) = rule.preset {
+        parts.push(preset_summary(preset));
+    }
+    if let Some(dir) = &rule.output_dir {
+        parts.push(t!("rule-sum-folder", dir = dir.clone()).to_string());
+    }
+    if rule.outtmpl.is_some() {
+        parts.push(t!("rule-sum-name").to_string());
+    }
+    if let Some(fix) = rule.fix {
+        parts.push(t!("rule-sum-fix", fix = format::fix_name(fix)).to_string());
+    }
+    match parts.is_empty() {
+        true => t!("rule-sum-nothing"),
+        false => parts.join(" · ").into(),
+    }
+}
+
+/// The real defaults, spelled out for the "Everything else" row.
+fn fallback_summary(s: &Settings) -> SharedString {
+    let fix = s
+        .default_fix
+        .map(|fix| t!("rule-sum-fix", fix = format::fix_name(fix)).to_string())
+        .unwrap_or_else(|| t!("rule-sum-no-fix").to_string());
+    [
+        clip_summary(fallback_clip(s)),
+        preset_summary(default_preset(s)),
+        s.output_dir.clone(),
+        fix,
+    ]
+    .join(" · ")
+    .into()
+}
+
+fn clip_summary(action: ClipAction) -> String {
+    match action {
+        ClipAction::Add => t!("rule-sum-add"),
+        ClipAction::Ask => t!("rule-sum-ask"),
+        ClipAction::Ignore => t!("rule-sum-ignore"),
+    }
+    .to_string()
 }
 
 impl SettingsView {
@@ -84,11 +143,7 @@ impl SettingsView {
         let draft = match (at, fallback) {
             (_, true) => SiteRule {
                 on: true,
-                clipboard: Some(if s.clipboard_auto_add {
-                    ClipAction::Add
-                } else {
-                    ClipAction::Ask
-                }),
+                clipboard: Some(fallback_clip(&s)),
                 fix: s.default_fix,
                 ..Default::default()
             },
@@ -111,11 +166,6 @@ impl SettingsView {
             input.set_text(draft.outtmpl.clone().unwrap_or_default(), cx);
             input
         });
-        cx.observe(&outtmpl, |this, input, cx| {
-            let text = input.read(cx).text().trim().to_owned();
-            this.draft(|d| d.outtmpl = (!text.is_empty()).then_some(text), cx);
-        })
-        .detach();
         cx.observe(&pattern, |this, input, cx| {
             let text = input.read(cx).text().to_owned();
             if let Some(editor) = &mut this.rule_editor {
@@ -125,6 +175,12 @@ impl SettingsView {
         })
         .detach();
         cx.observe(&test, |_, _, cx| cx.notify()).detach();
+        cx.observe(&outtmpl, |this, input, cx| {
+            let text = input.read(cx).text().trim().to_owned();
+            this.draft(|d| d.outtmpl = (!text.is_empty()).then_some(text), cx);
+            this.refresh_example(cx);
+        })
+        .detach();
         if !fallback {
             let focus = pattern.clone();
             focus.update(cx, |input, cx| input.focus(window, cx));
@@ -136,7 +192,11 @@ impl SettingsView {
             pattern,
             test,
             outtmpl,
+            example: None,
+            example_wait: None,
+            example_task: None,
         });
+        self.refresh_example(cx);
         cx.notify();
     }
 
@@ -145,6 +205,38 @@ impl SettingsView {
             edit(&mut editor.draft);
         }
         cx.notify();
+    }
+
+    /// Previews the drafted file name once typing pauses; the newest request wins.
+    fn refresh_example(&mut self, cx: &mut Context<Self>) {
+        let Some(editor) = &mut self.rule_editor else {
+            return;
+        };
+        editor.example_wait = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(250))
+                .await;
+            this.update(cx, |this, cx| {
+                let Some(draft) = this.rule_editor.as_ref().map(|e| e.draft.clone()) else {
+                    return;
+                };
+                let task = this.file_name_preview(
+                    draft.outtmpl,
+                    draft.output_dir,
+                    cx,
+                    |this, result, cx| {
+                        if let Some(editor) = &mut this.rule_editor {
+                            editor.example = Some(result);
+                        }
+                        cx.notify();
+                    },
+                );
+                if let Some(editor) = &mut this.rule_editor {
+                    editor.example_task = task;
+                }
+            })
+            .ok();
+        }));
     }
 
     /// Asks for the folder the drafted rule saves to.
@@ -160,8 +252,11 @@ impl SettingsView {
                 && let Some(path) = paths.first()
             {
                 let dir = path.to_string_lossy().into_owned();
-                this.update(cx, |this, cx| this.draft(|d| d.output_dir = Some(dir), cx))
-                    .ok();
+                this.update(cx, |this, cx| {
+                    this.draft(|d| d.output_dir = Some(dir), cx);
+                    this.refresh_example(cx);
+                })
+                .ok();
             }
         })
         .detach();
@@ -215,6 +310,11 @@ impl SettingsView {
         cx.notify();
     }
 
+    fn close_rule(&mut self, cx: &mut Context<Self>) {
+        self.rule_editor = None;
+        cx.notify();
+    }
+
     pub(super) fn page_rules(
         &mut self,
         s: &Settings,
@@ -222,11 +322,27 @@ impl SettingsView {
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         if self.rule_editor.is_some() {
-            return vec![self.rule_editor_section(s, window, cx)];
+            return self.rule_editor_page(s, window, cx);
         }
         let theme = *cx.theme();
         let rules = &s.site_rules;
         let last = rules.len().saturating_sub(1);
+        let number = |n: Option<usize>| {
+            div()
+                .w(px(18.))
+                .flex_none()
+                .font_family(MONO)
+                .text_size(theme.text(Text::Small))
+                .text_color(theme.muted_foreground)
+                .children(n.map(|n| SharedString::from((n + 1).to_string())))
+        };
+        let line = |text: SharedString| {
+            div()
+                .truncate()
+                .text_size(theme.text(Text::Small))
+                .text_color(theme.muted_foreground)
+                .child(text)
+        };
         let mut rows: Vec<AnyElement> = vec![];
         for (at, rule) in rules.iter().enumerate() {
             let id = rule.id.clone();
@@ -235,20 +351,16 @@ impl SettingsView {
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .child(
-                    div()
-                        .px(px(6.))
-                        .rounded(theme.radius)
-                        .bg(theme.table_active)
-                        .text_size(theme.text(Text::Small))
-                        .text_color(crate::ink(cx))
-                        .child(kind_name(rule.kind)),
-                )
+                .min_w_0()
+                .child(kind_tag(rule.kind, cx))
                 .child(
                     div()
                         .font_family(MONO)
                         .truncate()
                         .when(bad, |this| this.text_color(theme.danger))
+                        .when(!rule.on && !bad, |this| {
+                            this.text_color(theme.muted_foreground)
+                        })
                         .child(rule.pattern.clone()),
                 );
             let controls = div()
@@ -307,6 +419,7 @@ impl SettingsView {
                     .gap(px(16.))
                     .min_h(px(52.))
                     .py(px(10.))
+                    .child(number(Some(at)))
                     .child(
                         div()
                             .flex_1()
@@ -315,63 +428,40 @@ impl SettingsView {
                             .flex_col()
                             .gap(px(4.))
                             .child(title)
-                            .child(
-                                div()
-                                    .text_size(theme.text(Text::Small))
-                                    .text_color(theme.muted_foreground)
-                                    .child(summary(rule)),
-                            ),
+                            .child(line(summary(rule))),
                     )
                     .child(controls)
                     .into_any_element(),
             );
         }
-        let fallback = SiteRule {
-            clipboard: Some(if s.clipboard_auto_add {
-                ClipAction::Add
-            } else {
-                ClipAction::Ask
-            }),
-            fix: s.default_fix,
-            ..Default::default()
-        };
-        rows.push(row(
-            t!("rule-fallback"),
-            Some(summary(&fallback)),
-            Button::new("rule-edit-fallback")
-                .ghost()
-                .small()
-                .label(t!("set-ck-edit"))
-                .on_click(
-                    cx.listener(|this, _, window, cx| this.open_rule(None, true, window, cx)),
-                ),
-            cx,
-        ));
-        let encoder = s.encoder.clone();
-        let encoders = self.chips(
-            "enc",
-            [
-                (
-                    "auto",
-                    "rule-enc-auto",
-                    encoder == "auto",
-                    std::rc::Rc::new(|st: &mut Settings| st.encoder = "auto".into()) as super::Edit,
-                ),
-                (
-                    "hardware",
-                    "rule-enc-hardware",
-                    encoder == "hardware",
-                    std::rc::Rc::new(|st: &mut Settings| st.encoder = "hardware".into())
-                        as super::Edit,
-                ),
-                (
-                    "software",
-                    "rule-enc-software",
-                    encoder == "software",
-                    std::rc::Rc::new(|st: &mut Settings| st.encoder = "software".into())
-                        as super::Edit,
-                ),
-            ],
+        rows.push(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(16.))
+                .min_h(px(52.))
+                .py(px(10.))
+                .child(number(None))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.))
+                        .child(t!("rule-fallback"))
+                        .child(line(fallback_summary(s))),
+                )
+                .child(
+                    Button::new("rule-edit-fallback")
+                        .ghost()
+                        .small()
+                        .label(t!("set-ck-edit"))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.open_rule(None, true, window, cx)
+                        })),
+                )
+                .into_any_element(),
         );
         vec![
             section(Some(t!("rule-list")), rows, cx),
@@ -388,25 +478,16 @@ impl SettingsView {
                         })),
                 )
                 .into_any_element(),
-            section(
-                Some(t!("rule-converting")),
-                vec![stacked(
-                    t!("rule-encoder"),
-                    Some(t!("rule-encoder-desc")),
-                    encoders,
-                    cx,
-                )],
-                cx,
-            ),
         ]
     }
 
-    fn rule_editor_section(
+    /// The open rule: a way back, the rule's header, then its settings in three groups.
+    fn rule_editor_page(
         &self,
         s: &Settings,
         _window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> AnyElement {
+    ) -> Vec<AnyElement> {
         let theme = *cx.theme();
         let editor = self.rule_editor.as_ref().expect("an open editor");
         let draft = editor.draft.clone();
@@ -415,9 +496,78 @@ impl SettingsView {
         let chip = |id: String, label: SharedString, selected: bool| {
             Chip::new(SharedString::from(id), label).selected(selected)
         };
-        let mut rows: Vec<AnyElement> = vec![];
+        let small = |text: SharedString| {
+            div()
+                .text_size(theme.text(Text::Small))
+                .text_color(theme.muted_foreground)
+                .child(text)
+        };
+        let chips = || div().flex().flex_wrap().gap(px(8.));
+        let mut page: Vec<AnyElement> = vec![];
+
+        // 1A: "‹ Site rules / Rule 2 of 4"
+        let where_ = match (fallback, editor.at) {
+            (true, _) => t!("rule-fallback"),
+            (false, Some(at)) => t!("rule-n-of", n = at + 1, total = s.site_rules.len()),
+            (false, None) => t!("rule-new-title"),
+        };
+        page.push(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .text_color(theme.muted_foreground)
+                .child(
+                    Button::new("rule-back")
+                        .ghost()
+                        .small()
+                        .icon("icons/chevron-left.svg")
+                        .label(t!("set-page-rules"))
+                        .on_click(cx.listener(|this, _, _, cx| this.close_rule(cx))),
+                )
+                .child("/")
+                .child(div().text_color(theme.foreground).child(where_))
+                .into_any_element(),
+        );
         if !fallback {
-            let kinds = div().flex().flex_wrap().gap(px(8.)).children(
+            let shown = match draft.pattern.trim().is_empty() {
+                true => t!("rule-new-title"),
+                false => SharedString::from(draft.pattern.clone()),
+            };
+            page.push(section(
+                None,
+                vec![
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .min_w_0()
+                        .min_h(px(52.))
+                        .py(px(10.))
+                        .child(kind_tag(draft.kind, cx))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .font_family(MONO)
+                                .truncate()
+                                .child(shown),
+                        )
+                        .child(small(t!("rule-on")))
+                        .child(
+                            Switch::new("rule-editor-on", draft.on)
+                                .name(t!("rule-on"))
+                                .on_click(
+                                    cx.listener(|this, _, _, cx| this.draft(|d| d.on = !d.on, cx)),
+                                ),
+                        )
+                        .into_any_element(),
+                ],
+                cx,
+            ));
+
+            // Links: Match with the link test right under it
+            let kinds = chips().children(
                 [MatchKind::Domain, MatchKind::Prefix, MatchKind::Regex].map(|kind| {
                     chip(
                         format!("rule-kind-{kind:?}"),
@@ -433,30 +583,65 @@ impl SettingsView {
                     }))
                 }),
             );
-            rows.push(stacked(
-                t!("rule-match"),
-                Some(t!("rule-match-desc")),
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(8.))
-                    .child(kinds)
-                    .child(div().font_family(MONO).child(editor.pattern.clone()))
-                    .children(
-                        check
-                            .clone()
-                            .err()
-                            .filter(|_| !draft.pattern.trim().is_empty())
-                            .map(|why| {
-                                div()
-                                    .text_size(theme.text(Text::Small))
-                                    .text_color(theme.danger)
-                                    .child(t!("rule-pattern-bad", why = why))
-                            }),
+            let mut rules = s.site_rules.clone();
+            match editor.at {
+                // the draft stands in for its own place in the list, so the test shows what saving does
+                Some(at) if at < rules.len() => rules[at] = draft.clone(),
+                _ => rules.push(draft.clone()),
+            }
+            let link = editor.test.read(cx).text().trim().to_owned();
+            let result = (!link.is_empty()).then(|| match rule_for(&rules, &link) {
+                Some((at, rule)) => t!(
+                    "rule-test-match",
+                    n = at + 1,
+                    pattern = rule.pattern.clone(),
+                    what = summary(rule).to_string()
+                ),
+                None => t!("rule-test-none"),
+            });
+            page.push(section(
+                Some(t!("rule-grp-links")),
+                vec![
+                    stacked(
+                        t!("rule-match"),
+                        Some(t!("rule-match-desc")),
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(8.))
+                            .child(kinds)
+                            .child(div().font_family(MONO).child(editor.pattern.clone()))
+                            .children(
+                                check
+                                    .clone()
+                                    .err()
+                                    .filter(|_| !draft.pattern.trim().is_empty())
+                                    .map(|why| {
+                                        div()
+                                            .text_size(theme.text(Text::Small))
+                                            .text_color(theme.danger)
+                                            .child(t!("rule-pattern-bad", why = why))
+                                    }),
+                            ),
+                        cx,
                     ),
+                    stacked(
+                        t!("rule-test"),
+                        Some(t!("rule-test-desc")),
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(6.))
+                            .child(div().font_family(MONO).child(editor.test.clone()))
+                            .children(result.map(small)),
+                        cx,
+                    ),
+                ],
                 cx,
             ));
         }
+
+        // When a link is copied
         let clips: Vec<Option<ClipAction>> = match fallback {
             true => vec![Some(ClipAction::Add), Some(ClipAction::Ask)],
             false => vec![
@@ -466,86 +651,96 @@ impl SettingsView {
                 Some(ClipAction::Ignore),
             ],
         };
-        rows.push(stacked(
-            t!("rule-clipboard"),
-            Some(t!("rule-clipboard-desc")),
-            div()
-                .flex()
-                .flex_wrap()
-                .gap(px(8.))
-                .children(clips.into_iter().map(|action| {
+        let default_clip = clip_name(fallback_clip(s));
+        page.push(section(
+            Some(t!("rule-grp-copied")),
+            vec![stacked(
+                t!("rule-clipboard"),
+                Some(t!("rule-clipboard-desc")),
+                chips().children(clips.into_iter().map(|action| {
+                    let label = match action {
+                        Some(action) => clip_name(action),
+                        None => t!("rule-default-is", value = default_clip.to_string()),
+                    };
                     chip(
                         format!("rule-clip-{action:?}"),
-                        clip_name(action),
+                        label,
                         draft.clipboard == action,
                     )
                     .on_click(
                         cx.listener(move |this, _, _, cx| this.draft(|d| d.clipboard = action, cx)),
                     )
                 })),
+                cx,
+            )],
             cx,
         ));
+
+        // When it downloads
+        let mut downloads: Vec<AnyElement> = vec![];
         if !fallback {
-            let presets = std::iter::once(None).chain(Preset::all().into_iter().map(Some));
-            rows.push(stacked(
+            let preset_chip = |preset: Option<Preset>, label: SharedString| {
+                chip(
+                    format!("rule-preset-{preset:?}"),
+                    label,
+                    draft.preset == preset,
+                )
+                .on_click(cx.listener(move |this, _, _, cx| this.draft(|d| d.preset = preset, cx)))
+            };
+            let caption = |key: &str| {
+                div()
+                    .w(px(44.))
+                    .flex_none()
+                    .h(theme.metrics.control)
+                    .flex()
+                    .items_center()
+                    .text_size(theme.text(Text::Small))
+                    .text_color(theme.muted_foreground)
+                    .child(i18n::lookup(key, None))
+            };
+            let (video, audio): (Vec<Preset>, Vec<Preset>) = Preset::all()
+                .into_iter()
+                .partition(|p| matches!(p, Preset::Video(_)));
+            let default_label = t!(
+                "rule-default-is",
+                value = format::preset_label(default_preset(s))
+            );
+            downloads.push(stacked(
                 t!("rule-format"),
                 Some(t!("rule-format-desc")),
                 div()
                     .flex()
-                    .flex_wrap()
-                    .gap(px(8.))
-                    .children(presets.map(|preset| {
-                        let label = preset
-                            .map(|p| SharedString::from(format::preset_label(p)))
-                            .unwrap_or_else(|| t!("rule-default"));
-                        chip(
-                            format!("rule-preset-{preset:?}"),
-                            label,
-                            draft.preset == preset,
-                        )
-                        .on_click(
-                            cx.listener(move |this, _, _, cx| {
-                                this.draft(|d| d.preset = preset, cx)
-                            }),
-                        )
-                    })),
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_start()
+                            .child(caption("rule-fmt-video"))
+                            .child(
+                                chips()
+                                    .flex_1()
+                                    .child(preset_chip(None, default_label))
+                                    .children(video.into_iter().map(|p| {
+                                        preset_chip(Some(p), format::preset_label(p).into())
+                                    })),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_start()
+                            .child(caption("rule-fmt-audio"))
+                            .child(
+                                chips().flex_1().children(
+                                    audio.into_iter().map(|p| {
+                                        preset_chip(Some(p), format::preset_label(p).into())
+                                    }),
+                                ),
+                            ),
+                    ),
                 cx,
             ));
-        }
-        let fixes = std::iter::once(None).chain(Fix::ALL.into_iter().map(Some));
-        let fix_desc = draft.fix.map(|fix| {
-            i18n::lookup(
-                &format!(
-                    "{}-desc",
-                    match fix {
-                        Fix::Compatible => "fix-compatible",
-                        Fix::EditFriendly => "fix-edit-friendly",
-                        Fix::Repair => "fix-repair",
-                        Fix::Normalize => "fix-normalize",
-                        Fix::Smaller => "fix-smaller",
-                    }
-                ),
-                None,
-            )
-        });
-        rows.push(stacked(
-            t!("rule-fix"),
-            Some(fix_desc.unwrap_or_else(|| t!("rule-fix-desc"))),
-            div()
-                .flex()
-                .flex_wrap()
-                .gap(px(8.))
-                .children(fixes.map(|fix| {
-                    let label = fix
-                        .map(|f| SharedString::from(format::fix_name(f)))
-                        .unwrap_or_else(|| t!("rule-fix-none"));
-                    chip(format!("rule-fix-{fix:?}"), label, draft.fix == fix).on_click(
-                        cx.listener(move |this, _, _, cx| this.draft(|d| d.fix = fix, cx)),
-                    )
-                })),
-            cx,
-        ));
-        if !fallback {
             let folder = div()
                 .flex()
                 .items_center()
@@ -569,62 +764,70 @@ impl SettingsView {
                             .ghost()
                             .label(t!("rule-default"))
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.draft(|d| d.output_dir = None, cx)
+                                this.draft(|d| d.output_dir = None, cx);
+                                this.refresh_example(cx);
                             })),
                     )
                 });
-            rows.push(stacked(
+            downloads.push(stacked(
                 t!("rule-folder"),
                 Some(t!("rule-folder-desc")),
                 folder,
                 cx,
             ));
-            rows.push(stacked(
+            let example = match &editor.example {
+                Some(Ok(name)) => Some(t!("rule-file-name-example", name = name.clone())),
+                Some(Err(_)) => Some(t!("set-preview-failed")),
+                None => None,
+            };
+            downloads.push(stacked(
                 t!("rule-file-name"),
                 Some(t!("rule-file-name-desc", template = s.outtmpl.clone())),
-                div().font_family(MONO).child(editor.outtmpl.clone()),
-                cx,
-            ));
-            // the draft stands in for its own place in the list, so the test shows what saving does
-            let mut rules = s.site_rules.clone();
-            match editor.at {
-                Some(at) if at < rules.len() => rules[at] = draft,
-                _ => rules.push(draft),
-            }
-            let link = editor.test.read(cx).text().trim().to_owned();
-            let result = (!link.is_empty()).then(|| match rule_for(&rules, &link) {
-                Some((at, rule)) => t!(
-                    "rule-test-match",
-                    n = at + 1,
-                    pattern = rule.pattern.clone(),
-                    what = summary(rule).to_string()
-                ),
-                None => t!("rule-test-none"),
-            });
-            rows.push(stacked(
-                t!("rule-test"),
-                Some(t!("rule-test-desc")),
                 div()
                     .flex()
                     .flex_col()
                     .gap(px(6.))
-                    .child(div().font_family(MONO).child(editor.test.clone()))
-                    .children(result.map(|line| {
-                        div()
-                            .text_size(theme.text(Text::Small))
-                            .text_color(theme.muted_foreground)
-                            .child(line)
-                    })),
+                    .child(div().font_family(MONO).child(editor.outtmpl.clone()))
+                    .children(example.map(|line| small(line).font_family(MONO))),
                 cx,
             ));
         }
+        let fixes = std::iter::once(None).chain(Fix::ALL.into_iter().map(Some));
+        let fix_desc = draft.fix.map(|fix| {
+            i18n::lookup(
+                &format!(
+                    "{}-desc",
+                    match fix {
+                        Fix::Compatible => "fix-compatible",
+                        Fix::EditFriendly => "fix-edit-friendly",
+                        Fix::Repair => "fix-repair",
+                        Fix::Normalize => "fix-normalize",
+                        Fix::Smaller => "fix-smaller",
+                    }
+                ),
+                None,
+            )
+        });
+        downloads.push(stacked(
+            t!("rule-fix"),
+            Some(fix_desc.unwrap_or_else(|| t!("rule-fix-desc"))),
+            chips().children(fixes.map(|fix| {
+                let label = fix
+                    .map(|f| SharedString::from(format::fix_name(f)))
+                    .unwrap_or_else(|| t!("rule-fix-none"));
+                chip(format!("rule-fix-{fix:?}"), label, draft.fix == fix)
+                    .on_click(cx.listener(move |this, _, _, cx| this.draft(|d| d.fix = fix, cx)))
+            })),
+            cx,
+        ));
+        page.push(section(Some(t!("rule-grp-download")), downloads, cx));
+
         let can_save = fallback || check.is_ok();
-        rows.push(
+        page.push(
             div()
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .py(px(10.))
                 .child(div().flex_1())
                 .when(editor.at.is_some() && !fallback, |this| {
                     this.child(
@@ -639,10 +842,7 @@ impl SettingsView {
                     Button::new("rule-cancel")
                         .ghost()
                         .label(t!("set-ck-close"))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.rule_editor = None;
-                            cx.notify();
-                        })),
+                        .on_click(cx.listener(|this, _, _, cx| this.close_rule(cx))),
                 )
                 .child(
                     Button::new("rule-save")
@@ -653,13 +853,41 @@ impl SettingsView {
                 )
                 .into_any_element(),
         );
-        section(
-            Some(match fallback {
-                true => t!("rule-fallback"),
-                false => t!("rule-edit-title"),
-            }),
-            rows,
-            cx,
-        )
+        page
+    }
+}
+
+/// The ink-blue tag naming how a rule matches.
+fn kind_tag(kind: MatchKind, cx: &gpui::App) -> gpui::Div {
+    let theme = cx.theme();
+    div()
+        .flex_none()
+        .px(px(6.))
+        .rounded(theme.radius)
+        .bg(theme.table_active)
+        .text_size(theme.text(Text::Small))
+        .text_color(crate::ink(cx))
+        .child(kind_name(kind))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn summary_names_only_what_a_rule_changes() {
+        assert_eq!(summary(&SiteRule::default()), t!("rule-sum-nothing"));
+        let rule = SiteRule {
+            output_dir: Some("D:/Streams".into()),
+            outtmpl: Some("%(id)s.%(ext)s".into()),
+            fix: Some(Fix::EditFriendly),
+            ..Default::default()
+        };
+        let text = summary(&rule).to_string();
+        assert!(
+            text.contains("D:/Streams") && !text.contains("copied"),
+            "{text}"
+        );
+        assert_eq!(text.matches(" · ").count(), 2, "{text}");
     }
 }

@@ -242,6 +242,22 @@ impl SettingsView {
                 cx,
             ));
         }
+        let encoder = s.encoder.clone();
+        let encoders = self.chips(
+            "enc",
+            ["auto", "hardware", "software"].map(|value| {
+                (
+                    value,
+                    match value {
+                        "auto" => "rule-enc-auto",
+                        "hardware" => "rule-enc-hardware",
+                        _ => "rule-enc-software",
+                    },
+                    encoder == value,
+                    Rc::new(move |st: &mut Settings| st.encoder = value.into()) as super::Edit,
+                )
+            }),
+        );
         vec![
             section(
                 Some(t!("set-sec-defaults")),
@@ -296,6 +312,16 @@ impl SettingsView {
                 cx,
             ),
             section(Some(t!("set-sponsorblock")), sponsor, cx),
+            section(
+                Some(t!("rule-converting")),
+                vec![stacked(
+                    t!("rule-encoder"),
+                    Some(t!("rule-encoder-desc")),
+                    encoders,
+                    cx,
+                )],
+                cx,
+            ),
         ]
     }
 

@@ -500,22 +500,35 @@ impl SettingsView {
 
     /// Recomputes the file name preview off the UI thread; the newest request wins.
     fn refresh_preview(&mut self, cx: &mut Context<Self>) {
-        let Some(preview) = cx.try_global::<Hooks>().and_then(|h| h.preview.clone()) else {
-            return;
-        };
-        let settings = self.settings();
-        let (spec, dir) = {
-            let s = settings.read(cx);
-            let spec = s.job_spec(
-                "https://example.com/watch?v=dQw4w9WgXcQ",
-                Preset::DEFAULT,
-                "",
-                None,
-            );
-            (spec, s.get().output_dir.clone())
-        };
+        if let Some(task) = self.file_name_preview(None, None, cx, |this, result, cx| {
+            this.preview = Some(result);
+            cx.notify();
+        }) {
+            self.preview_task = Some(task);
+        }
+    }
+
+    /// The file name an example link gets, relative to its folder, with `outtmpl` and
+    /// `output_dir` in place of the settings' own when given. `None` without a preview hook.
+    fn file_name_preview(
+        &self,
+        outtmpl: Option<String>,
+        output_dir: Option<String>,
+        cx: &mut Context<Self>,
+        done: impl FnOnce(&mut Self, Result<String, String>, &mut Context<Self>) + 'static,
+    ) -> Option<Task<()>> {
+        let preview = cx.try_global::<Hooks>().and_then(|h| h.preview.clone())?;
+        let mut spec = self.settings().read(cx).job_spec(
+            "https://example.com/watch?v=dQw4w9WgXcQ",
+            Preset::DEFAULT,
+            "",
+            None,
+        );
+        spec.outtmpl = outtmpl.unwrap_or(spec.outtmpl);
+        spec.output_dir = output_dir.unwrap_or(spec.output_dir);
+        let dir = spec.output_dir.clone();
         let io = self.state.io.clone();
-        self.preview_task = Some(cx.spawn(async move |this, cx| {
+        Some(cx.spawn(async move |this, cx| {
             let result = io
                 .spawn_blocking(move || preview(&spec))
                 .await
@@ -523,16 +536,13 @@ impl SettingsView {
             if let Err(error) = &result {
                 log::warn!("settings: cannot preview the file name: {error}");
             }
-            this.update(cx, |this, cx| {
-                this.preview = Some(result.map(|path| {
-                    let path = std::path::Path::new(&path);
-                    let shown = path.strip_prefix(&dir).unwrap_or(path);
-                    shown.to_string_lossy().into_owned()
-                }));
-                cx.notify();
-            })
-            .ok();
-        }));
+            let result = result.map(|path| {
+                let path = std::path::Path::new(&path);
+                let shown = path.strip_prefix(&dir).unwrap_or(path);
+                shown.to_string_lossy().into_owned()
+            });
+            this.update(cx, |this, cx| done(this, result, cx)).ok();
+        }))
     }
 }
 
