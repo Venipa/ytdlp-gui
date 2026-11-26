@@ -30,6 +30,8 @@ ldd "$bin" | awk '$2 == "=>" && $3 ~ /^\// { print $1, $3 }' | while read -r nam
   sed 's/#.*//; s/[[:space:]]*$//' "$excl" | grep -qxF "$name" || cp -L "$path" "$appdir/usr/lib/"
 done
 ls "$appdir/usr/lib/libxkbcommon-x11.so.0" >/dev/null
+# the bundled libs find each other only through the exe's DT_RPATH (DT_RUNPATH is not inherited)
+readelf -d "$appdir/usr/bin/ytdlpd" | grep -q '(RPATH)' || { echo "ytdlpd has no DT_RPATH; bundled libs would not load" >&2; exit 1; }
 icon=assets/linux/ytdlpd.png
 [ -f "$icon" ] || icon=assets/tray/icon-64.png
 cp "$icon" "$appdir/ytdlpd.png"

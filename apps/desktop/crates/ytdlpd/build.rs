@@ -76,5 +76,10 @@ fn python_runtime() {
         } {
             println!("cargo:rustc-link-arg=-Wl,-rpath,{rel}");
         }
+        // DT_RPATH, not DT_RUNPATH: RUNPATH only serves the exe's own needs, so a bundled lib
+        // (libxkbcommon-x11) could not find the libs it needs in turn (libxcb-xkb)
+        if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+            println!("cargo:rustc-link-arg=-Wl,--disable-new-dtags");
+        }
     }
 }
