@@ -9,6 +9,7 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/venipa/ytdlpd"
 
 [workspace.dependencies]
+bridge = { path = "crates/bridge" }
 cli = { path = "crates/cli" }
 domain = { path = "crates/domain" }
 embed = { path = "crates/embed" }
@@ -22,6 +23,13 @@ storage = { path = "crates/storage" }
 tools = { path = "crates/tools" }
 ui = { path = "crates/ui" }
 views = { path = "crates/views" }
+
+# lane D: browser extension bridge
+base64 = "0.22"
+getrandom = "0.3"
+tokio-tungstenite = { version = "0.30", default-features = false, features = [
+    "handshake",
+] }
 
 anyhow = "1.0"
 ashpd = { version = "0.14", default-features = false, features = [

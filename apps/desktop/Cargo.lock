@@ -729,6 +729,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "bridge"
+version = "1.0.15"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "cli",
+ "futures",
+ "getrandom 0.3.4",
+ "log",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite",
+]
+
+[[package]]
 name = "built"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1372,6 +1390,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "data-encoding"
+version = "2.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4583a4551df46e2792f82ceeac45e850d2e2d5debba0b91f102385cda5b11f06"
+
+[[package]]
 name = "data-url"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1637,6 +1661,7 @@ checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
 name = "engine"
 version = "1.0.15"
 dependencies = [
+ "anyhow",
  "domain",
  "futures",
  "libc",
@@ -6121,6 +6146,7 @@ name = "state"
 version = "1.0.15"
 dependencies = [
  "anyhow",
+ "bridge",
  "domain",
  "futures",
  "gpui",
@@ -6569,6 +6595,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-tungstenite"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17a073bfed563fa236697a068031408a93cd9522e08abf9933ead3e73411bd71"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite",
+]
+
+[[package]]
 name = "tokio-util"
 version = "0.7.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6803,6 +6841,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 dependencies = [
  "core_maths",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e48ac77174b19c110a50ab2128b24215ac9cb40e0e12e093fb602d175c569d22"
+dependencies = [
+ "bytes",
+ "data-encoding",
+ "http",
+ "httparse",
+ "log",
+ "rand 0.10.4",
+ "sha1",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -8194,6 +8248,7 @@ name = "ytdlpd"
 version = "1.0.15"
 dependencies = [
  "anyhow",
+ "bridge",
  "clap",
  "cli",
  "domain",

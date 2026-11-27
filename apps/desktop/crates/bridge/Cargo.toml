@@ -1,0 +1,25 @@
+[package]
+name = "bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Localhost WebSocket the browser extension talks to: pairing, token auth, check and add. No gpui."
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+cli.workspace = true
+futures.workspace = true
+getrandom.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
