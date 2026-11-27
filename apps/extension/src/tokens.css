@@ -1,0 +1,11 @@
+:host,:root{
+  --bg:#15130f;--drawer:#1e1b16;--edge:#2a2620;--paper:#ece5d8;--pencil:#9c9384;--amber:#e9a23b;--ink:#8fb0d6;--danger:#e86a58;
+  --bd:color-mix(in srgb,var(--paper) 14%,transparent);
+  --hover:color-mix(in srgb,var(--paper) 7%,transparent);
+  --inkbg:color-mix(in srgb,var(--ink) 14%,transparent);
+  --radius:2px;--font-size:12px;--bar-h:24px;--bar-h-in:28px;--gap:8px;--pad:9px;--fade:120ms;
+  --font:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;--mono:"IBM Plex Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:light){:host,:root{
+  --bg:#f2ede3;--drawer:#e8e1d4;--edge:#dcd3c3;--paper:#1d1a15;--pencil:#6b6253;--amber:#8a4f00;--ink:#2f4a6b;--danger:#b3261e;
+}}

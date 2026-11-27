@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ytdlpd</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<main class="pop">
+  <header class="hd"><b data-i18n="ext_name"></b><span id="dot" class="dot off" aria-hidden="true"></span><span id="status" class="st" role="status"></span></header>
+
+  <section id="offline" hidden>
+    <div class="pad"><p id="offline-text" class="small"></p></div>
+    <div class="pad"><button id="retry" class="btn" type="button" data-i18n="popup_retry"></button></div>
+  </section>
+
+  <section id="pair" hidden>
+    <div class="pad">
+      <p id="removed" class="err" hidden data-i18n="popup_removed"></p>
+      <p class="lead" data-i18n="popup_pair_title"></p>
+      <p class="small" data-i18n="popup_pair_help"></p>
+    </div>
+    <label class="slots" id="slots">
+      <input id="code" data-i18n-label="popup_pair_title" inputmode="numeric" autocomplete="one-time-code" maxlength="9" spellcheck="false">
+      <span class="grp"><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i></span>
+      <span class="dash" aria-hidden="true"></span>
+      <span class="grp"><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i></span>
+    </label>
+    <div class="pad"><p id="pair-err" class="err" role="alert" hidden></p></div>
+    <div class="pad"><button id="connect" class="btn pri wide" type="button" data-i18n="popup_connect"></button></div>
+  </section>
+
+  <section id="ready" hidden>
+    <div class="rw"><div class="l"><b id="host" class="mono"></b><span id="site"></span></div><button id="show" class="btn" type="button" hidden data-i18n="popup_show_again"></button></div>
+    <div class="rw"><div class="l"><b data-i18n="popup_download_page"></b><span id="support"></span></div><button id="download" class="btn pri" type="button" disabled data-i18n="popup_download"></button></div>
+    <div class="rw"><div class="l"><b data-i18n="popup_switch"></b><span data-i18n="popup_switch_sub"></span></div><button id="enabled" class="sw" type="button" role="switch" aria-checked="true" data-i18n-label="popup_switch"></button></div>
+    <p id="result" class="pad small" role="status" hidden></p>
+    <footer class="ft"><button id="disconnect" class="link" type="button" data-i18n="popup_disconnect"></button><span id="version" class="mono"></span></footer>
+  </section>
+</main>
+<script src="popup.js"></script>
+</body>
+</html>

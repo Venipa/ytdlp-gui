@@ -16,6 +16,7 @@
     "release:mac": "bun run --filter @ytdlpd/desktop release:mac",
     "web:dev": "bun run --filter @ytdlpd/web dev",
     "web:build": "bun run --filter @ytdlpd/web build",
-    "web:stats": "bun run --filter @ytdlpd/web stats"
+    "web:stats": "bun run --filter @ytdlpd/web stats",
+    "ext:build": "bun run --filter @ytdlpd/extension build"
   }
 }
