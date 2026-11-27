@@ -8,6 +8,10 @@
     "apps/desktop": {
       "name": "@ytdlpd/desktop",
     },
+    "apps/extension": {
+      "name": "@ytdlpd/extension",
+      "version": "0.1.0",
+    },
     "apps/web": {
       "name": "@ytdlpd/web",
       "dependencies": {
@@ -310,6 +314,8 @@
     "@ungap/structured-clone": ["@ungap/structured-clone@1.4.0", "", {}, "sha512-1mEZtMKPM09vDmQt5y7YvmN2+DFTP7Tg0EWXdic8/C6VRnpb33e4ghisCIE3WZjsE2N8mf+QV1Zqh7ZFYLWInQ=="],
 
     "@ytdlpd/desktop": ["@ytdlpd/desktop@workspace:apps/desktop"],
+
+    "@ytdlpd/extension": ["@ytdlpd/extension@workspace:apps/extension"],
 
     "@ytdlpd/web": ["@ytdlpd/web@workspace:apps/web"],
 
