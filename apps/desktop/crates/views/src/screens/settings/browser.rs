@@ -32,10 +32,12 @@ impl SettingsView {
                 cx.background_executor().timer(Duration::from_secs(1)).await;
                 let live = this
                     .update(cx, |this, cx| {
+                        // a used or burned code goes at once, not when its time runs out
                         let live = this
                             .pair
                             .as_ref()
-                            .is_some_and(|(_, at)| *at > Instant::now());
+                            .is_some_and(|(_, at)| *at > Instant::now())
+                            && this.bridge(cx).is_some_and(|b| b.code_live());
                         if !live {
                             this.pair = None;
                         }
@@ -171,10 +173,11 @@ impl SettingsView {
                             seen = seen
                         )
                     };
+                    // saturated, so a dropped browser stands out
                     let dot = if d.connected {
-                        theme.primary
+                        theme.success
                     } else {
-                        theme.muted_foreground.opacity(0.4)
+                        theme.danger
                     };
                     let hash = d.hash.clone();
                     row(

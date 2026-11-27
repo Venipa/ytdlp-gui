@@ -221,6 +221,7 @@ pub struct ThemeOverrides {
     pub danger: Option<String>,
     pub danger_foreground: Option<String>,
     pub danger_hover: Option<String>,
+    pub success: Option<String>,
     pub popover: Option<String>,
     pub popover_foreground: Option<String>,
     pub progress_bar: Option<String>,
@@ -269,6 +270,7 @@ impl ThemeOverrides {
             danger,
             danger_foreground,
             danger_hover,
+            success,
             popover,
             popover_foreground,
             progress_bar,
@@ -310,6 +312,7 @@ impl ThemeOverrides {
                 | "danger"
                 | "danger_foreground"
                 | "danger_hover"
+                | "success"
                 | "popover"
                 | "popover_foreground"
                 | "progress_bar"
@@ -356,6 +359,7 @@ impl ThemeOverrides {
             danger,
             danger_foreground,
             danger_hover,
+            success,
             popover,
             popover_foreground,
             progress_bar,
@@ -407,6 +411,8 @@ pub struct Theme {
     pub danger: Hsla,
     pub danger_foreground: Hsla,
     pub danger_hover: Hsla,
+    /// Saturated green for a working connection (paired browser online).
+    pub success: Hsla,
     pub popover: Hsla,
     pub popover_foreground: Hsla,
     pub progress_bar: Hsla,
@@ -466,6 +472,7 @@ impl Theme {
             ink: 0x8fb0d6,
             danger: 0xe86a58,
             danger_foreground: 0x1a0b09,
+            success: 0x22c55e,
             overlay: 0x000000,
             hover: [0.07, 0.11, 0.05],
         })
@@ -484,6 +491,7 @@ impl Theme {
             ink: 0x2f4a6b,
             danger: 0xb3261e,
             danger_foreground: 0xffffff,
+            success: 0x16a34a,
             overlay: 0x000000,
             hover: [0.07, 0.11, 0.05],
         })
@@ -510,6 +518,7 @@ impl Theme {
             danger: c(p.danger),
             danger_foreground: c(p.danger_foreground),
             danger_hover: c(p.danger).opacity(0.85),
+            success: c(p.success),
             popover: c(p.drawer),
             popover_foreground: paper,
             progress_bar: c(p.amber),
@@ -739,6 +748,7 @@ impl Theme {
             danger,
             danger_foreground,
             danger_hover,
+            success,
             popover,
             popover_foreground,
             progress_bar,
@@ -782,6 +792,7 @@ impl Theme {
         apply_color!(danger);
         apply_color!(danger_foreground);
         apply_color!(danger_hover);
+        apply_color!(success);
         apply_color!(popover);
         apply_color!(popover_foreground);
         apply_color!(progress_bar);
@@ -1168,6 +1179,7 @@ struct Palette {
     ink: u32,
     danger: u32,
     danger_foreground: u32,
+    success: u32,
     overlay: u32,
     /// Paper alpha of the hover, press and row-hover fills.
     hover: [f32; 3],

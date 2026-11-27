@@ -16,6 +16,7 @@ pub use look::{apply_stored, apply_window, look_of, overrides_of};
 
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::time::Duration;
 
 use domain::{Preset, Settings, ToolKind, ToolSource};
 use fields::{Field, Invalid};
@@ -98,6 +99,8 @@ pub struct SettingsView {
     pair: Option<(String, std::time::Instant)>,
     /// Repaints the Browser page each second while a code counts down.
     pair_tick: Option<Task<()>>,
+    /// Repaints the Browser page while it is open, so a browser connecting or dropping shows.
+    devices_tick: Option<Task<()>>,
 }
 
 impl SettingsView {
@@ -194,6 +197,7 @@ impl SettingsView {
             arg_check: None,
             pair: None,
             pair_tick: None,
+            devices_tick: None,
         };
         this.refresh_preview(cx);
         this.load_ytdlp_version(cx);
@@ -672,6 +676,27 @@ impl Render for SettingsView {
         self.on_downloads = page == SettingsPage::Downloads;
         if retry_preview(entering, &self.preview) {
             self.refresh_preview(cx);
+        }
+        if page == SettingsPage::Browser && self.devices_tick.is_none() {
+            self.devices_tick = Some(cx.spawn(async move |this, cx| {
+                loop {
+                    cx.background_executor().timer(Duration::from_secs(2)).await;
+                    // shortcut: idles every 2 s after leaving Settings entirely; dropped on the next other page
+                    let alive = this.update(cx, |this, cx| {
+                        if matches!(
+                            this.navigation.read(cx).current(),
+                            Destination::Settings(SettingsPage::Browser)
+                        ) {
+                            cx.notify();
+                        }
+                    });
+                    if alive.is_err() {
+                        break;
+                    }
+                }
+            }));
+        } else if page != SettingsPage::Browser {
+            self.devices_tick = None;
         }
         let s = self.settings().read(cx).get().clone();
         let broken = self.settings().read(cx).error().is_some();
