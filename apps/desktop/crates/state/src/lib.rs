@@ -393,7 +393,11 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
     let logs = cx.new(|_| Logs::default());
     let toasts = cx.new(|_| Toasts::default());
     let intake = cx.new(|_| Intake::default());
-    let probes = cx.new(|_| Probes::new(backend.clone()).with_cookies(cookies.clone()));
+    let probes = cx.new(|_| {
+        Probes::new(backend.clone())
+            .with_cookies(cookies.clone())
+            .with_logs(logs.clone())
+    });
     let args = cx.new(|_| CustomArgs::new(backend.clone()));
     // saved lines are checked once at start; until yt-dlp answers they count as fine
     let saved = settings.read(cx).get().clone();

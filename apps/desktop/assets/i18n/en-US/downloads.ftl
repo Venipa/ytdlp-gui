@@ -163,6 +163,8 @@ dl-col-status = Status
 
 # UI refine round 3
 dl-copied-link = Link copied
+dl-copy-error = Copy error
+dl-copied-error = Error copied
 dl-copied-title = Title copied
 dl-col-eta = ETA
 dl-empty-keys = or press

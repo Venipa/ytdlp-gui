@@ -6,8 +6,8 @@ use std::sync::Arc;
 use domain::{AudioFormat, Preset, ProbeResult, VideoQuality, split_urls};
 use gpui::prelude::*;
 use gpui::{
-    Animation, AnimationExt as _, AnyElement, App, Context, FontWeight, SharedString, deferred,
-    div, px, svg, uniform_list,
+    Animation, AnimationExt as _, AnyElement, App, ClipboardItem, Context, FontWeight,
+    SharedString, deferred, div, px, svg, uniform_list,
 };
 use i18n::t;
 use state::ProbeState;
@@ -18,6 +18,7 @@ use ui::{
 
 use crate::downloads::{Card, Downloads, error_text};
 use crate::format;
+use crate::toasts::{Kind, toast};
 
 /// The video rows of the preset chips.
 const VIDEO: [VideoQuality; 6] = [
@@ -294,7 +295,18 @@ impl Downloads {
                 .aria_label(t!("dl-notlink-title"))
                 .into_any_element(),
             Card::Failed(error) => {
+                // the code and the full message, for a bug report
+                let report = format!("{}: {}", error.code, error.message);
                 let actions = vec![
+                    Button::new("probe-copy-error")
+                        .ghost()
+                        .icon("icons/copy.svg")
+                        .label(t!("dl-copy-error"))
+                        .on_click(move |_, _, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(report.clone()));
+                            toast(cx, Kind::Success, t!("dl-copied-error"), None);
+                        })
+                        .into_any_element(),
                     Button::new("open-settings")
                         .ghost()
                         .label(t!("dl-open-settings"))
