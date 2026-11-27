@@ -21,6 +21,30 @@ pub struct Env {
     pub cache_dir: Option<String>,
     /// Fallback runtime when the spec carries none: `(key, path)`.
     pub js_runtime: Option<(String, String)>,
+    /// Where partial files go: the worker picks `temp_dir`, and before that this is the
+    /// fallback (`<data>/tmp`) for a download folder that cannot hold one.
+    pub temp_dir: Option<String>,
+}
+
+/// The folder ytdlpd keeps partial files in, inside the download folder.
+pub const TEMP_NAME: &str = ".ytdlpd-tmp";
+
+/// The temp folder for a job: `<output>/.ytdlpd-tmp` when it can be made and written, else
+/// `fallback` (made if missing). `None` when neither works; yt-dlp then keeps parts beside the file.
+pub fn temp_dir(output_dir: &str, fallback: Option<&str>) -> Option<String> {
+    let usable = |dir: &std::path::Path| {
+        let probe = dir.join(format!(".write-{}", std::process::id()));
+        let ok = std::fs::create_dir_all(dir).is_ok() && std::fs::File::create(&probe).is_ok();
+        std::fs::remove_file(&probe).ok();
+        ok
+    };
+    let inside = std::path::Path::new(output_dir).join(TEMP_NAME);
+    if !output_dir.is_empty() && usable(&inside) {
+        return Some(inside.to_string_lossy().into_owned());
+    }
+    fallback
+        .filter(|f| usable(std::path::Path::new(f)))
+        .map(str::to_owned)
 }
 
 /// A spec with only the essentials set; for examples, tests and dev tools.
@@ -162,7 +186,11 @@ pub fn to_opts(s: &JobSpec, env: &Env) -> Value {
         &s.outtmpl
     };
     o.insert("outtmpl".into(), json!(tmpl));
-    o.insert("paths".into(), json!({ "home": s.output_dir }));
+    let mut paths = json!({ "home": s.output_dir });
+    if let Some(temp) = &env.temp_dir {
+        paths["temp"] = json!(temp);
+    }
+    o.insert("paths".into(), paths);
     o.insert("updatetime".into(), json!(false));
     o.insert("continuedl".into(), json!(true));
     o.insert("overwrites".into(), json!(false));
@@ -253,6 +281,29 @@ pub fn probe_opts(p: &ProbeOpts, env: &Env) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn temp_goes_inside_the_download_folder_else_the_fallback() {
+        let root = std::env::temp_dir().join(format!("ytdlpd-temp-{}", std::process::id()));
+        let out = root.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let fallback = root.join("data-tmp").to_string_lossy().into_owned();
+        assert_eq!(
+            temp_dir(&out.to_string_lossy(), Some(&fallback)),
+            Some(out.join(TEMP_NAME).to_string_lossy().into_owned())
+        );
+        // a file where the folder would go makes the folder impossible
+        let blocked = root.join("blocked");
+        std::fs::create_dir_all(&blocked).unwrap();
+        std::fs::write(blocked.join(TEMP_NAME), "").unwrap();
+        assert_eq!(
+            temp_dir(&blocked.to_string_lossy(), Some(&fallback)),
+            Some(fallback.clone())
+        );
+        assert!(std::path::Path::new(&fallback).is_dir());
+        assert_eq!(temp_dir("", None), None);
+        std::fs::remove_dir_all(&root).ok();
+    }
     use domain::{CookiesSettings, SubtitleSettings};
 
     fn base(preset: Preset) -> JobSpec {
@@ -325,11 +376,13 @@ mod tests {
         let env = Env {
             cache_dir: Some("C:/cache/yt-dlp".into()),
             js_runtime: None,
+            temp_dir: Some("D:/out/.ytdlpd-tmp".into()),
         };
         let o = to_opts(&s, &env);
         assert_eq!(o["js_runtimes"], json!({"deno": {"path": "C:/t/deno.exe"}}));
         assert_eq!(o["ffmpeg_location"], "C:/t/ffmpeg.exe");
         assert_eq!(o["cachedir"], "C:/cache/yt-dlp");
+        assert_eq!(o["paths"]["temp"], "D:/out/.ytdlpd-tmp");
         assert_eq!(o["outtmpl"], PLAYLIST_OUTTMPL);
         assert_eq!(o["noplaylist"], false);
         assert_eq!(o["playlist_items"], "3");

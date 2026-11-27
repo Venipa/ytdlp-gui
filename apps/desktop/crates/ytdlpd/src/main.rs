@@ -90,6 +90,7 @@ fn build_app(data_dir: Option<PathBuf>, demo: Option<&str>, cx: &mut App) -> sta
                 cache_dir: Some(paths.cache.join("yt-dlp").to_string_lossy().into_owned()),
                 // the JavaScript runtime travels in each job spec (settings, then the detected deno)
                 js_runtime: None,
+                temp_dir: Some(paths.data.join("tmp").to_string_lossy().into_owned()),
             },
         };
         std::sync::Arc::new(engine::EngineBackend::new(config)) as _

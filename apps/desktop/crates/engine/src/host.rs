@@ -202,6 +202,19 @@ pub fn spawn_worker_with(
         c.env("YTDLPD_SITE_UPDATES", s);
     }
     c.envs(cfg.env.iter().map(|(k, v)| (k, v)));
+    // partials, cookie copies and aria2c's files go to a folder this user can write, never the
+    // install folder the app was started in
+    let temp = crate::spec::temp_dir(&job.output_dir, env.temp_dir.as_deref());
+    if let Some(t) = &temp {
+        c.env("TEMP", t)
+            .env("TMP", t)
+            .env("TMPDIR", t)
+            .current_dir(t);
+    }
+    let env = &Env {
+        temp_dir: temp,
+        ..env.clone()
+    };
     let spawned_at = Instant::now();
     let mut proc = TreeChild::spawn(&mut c)?;
     let mut stdin = proc.child.stdin.take().expect("piped stdin");

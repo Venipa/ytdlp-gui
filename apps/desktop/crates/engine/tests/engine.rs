@@ -216,10 +216,17 @@ fn cancel_mid_download_kills_worker_and_cleans_partials() {
         partials::cleanup(&files) >= 1,
         "the .part file existed and is removed"
     );
-    assert_eq!(
-        std::fs::read_dir(&out).unwrap().count(),
-        0,
+    // only the (now empty) temp folder stays, for the next download
+    let left: Vec<_> = std::fs::read_dir(&out).unwrap().flatten().collect();
+    assert!(
+        left.len() == 1 && left[0].file_name() == engine::spec::TEMP_NAME,
         "nothing left behind"
+    );
+    assert_eq!(
+        std::fs::read_dir(out.join(engine::spec::TEMP_NAME))
+            .unwrap()
+            .count(),
+        0
     );
 }
 
@@ -320,7 +327,7 @@ fn pause_then_resume_uses_range_and_completes() {
         }
     }
     w.kill(); // pause = kill, partials stay
-    let part = std::fs::read_dir(&out)
+    let part = std::fs::read_dir(out.join(engine::spec::TEMP_NAME))
         .unwrap()
         .flatten()
         .find(|e| e.file_name().to_string_lossy().ends_with(".part"))

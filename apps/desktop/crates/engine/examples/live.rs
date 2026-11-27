@@ -34,6 +34,7 @@ fn main() {
         env: Env {
             cache_dir: None,
             js_runtime: Some(("deno".into(), deno)),
+            temp_dir: None,
         },
     });
 
