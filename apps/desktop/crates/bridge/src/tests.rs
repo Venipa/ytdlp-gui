@@ -537,16 +537,18 @@ async fn add_and_check_are_rate_limited() {
 
 #[tokio::test]
 async fn port_falls_back_and_is_loopback() {
-    // hold port p, keep p+1 free for the fallback
-    let (p, held) = (0..50)
+    // hold p and p+1; p+1 is let go only right before `start`. Parallel tests get ports in sequence
+    // (Windows), so a p+1 that is merely checked free is taken by another test before the bind
+    let (p, held, next) = (0..50)
         .find_map(|_| {
             let p = free_port();
             let held = TcpListener::bind(("127.0.0.1", p)).ok()?;
-            drop(TcpListener::bind(("127.0.0.1", p.checked_add(1)?)).ok()?);
-            Some((p, held))
+            let next = TcpListener::bind(("127.0.0.1", p.checked_add(1)?)).ok()?;
+            Some((p, held, next))
         })
         .expect("two adjacent free ports");
     let dir = tempfile::tempdir().unwrap();
+    drop(next);
     let b = start(
         Config {
             data_dir: dir.path().into(),
