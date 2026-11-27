@@ -1,5 +1,6 @@
 // bun build.ts [--unsigned]: bundles the extension into dist/chrome and dist/firefox, packs
-// dist/ytdlpd-chrome.crx and dist/ytdlpd-firefox.xpi (unsigned; Firefox release builds need AMO signing).
+// dist/ytdlpd-chrome.crx, dist/ytdlpd-chrome.zip (the folder, for Load unpacked) and dist/ytdlpd-firefox.xpi
+// (unsigned; Firefox release builds need AMO signing).
 // The signing key comes from env CRX_KEY_PEM, else the dev key in F:\tmp\ytdlpd-rs (generated once, never committed).
 // --unsigned (CI without the key, e.g. pull requests from forks): no crx, no id check, no `key` in the manifest.
 import { createPrivateKey, createPublicKey, generateKeyPairSync } from "node:crypto";
@@ -93,7 +94,10 @@ function filesOf(base: string): Map<string, Uint8Array> {
 
 const xpi = join(dist, "ytdlpd-firefox.xpi");
 writeFileSync(xpi, zip(filesOf(ff)));
-console.log(`extension: ${out}\nextension: ${ff}\nextension: ${xpi}`);
+// the folder for Load unpacked: Chromium browsers mostly refuse a .crx from outside their store
+const unpacked = join(dist, "ytdlpd-chrome.zip");
+writeFileSync(unpacked, zip(filesOf(out)));
+console.log(`extension: ${out}\nextension: ${ff}\nextension: ${xpi}\nextension: ${unpacked}`);
 if (priv && spki) {
   const crx = join(dist, "ytdlpd-chrome.crx");
   writeFileSync(crx, packCrx(zip(filesOf(out)), priv, spki));

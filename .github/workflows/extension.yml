@@ -68,6 +68,7 @@ jobs:
           if-no-files-found: error
           path: |
             apps/extension/dist/ytdlpd-chrome.crx
+            apps/extension/dist/ytdlpd-chrome.zip
             apps/extension/dist/ytdlpd-firefox.xpi
             apps/extension/dist/ytdlpd-extension-*-source.zip
       # a release downloads every artifact into one folder: loose unpacked files must not land there
