@@ -15,6 +15,16 @@ on:
       - "apps/desktop/crates/ytdlpd/src/browser.rs"
       - ".github/workflows/extension.yml"
   workflow_dispatch:
+  # the release workflow builds the extension too and attaches its files to the release
+  workflow_call:
+    inputs:
+      release:
+        description: Called from the release workflow (skips the unpacked folder artifact).
+        type: boolean
+        default: false
+    secrets:
+      CRX_KEY_PEM:
+        required: false
 
 concurrency:
   group: extension-${{ github.event.pull_request.number || github.ref }}
@@ -60,7 +70,9 @@ jobs:
             apps/extension/dist/ytdlpd-chrome.crx
             apps/extension/dist/ytdlpd-firefox.xpi
             apps/extension/dist/ytdlpd-extension-*-source.zip
-      - uses: actions/upload-artifact@v4
+      # a release downloads every artifact into one folder: loose unpacked files must not land there
+      - if: ${{ !inputs.release }}
+        uses: actions/upload-artifact@v4
         with:
           name: ytdlpd-extension-${{ steps.v.outputs.version }}-chrome-unpacked
           path: apps/extension/dist/chrome
