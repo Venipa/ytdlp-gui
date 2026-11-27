@@ -6,7 +6,7 @@ import { join } from "node:path";
 const src = (f: string) => readFileSync(join(import.meta.dir, "..", "src", f), "utf8");
 
 test("the worker locks storage to trusted contexts", () => {
-  expect(src("background.ts")).toMatch(/storage\.local\.setAccessLevel\(\{ accessLevel: "TRUSTED_CONTEXTS" \}\)/);
+  expect(src("background.ts")).toMatch(/storage\.local\.setAccessLevel\?\.\(\{ accessLevel: "TRUSTED_CONTEXTS" \}\)/);
 });
 
 test("no content-script path touches storage or the client", () => {

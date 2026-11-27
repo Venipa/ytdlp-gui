@@ -4,7 +4,8 @@ import { makeHandler } from "./worker";
 import type { Msg, State } from "./protocol";
 
 // tokens live here: keep them out of content scripts (default access includes them)
-void chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
+// Firefox has no access levels (its content scripts can always read storage): the call is skipped there
+void chrome.storage.local.setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" });
 
 const store: Store = {
   get: async (k) => (await chrome.storage.local.get(k))[k],

@@ -1,0 +1,66 @@
+name: extension
+
+# Runs only when the extension (or this file) changes. The bridge allowlist it checks against
+# (apps/desktop/crates/ytdlpd/src/browser.rs, CHROME_IDS) is watched too: a changed id must still match the key.
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/extension/**"
+      - "apps/desktop/crates/ytdlpd/src/browser.rs"
+      - ".github/workflows/extension.yml"
+  pull_request:
+    paths:
+      - "apps/extension/**"
+      - "apps/desktop/crates/ytdlpd/src/browser.rs"
+      - ".github/workflows/extension.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: extension-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: apps/extension
+
+jobs:
+  build:
+    name: test and package
+    runs-on: ubuntu-24.04
+    env:
+      # the release signing key (its id is the one in CHROME_IDS); absent on forks, then the build is unsigned
+      CRX_KEY_PEM: ${{ secrets.CRX_KEY_PEM }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - name: test
+        run: bun test
+      - name: build (signed crx)
+        if: ${{ env.CRX_KEY_PEM != '' }}
+        run: bun build.ts
+      - name: build (unsigned, no CRX_KEY_PEM secret)
+        if: ${{ env.CRX_KEY_PEM == '' }}
+        run: bun build.ts --unsigned
+      - name: version
+        id: v
+        run: echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
+      - name: source zip
+        working-directory: .
+        # tracked files only: no dist, no node_modules, never a key
+        run: git archive --format=zip --prefix=ytdlpd-extension/ -o "apps/extension/dist/ytdlpd-extension-${{ steps.v.outputs.version }}-source.zip" HEAD apps/extension
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ytdlpd-extension-${{ steps.v.outputs.version }}
+          if-no-files-found: error
+          path: |
+            apps/extension/dist/ytdlpd-chrome.crx
+            apps/extension/dist/ytdlpd-firefox.xpi
+            apps/extension/dist/ytdlpd-extension-*-source.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ytdlpd-extension-${{ steps.v.outputs.version }}-chrome-unpacked
+          path: apps/extension/dist/chrome
