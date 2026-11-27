@@ -347,7 +347,9 @@ async fn pairing_then_auth_then_use() {
 #[tokio::test]
 async fn code_is_single_use_expires_and_burns() {
     let r = rig();
+    assert!(!r.bridge.code_live());
     let code = r.bridge.new_code().code;
+    assert!(r.bridge.code_live());
     assert_eq!(code.len(), 8);
     assert!(code.bytes().all(|b| b.is_ascii_digit()));
     let mut ws = connect(&r, A).await;
@@ -355,6 +357,7 @@ async fn code_is_single_use_expires_and_burns() {
         call(&mut ws, json!({"type":"pair","code":code,"device":"x"})).await["type"],
         "paired"
     );
+    assert!(!r.bridge.code_live(), "a used code is gone");
     let mut ws2 = connect(&r, A).await;
     assert_eq!(
         code_of(&call(&mut ws2, json!({"type":"pair","code":code,"device":"x"})).await),

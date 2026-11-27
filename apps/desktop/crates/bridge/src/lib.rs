@@ -206,6 +206,13 @@ impl Bridge {
         PairCode { code, expires }
     }
 
+    /// A code is open: made, not yet used, burned or expired.
+    pub fn code_live(&self) -> bool {
+        lock(&self.inner.code)
+            .as_ref()
+            .is_some_and(|c| Instant::now() < c.expires)
+    }
+
     /// Drops the live code (the pairing panel closed).
     pub fn cancel_code(&self) {
         *lock(&self.inner.code) = None;

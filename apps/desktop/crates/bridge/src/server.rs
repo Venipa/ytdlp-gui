@@ -256,6 +256,7 @@ impl Conn {
         };
         // wrong, expired and "no code is open" look the same on purpose
         if !self.inner.redeem(&code) {
+            log::warn!("bridge: pairing refused: wrong, used or expired code");
             return self.fail(id, "bad_code", "wrong or expired code");
         }
         let device: String = device
@@ -312,9 +313,13 @@ impl Conn {
                     log::warn!("bridge: {e:#}");
                 }
                 self.set_authed(hash);
+                log::info!("bridge: {device:?} signed in");
                 reply(Resp::AuthOk { device }, id)
             }
-            None => self.fail(id, "bad_token", "unknown token"),
+            None => {
+                log::warn!("bridge: sign-in refused: unknown token or another origin");
+                self.fail(id, "bad_token", "unknown token")
+            }
         }
     }
 }
@@ -405,6 +410,9 @@ async fn session(inner: Arc<Inner>, stream: TcpStream) {
             },
             () = wait_auth => { close(&mut tx, 4401).await; break }
         }
+    }
+    if conn.authed.is_some() {
+        log::info!("bridge: a signed-in browser disconnected");
     }
 }
 
