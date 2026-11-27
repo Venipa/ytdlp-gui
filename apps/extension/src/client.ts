@@ -1,3 +1,4 @@
+import { fixUrl } from "./rules";
 import { PORTS, PROTO, WireError, type Added, type Checked, type Frame, type HelloOk, type State } from "./protocol";
 
 export interface Store { get(key: string): Promise<any>; set(key: string, value: any): Promise<void> }
@@ -264,6 +265,7 @@ export class Client {
 
   /** `supported` answer for a URL, cached 10 min including negatives; concurrent calls share one request. */
   async check(url: string): Promise<Checked> {
+    url = fixUrl(url);
     const hit = this.cache.get(url);
     if (hit && this.o.now() - hit.t < this.o.cacheMs) return hit.res;
     const busy = this.inflight.get(url);
@@ -279,6 +281,7 @@ export class Client {
   }
 
   async add(url: string, preset: string | null, start = true): Promise<Added> {
+    url = fixUrl(url);
     await this.ready();
     return (await this.request({ type: "add", url, preset, start })) as unknown as Added;
   }
