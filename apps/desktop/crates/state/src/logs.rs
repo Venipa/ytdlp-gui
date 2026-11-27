@@ -6,6 +6,26 @@ use gpui::Context;
 /// Lines kept in memory for the Logs screen.
 const CAP: usize = 5000;
 
+/// `text` without terminal colour codes (`ESC [ ... m` and the like), which tools such as deno
+/// print even when their output is captured.
+fn plain(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(c) = chars.next() {
+        if c != '\u{1b}' {
+            out.push(c);
+        } else if chars.next() == Some('[') {
+            // a control sequence ends at its first byte in `@`..=`~`
+            for c in chars.by_ref() {
+                if ('@'..='~').contains(&c) {
+                    break;
+                }
+            }
+        }
+    }
+    out
+}
+
 /// One line on the Logs screen.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LogEntry {
@@ -38,7 +58,7 @@ impl Logs {
             at: SystemClock.now_ms(),
             job,
             level: level.to_string(),
-            message: message.to_string(),
+            message: plain(message),
         });
         cx.notify();
     }
@@ -67,5 +87,19 @@ impl Logs {
     pub fn clear(&mut self, cx: &mut Context<Self>) {
         self.entries.clear();
         cx.notify();
+    }
+}
+
+#[cfg(test)]
+mod plain_tests {
+    #[test]
+    fn colour_codes_go() {
+        assert_eq!(
+            super::plain(
+                "\u{1b}[0m\u{1b}[1m\u{1b}[31merror\u{1b}[0m: at \u{1b}[38;5;245mfile\u{1b}[0m"
+            ),
+            "error: at file"
+        );
+        assert_eq!(super::plain("plain [0m text"), "plain [0m text");
     }
 }
