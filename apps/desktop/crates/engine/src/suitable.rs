@@ -34,7 +34,11 @@ pub fn kind_of(key: &str, url: &str) -> UrlKind {
     let u = url.to_ascii_lowercase();
     let has = |s: &[&str]| s.iter().any(|p| u.contains(p));
     if key.ends_with("Tab") {
-        return if has(&["/playlist", "list="]) {
+        // a playing video with a list (or YouTube Music radio) attached: the download takes only
+        // the video (`noplaylist`), so the bar treats it as one
+        return if has(&["watch?v=", "&v=", "youtu.be/"]) {
+            UrlKind::Video
+        } else if has(&["/playlist", "list="]) {
             UrlKind::Playlist
         } else if has(&["/@", "/channel/", "/c/", "/user/", "/channels", "/videos"]) {
             UrlKind::Channel
@@ -102,6 +106,17 @@ mod tests {
         assert_eq!(
             kind_of("YoutubeTab", "https://youtube.com/playlist?list=PL1"),
             UrlKind::Playlist
+        );
+        assert_eq!(
+            kind_of(
+                "YoutubeTab",
+                "https://music.youtube.com/watch?v=1&list=RDAMVM1"
+            ),
+            UrlKind::Video
+        );
+        assert_eq!(
+            kind_of("YoutubeTab", "https://youtube.com/watch?list=PL1&v=1"),
+            UrlKind::Video
         );
         assert_eq!(
             kind_of("YoutubeTab", "https://youtube.com/@a/videos"),
