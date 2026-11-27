@@ -1,6 +1,7 @@
 //! Contract crate for ytdlpd: ids, statuses, specs, errors, the job state machine,
 //! filter grammar, URL intake, settings and the backend traits. No gpui, no IO beyond settings files.
 
+pub mod args;
 pub mod backend;
 pub mod cookies;
 pub mod filter;

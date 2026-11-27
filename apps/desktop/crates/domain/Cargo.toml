@@ -15,3 +15,4 @@ url.workspace = true
 regex.workspace = true
 dirs.workspace = true
 anyhow.workspace = true
+shlex.workspace = true

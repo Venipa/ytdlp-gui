@@ -73,6 +73,12 @@ pub trait Backend: Send + Sync {
     /// Points new workers (and the first probe) at an updated yt-dlp site dir; `None` goes back to
     /// the bundled one. Running jobs keep what they loaded.
     fn set_site(&self, _site: Option<std::path::PathBuf>) {}
+    /// Checks custom yt-dlp argument lines, each already split into arguments, with yt-dlp's own
+    /// option parser: one answer per line. The default takes every line.
+    fn check_args(&self, lines: Vec<Vec<String>>) -> BoxFuture<'static, Vec<crate::ArgCheck>> {
+        let n = lines.len();
+        Box::pin(async move { vec![crate::ArgCheck::Ok; n] })
+    }
 }
 
 /// Progress/outcome of `ToolsApi::ensure`.

@@ -7,7 +7,7 @@ External deps: domain = serde, serde_json, futures, url, dirs, anyhow; storage =
 ## domain (no gpui)
 Modules re-exported flat from the crate root.
 
-**ids/enums** (all `as_str()`, `FromStr`, `Display`, serde as string, `ALL`): `DownloadId(i64)` (serde transparent), `DownloadStatus` (+`is_active`, `is_terminal`), `MediaKind{Video,Audio}`, `ErrorCode` (17 codes, `retryable()`), `VideoQuality{Best,2160..480}`, `AudioFormat{Best,Mp3,M4a,Opus}`, `ToolKind{Ffmpeg,Ffprobe,Deno,YtDlp,YtDlpEjs,Python}`, `ToolSource{Managed,Path,Custom}`.
+**ids/enums** (all `as_str()`, `FromStr`, `Display`, serde as string, `ALL`): `DownloadId(i64)` (serde transparent), `DownloadStatus` (+`is_active`, `is_terminal`), `MediaKind{Video,Audio}`, `ErrorCode` (17 codes, `retryable()`), `VideoQuality{Best,2160..480}`, `AudioFormat{Best,Mp3,M4a,Opus}`, `ToolKind{Ffmpeg,Ffprobe,Deno,YtDlp,YtDlpEjs,Python,Aria2c}` (+`optional()`: Aria2c), `ToolSource{Managed,Path,Custom}`, `ArgCheck{Ok,Reserved,Invalid{message,suggestion}}`.
 **Preset** `Video(VideoQuality) | Audio(AudioFormat) | Custom`, string form `video:1080` / `audio:mp3` / `custom`, `Preset::all()` (10), `Preset::DEFAULT`, `.kind()`.
 **EngineError{code, message, retryable}** (`new` derives retryable), `std::error::Error`.
 **JobSpec** (stored as `options_json`): url, preset, format_spec, output_dir, outtmpl, playlist_index, embed_thumbnail/metadata/chapters, subtitles, sponsorblock, cookies, proxy, rate_limit, retries, ffmpeg_location, js_runtime `(key, path)`, extra_args `Vec<String>`.

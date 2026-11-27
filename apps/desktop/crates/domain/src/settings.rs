@@ -92,6 +92,7 @@ pub struct ToolPaths {
     pub ffmpeg: Option<String>,
     pub ffprobe: Option<String>,
     pub deno: Option<String>,
+    pub aria2c: Option<String>,
 }
 
 /// Which GitHub releases the app updates to: `stable` (latest release) or `beta` (pre-releases too).
@@ -155,6 +156,14 @@ pub struct Settings {
     pub rate_limit: Option<String>,
     pub cookies: CookiesSettings,
     pub tool_paths: ToolPaths,
+    /// Hand downloads to aria2c (when one is found) instead of yt-dlp's own downloader.
+    pub aria2c: bool,
+    /// Whether the custom argument lines below reach downloads.
+    pub custom_args: bool,
+    /// Custom yt-dlp arguments, one option (with its value) per line, as on the command line.
+    pub ytdlp_args: Vec<String>,
+    /// Custom aria2c arguments, one per line; used only while aria2c is on.
+    pub aria2c_args: Vec<String>,
     /// `gpl` or `lgpl`.
     pub ffmpeg_flavor: String,
     pub ytdlp_auto_check: bool,
@@ -210,6 +219,10 @@ impl Default for Settings {
             rate_limit: None,
             cookies: Default::default(),
             tool_paths: Default::default(),
+            aria2c: false,
+            custom_args: false,
+            ytdlp_args: vec![],
+            aria2c_args: vec![],
             ffmpeg_flavor: "gpl".into(),
             ytdlp_auto_check: true,
             clipboard_watch: true,

@@ -213,6 +213,12 @@ pub struct JobSpec {
     /// `(runtime key: deno|node|bun|quickjs, absolute path)`.
     pub js_runtime: Option<(String, String)>,
     pub extra_args: Vec<String>,
+    /// aria2c binary yt-dlp hands http(s) downloads to; `None` uses yt-dlp's own downloader.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aria2c: Option<String>,
+    /// Extra aria2c arguments (Settings, Custom arguments), used only with `aria2c`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aria2c_args: Vec<String>,
     /// The ffmpeg fix run on the finished file (site rule or default); older specs have none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fix: Option<crate::Fix>,
@@ -363,7 +369,28 @@ impl ProbeResult {
 
 str_enum! {
     /// Managed external tools.
-    ToolKind { Ffmpeg = "ffmpeg", Ffprobe = "ffprobe", Deno = "deno", YtDlp = "yt-dlp", YtDlpEjs = "yt-dlp-ejs", Python = "python" }
+    ToolKind { Ffmpeg = "ffmpeg", Ffprobe = "ffprobe", Deno = "deno", YtDlp = "yt-dlp", YtDlpEjs = "yt-dlp-ejs", Python = "python", Aria2c = "aria2c" }
+}
+
+impl ToolKind {
+    /// Tools the app works without (aria2c): never downloaded, never block "all ready".
+    pub fn optional(self) -> bool {
+        self == ToolKind::Aria2c
+    }
+}
+
+/// What a check of one custom-argument line found (Settings, Network, Custom arguments).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ArgCheck {
+    /// The tool takes it; downloads get it.
+    Ok,
+    /// It changes an option ytdlpd sets itself; left out of downloads.
+    Reserved,
+    /// The tool refuses it: its own `message`, and a close option name when there is one; left out.
+    Invalid {
+        message: String,
+        suggestion: Option<String>,
+    },
 }
 
 str_enum! {
