@@ -26,6 +26,8 @@ export interface View {
   current?: string;
   detail?: string;
   inside: boolean;
+  /** Icon-only button for links on small thumbnails: no label, no preset chevron. */
+  compact?: boolean;
 }
 /** Viewport coordinates of the player's top-right corner: distance from the top and from the right edge. */
 export interface Anchor { top: number; right: number }
@@ -109,13 +111,15 @@ export class Bar {
     this.anchor = anchor;
     const l = LABEL[view.state];
     const text = view.state === "ready" ? view.main ?? t(l.key) : t(l.key);
-    this.main.innerHTML = `${svg(l.icon)}<span>${esc(text)}</span>${view.tag ? `<span class="tag">${esc(view.tag)}</span>` : ""}`;
+    const tag = view.compact ? undefined : view.tag;
+    this.main.innerHTML = view.compact ? svg(l.icon) : `${svg(l.icon)}<span>${esc(text)}</span>${tag ? `<span class="tag">${esc(tag)}</span>` : ""}`;
     const idle = view.state === "ready" || view.state === "failed";
     this.main.setAttribute("aria-disabled", String(!idle));
-    this.main.setAttribute("aria-label", view.state === "ready" ? `${text}${view.tag ? " " + view.tag : ""}: ${t("bar_tip")}` : view.state === "failed" ? `${t("bar_failed")}: ${view.detail ?? ""}` : text);
+    this.main.setAttribute("aria-label", view.state === "ready" ? `${text}${tag ? " " + tag : ""}: ${t("bar_tip")}` : view.state === "failed" ? `${t("bar_failed")}: ${view.detail ?? ""}` : text);
     this.main.title = view.state === "failed" ? view.detail ?? "" : view.state === "ready" ? t("bar_tip") : "";
+    if (view.compact) this.main.title ||= text;
     const multi = view.state === "ready" && (view.presets?.length ?? 0) > 1;
-    this.bar.className = `bar show vis${view.inside ? " inside" : ""}${multi ? "" : " single"} s-${view.state}`;
+    this.bar.className = `bar show vis${view.inside ? " inside" : ""}${view.compact ? " compact" : ""}${multi ? "" : " single"} s-${view.state}`;
     this.live.textContent = view.state === "ready" || view.state === "checking" ? "" : text;
     this.place();
   }
@@ -125,9 +129,9 @@ export class Bar {
 
   private place() {
     if (!this.anchor || !this.view) return;
-    const h = this.view.inside ? 28 : 24;
-    // inside: 8px in from the player's top-right; tab: flush above its top edge
-    const inset = this.view.inside ? 8 : 0;
+    const h = this.view.compact ? 24 : this.view.inside ? 28 : 24;
+    // inside: 8px in from the player's top-right (4 for the icon button); tab: flush above its top edge
+    const inset = this.view.compact ? 4 : this.view.inside ? 8 : 0;
     const top = this.anchor.top + (this.view.inside ? inset : -h);
     const right = this.anchor.right + inset;
     this.bar.style.top = `${Math.max(0, top)}px`;

@@ -52,6 +52,8 @@ export type Msg =
   | { t: "view" }
   | { t: "hide"; scope: "page" | "domain" }
   | { t: "top" }
+  | { t: "check-link"; url: string }
+  | { t: "add-link"; url: string; preset: string | null }
   | { t: "check-url"; url: string }
   | { t: "add-url"; url: string };
 

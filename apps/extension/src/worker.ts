@@ -1,10 +1,11 @@
 import type { Client } from "./client";
 import { candidateUrls, isContent, isHttp, isOwn, isPopup, type Sender } from "./sender";
+import { MAX_URL } from "./link";
 import { hide, hostOf, isHidden } from "./hidden";
 import { WireError, type Added, type Checked, type Msg, type State } from "./protocol";
 
 export type Reply =
-  | { ok: true; supported?: boolean; checked?: Checked; added?: Added; state?: State; label?: string; port?: number; appVersion?: string; error?: string; retryAfterMs?: number; off?: boolean; host?: string }
+  | { ok: true; supported?: boolean; checked?: Checked; added?: Added; state?: State; label?: string; port?: number; appVersion?: string; error?: string; retryAfterMs?: number; off?: boolean; links?: boolean; host?: string }
   | { ok: false; code: string; message?: string; retryAfterMs?: number };
 
 export interface Deps {
@@ -48,6 +49,10 @@ export function makeHandler(d: Deps) {
     return u;
   }
 
+  /** Newest link check per tab: an older one that finishes late is dropped. */
+  const linkSeq = new Map<number, number>();
+  const linkUrl = (u: unknown): u is string => typeof u === "string" && u.length <= MAX_URL && isHttp(u);
+
   return async function handle(msg: Msg, s: Sender): Promise<Reply> {
     if (!isOwn(s, extId)) return { ok: false, code: "unauthorized" };
     const popup = isPopup(s, extId);
@@ -62,7 +67,7 @@ export function makeHandler(d: Deps) {
           if (!content) return { ok: false, code: "unauthorized" };
           const top = (await topOf(s)) ?? s.url!;
           const off = (await d.store.get("enabled")) === false || isHidden(await d.store.get("hidden"), top);
-          return { ok: true, off, host: hostOf(top) };
+          return { ok: true, off, links: (await d.store.get("links")) !== false, host: hostOf(top) };
         }
         case "hide": {
           if (!content || (msg.scope !== "page" && msg.scope !== "domain")) return { ok: false, code: "bad_request" };
@@ -84,6 +89,24 @@ export function makeHandler(d: Deps) {
           if (client.state !== "ready") { void client.connect(); return { ok: false, code: client.state }; }
           const r = await find(candidateUrls(s, !!msg.cover, await topOf(s)));
           return { ok: true, supported: r.checked.supported, checked: r.checked };
+        }
+        case "check-link": {
+          if (!content) return { ok: false, code: "unauthorized" };
+          if (!linkUrl(msg.url)) return { ok: false, code: "bad_url" };
+          if (client.state !== "ready") { void client.connect(); return { ok: false, code: client.state }; }
+          const tab = s.tab!.id!, n = (linkSeq.get(tab) ?? 0) + 1;
+          linkSeq.set(tab, n);
+          const checked = await client.check(msg.url);
+          if (linkSeq.get(tab) !== n) return { ok: false, code: "superseded" };
+          return { ok: true, supported: checked.supported, checked };
+        }
+        case "add-link": {
+          if (!content) return { ok: false, code: "unauthorized" };
+          if (!linkUrl(msg.url)) return { ok: false, code: "bad_url" };
+          const checked = await client.check(msg.url); // cached from the hover
+          if (!checked.supported) return { ok: false, code: "unsupported" };
+          const preset = typeof msg.preset === "string" && checked.presets?.some((p) => p.id === msg.preset) ? msg.preset : null;
+          return { ok: true, added: await client.add(msg.url, preset) };
         }
         case "add": {
           if (!content) return { ok: false, code: "unauthorized" };

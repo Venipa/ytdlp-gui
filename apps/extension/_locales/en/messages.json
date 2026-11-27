@@ -37,6 +37,8 @@
   "popup_download": { "message": "Download" },
   "popup_switch": { "message": "Show button on videos" },
   "popup_switch_sub": { "message": "All sites, this browser" },
+  "popup_links": { "message": "Show on links" },
+  "popup_links_sub": { "message": "Thumbnails and large links" },
   "popup_disconnect": { "message": "Disconnect" },
   "popup_no_page": { "message": "No page here to download." },
   "popup_hidden_domain": { "message": "Hidden on $DOMAIN$", "placeholders": { "domain": { "content": "$1", "example": "youtube.com" } } },

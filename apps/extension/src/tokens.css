@@ -5,7 +5,7 @@
   --bd:color-mix(in srgb,var(--paper) 14%,transparent);
   --hover:color-mix(in srgb,var(--paper) 7%,transparent);
   --inkbg:color-mix(in srgb,var(--ink) 14%,transparent);
-  --radius:2px;--font-size:12px;--bar-h:24px;--bar-h-in:28px;--gap:8px;--pad:9px;--fade:120ms;
+  --radius:2px;--font-size:12px;--bar-h:24px;--bar-icon:24px;--bar-h-in:28px;--gap:8px;--pad:9px;--fade:120ms;
   --font:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;--mono:"IBM Plex Mono",Consolas,monospace;
 }
 @media (prefers-color-scheme:light){:host,:root{

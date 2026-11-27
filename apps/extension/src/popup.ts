@@ -69,9 +69,10 @@ async function pageUrl(): Promise<string | undefined> {
 }
 
 async function readyView() {
-  const store = await chrome.storage.local.get(["enabled", "hidden"]);
+  const store = await chrome.storage.local.get(["enabled", "hidden", "links"]);
   const sw = $("enabled");
   sw.setAttribute("aria-checked", String(store.enabled !== false));
+  $("links").setAttribute("aria-checked", String(store.links !== false));
   const url = await pageUrl();
   const dl = $<HTMLButtonElement>("download");
   dl.disabled = true;
@@ -110,6 +111,12 @@ $("enabled").addEventListener("click", async () => {
   const on = $("enabled").getAttribute("aria-checked") !== "true";
   $("enabled").setAttribute("aria-checked", String(on));
   await chrome.storage.local.set({ enabled: on });
+});
+
+$("links").addEventListener("click", async () => {
+  const on = $("links").getAttribute("aria-checked") !== "true";
+  $("links").setAttribute("aria-checked", String(on));
+  await chrome.storage.local.set({ links: on });
 });
 
 void render();

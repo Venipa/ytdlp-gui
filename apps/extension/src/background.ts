@@ -49,7 +49,7 @@ chrome.tabs.onRemoved.addListener((id: number) => tops.delete(id));
 
 // content scripts hold no storage: tell every frame to ask again when the switch or the hidden list changes
 chrome.storage.onChanged.addListener(async (c: Record<string, unknown>) => {
-  if (!c.enabled && !c.hidden) return;
+  if (!c.enabled && !c.hidden && !c.links) return;
   for (const tab of await chrome.tabs.query({})) if (tab.id !== undefined) chrome.tabs.sendMessage(tab.id, { t: "refresh" }).catch(() => {});
 });
 

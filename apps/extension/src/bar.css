@@ -15,7 +15,9 @@ button[aria-disabled=true]:hover{background:none}
 .bar.s-sending .main,.bar.s-checking .main{color:var(--amber)}
 .bar.s-checking .main,.bar.s-starting .main{color:var(--pencil)}
 .bar.s-failed{border-color:var(--danger)}.bar.s-failed button{color:var(--danger)}
-.bar.single .more{display:none}
+.bar.single .more,.bar.compact .more{display:none}
+.bar.compact{width:var(--bar-icon);height:var(--bar-icon);border-radius:var(--radius)}
+.bar.compact .main{width:100%;justify-content:center;padding:0}
 svg{width:14px;height:14px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .spin{animation:spin 1s steps(12) infinite}
 @keyframes spin{to{transform:rotate(360deg)}}

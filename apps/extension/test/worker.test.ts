@@ -118,6 +118,50 @@ describe("sender checks", () => {
     expect(s.data.hidden).toBeUndefined();
   });
 
+  test("link checks and adds: content only, http(s) up to 2048 chars, URL from the message is checked first", async () => {
+    const u = "https://youtube.com/watch?v=9";
+    const s = setup([u]);
+    expect(await s.handle({ t: "check-link", url: u }, popup)).toMatchObject({ ok: false, code: "unauthorized" });
+    expect(await s.handle({ t: "add-link", url: u, preset: null }, popup)).toMatchObject({ ok: false, code: "unauthorized" });
+    for (const url of ["javascript:alert(1)", "file:///c:/x", "", 5 as any, "https://a.example/" + "x".repeat(2100)]) {
+      expect(await s.handle({ t: "check-link", url }, content("https://a.example/"))).toMatchObject({ ok: false, code: "bad_url" });
+      expect(await s.handle({ t: "add-link", url, preset: null }, content("https://a.example/"))).toMatchObject({ ok: false, code: "bad_url" });
+    }
+    expect(s.calls).toEqual([]);
+    expect(await s.handle({ t: "check-link", url: u }, content("https://a.example/"))).toMatchObject({ ok: true, supported: true });
+    await s.handle({ t: "add-link", url: u, preset: "video:1080" }, content("https://a.example/"));
+    await s.handle({ t: "add-link", url: u, preset: "bogus" }, content("https://a.example/"));
+    expect(s.calls.filter((c) => c[0] === "add")).toEqual([["add", u, "video:1080"], ["add", u, null]]);
+    expect(await s.handle({ t: "add-link", url: "https://no.example/", preset: null }, content("https://a.example/"))).toMatchObject({ ok: false, code: "unsupported" });
+  });
+
+  test("check-link answers at once when not connected, and drops an older check on the same tab", async () => {
+    const connects: number[] = [];
+    const gates: (() => void)[] = [];
+    const client: any = {
+      state: "offline",
+      connect: async () => { connects.push(1); },
+      check: (u: string) => new Promise((res) => gates.push(() => res(checked(true)))),
+    };
+    const handle = makeHandler({ client, extId: ID, tops: new Map(), store: { get: async () => undefined, set: async () => {} }, setMenuHost: () => {} });
+    expect(await handle({ t: "check-link", url: "https://a.example/1" }, content("https://p.example/"))).toMatchObject({ ok: false, code: "offline" });
+    expect(connects.length).toBe(1);
+    client.state = "ready";
+    const first = handle({ t: "check-link", url: "https://a.example/1" }, content("https://p.example/"));
+    const second = handle({ t: "check-link", url: "https://a.example/2" }, content("https://p.example/"));
+    await Bun.sleep(5);
+    gates.forEach((g) => g());
+    expect(await first).toMatchObject({ ok: false, code: "superseded" });
+    expect(await second).toMatchObject({ ok: true, supported: true });
+  });
+
+  test("view carries the links switch", async () => {
+    const s = setup([]);
+    expect(await s.handle({ t: "view" }, content("https://a.example/"))).toMatchObject({ links: true });
+    s.data.links = false;
+    expect(await s.handle({ t: "view" }, content("https://a.example/"))).toMatchObject({ links: false });
+  });
+
   test("a lost top URL is asked from the top frame", async () => {
     const client: any = { state: "ready" };
     const asked: number[] = [];
