@@ -82,6 +82,17 @@ fn build_app(data_dir: Option<PathBuf>, demo: Option<&str>, cx: &mut App) -> sta
     #[cfg(feature = "real-engine")]
     let backend: Option<std::sync::Arc<dyn domain::Backend>> = scene.is_none().then(|| {
         let paths = storage::Paths::resolve(data_dir.as_deref());
+        // started from the Start menu the working folder is the install folder, which this user
+        // may not write; anything relative lands in `<data>/tmp` instead
+        let tmp = paths.data.join("tmp");
+        if let Err(error) =
+            std::fs::create_dir_all(&tmp).and_then(|()| std::env::set_current_dir(&tmp))
+        {
+            log::warn!(
+                "ytdlpd: cannot move the working folder to {}: {error}",
+                tmp.display()
+            );
+        }
         let config = engine::EngineConfig {
             worker_exe: std::env::current_exe().unwrap_or_default(),
             python_home: None,
@@ -90,7 +101,7 @@ fn build_app(data_dir: Option<PathBuf>, demo: Option<&str>, cx: &mut App) -> sta
                 cache_dir: Some(paths.cache.join("yt-dlp").to_string_lossy().into_owned()),
                 // the JavaScript runtime travels in each job spec (settings, then the detected deno)
                 js_runtime: None,
-                temp_dir: Some(paths.data.join("tmp").to_string_lossy().into_owned()),
+                temp_dir: Some(tmp.to_string_lossy().into_owned()),
             },
         };
         std::sync::Arc::new(engine::EngineBackend::new(config)) as _

@@ -267,6 +267,10 @@ pub fn probe_opts(p: &ProbeOpts, env: &Env) -> Value {
         cookies(&mut m, c);
     }
     m.insert("skip_download".into(), json!(true));
+    // a lookup may test formats with a scratch file; give it a folder this user can write
+    if let Some(temp) = &env.temp_dir {
+        m.insert("paths".into(), json!({ "home": temp, "temp": temp }));
+    }
     // a lookup only reads the info: `best*` is the best format with video, audio or both, so it
     // never fails the way `best` (a combined file, which YouTube Music lacks) or a video selector
     // does; the download picks the real formats later
@@ -552,5 +556,17 @@ mod tests {
             &Env::default(),
         );
         assert_eq!(o["js_runtimes"], json!({"deno": {"path": "/t/deno"}}));
+        assert!(o.get("paths").is_none());
+        let o = probe_opts(
+            &ProbeOpts::default(),
+            &Env {
+                temp_dir: Some("C:/data/tmp".into()),
+                ..Env::default()
+            },
+        );
+        assert_eq!(
+            o["paths"],
+            json!({"home": "C:/data/tmp", "temp": "C:/data/tmp"})
+        );
     }
 }
