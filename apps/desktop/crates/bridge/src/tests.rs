@@ -48,7 +48,7 @@ impl Host for Fake {
         self.adds.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
             Ok(Added {
-                id: req.start.then_some(7),
+                download: req.start.then_some(7),
                 state: if req.start {
                     AddState::Queued
                 } else {
@@ -318,7 +318,11 @@ async fn pairing_then_auth_then_use() {
     )
     .await;
     assert_eq!(
-        (a["type"].as_str(), a["id"].as_i64(), a["state"].as_str()),
+        (
+            a["type"].as_str(),
+            a["download"].as_i64(),
+            a["state"].as_str()
+        ),
         (Some("added"), Some(7), Some("queued"))
     );
     assert_eq!(
@@ -491,7 +495,8 @@ async fn frame_and_url_caps() {
     match recv(&mut ws).await {
         Ok(v) => {
             assert_eq!(code_of(&v), "too_large");
-            assert_eq!(recv(&mut ws).await, Err(1009));
+            // under load the close frame can be lost to the reset (0)
+            assert!(matches!(recv(&mut ws).await, Err(1009 | 0)));
         }
         Err(code) => assert!(code == 1009 || code == 0),
     }

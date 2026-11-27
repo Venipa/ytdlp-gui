@@ -24,7 +24,7 @@ function fakeApp(o: { port?: number; instance: string; tokens?: string[]; code?:
           case "pair": if (m.code !== o.code) return err("bad_code"); tokens.add("tok-" + o.instance); return reply(o.paired ?? { type: "paired", token: "tok-" + o.instance, device: m.device });
           case "ping": return reply({ type: "pong" });
           case "check": return reply({ type: "checked", url: m.url, supported: m.url.includes("youtube"), extractor: null, name: null, kind: "video", presets: [{ id: "video:1080", label: "Video 1080p" }], preset: "video:1080" });
-          case "add": return reply({ type: "added", id: 1, state: "queued", duplicate: false });
+          case "add": return reply({ type: "added", download: 1, state: "queued", duplicate: false });
         }
       },
     },

@@ -74,7 +74,7 @@ pub enum AddState {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Added {
     /// Download id when one was created.
-    pub id: Option<i64>,
+    pub download: Option<i64>,
     /// Where it went.
     pub state: AddState,
     /// An equal link already was in the list.

@@ -26,7 +26,7 @@ export interface Checked {
   presets?: PresetItem[];
   preset?: string;
 }
-export interface Added { id: number | null; state: "queued" | "intake"; duplicate: boolean }
+export interface Added { download: number | null; state: "queued" | "intake"; duplicate: boolean }
 export interface HelloOk { app: "ytdlpd"; app_version: string; proto: number; instance: string; label: string }
 
 export type Frame = { v: number; id?: number; type: string; [k: string]: unknown };
