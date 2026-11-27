@@ -2,7 +2,7 @@
 // Usage: bun scripts/setup.ts [--root <dir>] [--triple <t>] [--force] [--ship] [--update-lock]
 // Root (default: parent of scripts/, i.e. apps/desktop; env YTDLPD_ROOT) holds runtime.lock.json and runtime/.
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -61,7 +61,14 @@ const rt = join(rtRoot, triple);
 const py = join(rt, "python");
 const stamp = join(rt, ".stamp");
 const stampVal = `${asset}|${expected}|${JSON.stringify(lock.deps ?? null)}|${flag("ship")}`;
+// our yt-dlp plugins (extractor fixes upstream lacks) -> python/plugins, put on sys.path by engine::runtime;
+// synced on every run so a changed plugin needs no runtime rebuild
+const syncPlugins = () => {
+  rmSync(join(py, "plugins"), { recursive: true, force: true });
+  cpSync(join(root, "plugins"), join(py, "plugins"), { recursive: true, filter: (p) => !p.includes("__pycache__") });
+};
 if (!flag("force") && existsSync(stamp) && readFileSync(stamp, "utf8") === stampVal) {
+  syncPlugins();
   console.log("runtime up to date (use --force to rebuild)");
   process.exit(0);
 }
@@ -163,5 +170,6 @@ const du = (d: string): number => readdirSync(d, { withFileTypes: true }).reduce
 const sizeMb = +(du(py) / 1048576).toFixed(1);
 const assets = { ...(lock.pbs?.assets ?? {}), [triple]: { name: asset, sha256: expected } };
 writeFileSync(lockPath, JSON.stringify({ pbs: { tag, python: PY_VERSION, assets }, deps, size_mb: { ...(lock.size_mb ?? {}), [triple]: sizeMb } }, null, 2) + "\n");
+syncPlugins();
 writeFileSync(stamp, `${asset}|${expected}|${JSON.stringify(deps)}|${flag("ship")}`);
 console.log(`runtime ready: ${py} (${sizeMb} MB), lock ${lockPath}`);

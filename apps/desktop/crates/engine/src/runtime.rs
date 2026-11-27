@@ -139,6 +139,8 @@ fn start(home: &Path, updates: Option<&Path>) -> Result<(), String> {
     let s = |p: &Path| p.to_string_lossy().into_owned();
     let mut paths: Vec<String> = updates.map(s).into_iter().collect();
     paths.push(s(&home.join("site")));
+    // our yt-dlp plugins (apps/desktop/plugins), found by yt-dlp's sys.path scan
+    paths.push(s(&home.join("plugins")));
     if cfg!(windows) {
         paths.extend([s(&home.join("Lib")), s(&home.join("DLLs"))]);
     } else {
