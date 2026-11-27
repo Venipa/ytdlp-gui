@@ -78,7 +78,13 @@ rm -f "$dmg"
 stage="$(mktemp -d)"
 cp -R "$app" "$stage/"
 ln -s /Applications "$stage/Applications"
-hdiutil create -volname ytdlpd -srcfolder "$stage" -ov -format UDZO "$dmg"
+# hosted runners now and then answer "Resource busy" while something still holds the volume
+for try in 1 2 3 4 5; do
+  hdiutil create -volname ytdlpd -srcfolder "$stage" -ov -format UDZO "$dmg" && break
+  [ "$try" = 5 ] && exit 1
+  echo "hdiutil create failed, retrying in $((try * 5))s"
+  sleep $((try * 5))
+done
 rm -rf "$stage"
 [ "$id" != "-" ] && codesign --force --timestamp --sign "$id" "$dmg"
 if [ -n "${NOTARY_PROFILE:-}" ]; then
