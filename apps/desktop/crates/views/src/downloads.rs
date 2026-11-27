@@ -674,17 +674,19 @@ impl Downloads {
         probe: Option<&ProbeResult>,
         cx: &mut Context<Self>,
     ) {
-        let spec = self
-            .app
-            .job_spec(url, preset, format_spec, playlist_index, cx);
         let label = match preset {
             Preset::Custom => self.formats_label(probe, format_spec),
             other => format::preset_label(other),
         };
-        let task = self
-            .app
-            .downloads
-            .update(cx, |d, cx| d.enqueue(spec, probe, Some(label), cx));
+        let task = self.app.enqueue_job(
+            url,
+            preset,
+            format_spec,
+            playlist_index,
+            probe,
+            Some(label),
+            cx,
+        );
         task.detach_and_log_err(cx);
     }
 

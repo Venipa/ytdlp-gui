@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+bridge.workspace = true
 domain.workspace = true
 futures.workspace = true
 gpui.workspace = true

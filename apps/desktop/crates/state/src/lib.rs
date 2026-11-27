@@ -3,6 +3,7 @@
 
 mod args;
 pub mod cookies;
+mod direct;
 mod downloads;
 pub mod fake;
 pub mod fixes;
@@ -20,6 +21,7 @@ pub mod updates;
 
 pub use args::CustomArgs;
 pub use cookies::CookieFiles;
+pub use direct::AddDirectError;
 pub use downloads::{Downloads, DownloadsEvent, Live, UPDATE_REASON};
 pub use fake::{FakeBackend, FakeTools, Scene};
 pub use fixes::{FixState, Fixes};
@@ -118,6 +120,14 @@ impl Io {
         self.0.spawn_blocking(func)
     }
 }
+
+/// The browser-extension bridge. `.0` is the running server, `None` while the setting is off or the
+/// start failed; `.1` is why the last start failed (port taken, no free port), cleared when the
+/// setting is switched off. Set by the `ytdlpd` binary; the Settings > Browser page reads the port,
+/// pairing code and devices from `.0` and the error from `.1`.
+pub struct BridgeHandle(pub Option<bridge::Bridge>, pub Option<String>);
+
+impl Global for BridgeHandle {}
 
 /// Everything the views read; entities are cheap handles. Registered as a global by `init`.
 #[derive(Clone)]
