@@ -3,6 +3,7 @@
 #[cfg(windows)]
 mod apply;
 mod assets;
+mod browser;
 mod http;
 mod platform;
 mod selftest;
@@ -183,6 +184,9 @@ fn main() -> ExitCode {
             let size = args.window_size.map(|size| size.0).unwrap_or(FIRST_SIZE);
             let frame_stats = args.launch.frame_stats;
             let scene = args.screen.clone();
+            if platform.is_first() {
+                browser::install(&state, cx);
+            }
             let hooks = platform::Hooks {
                 open_window: Box::new(move |cx| open_window(scene.clone(), size, frame_stats, cx)),
                 on_event: Box::new(move |event, cx| route_event(&state, event.clone(), cx)),

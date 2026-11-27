@@ -62,6 +62,7 @@ pub struct Platform {
     rx: UnboundedReceiver<Event>,
     minimized: bool,
     initial: Vec<String>,
+    first: bool,
 }
 
 /// Claim the single-instance socket. `None` means another instance took over and this process
@@ -86,11 +87,12 @@ pub fn start(
         drop(sender.unbounded_send(r.into()))
     }) {
         Instance::Running => None,
-        Instance::First | Instance::Failed => Some(Platform {
+        first @ (Instance::First | Instance::Failed) => Some(Platform {
             tx,
             rx,
             minimized: launch.minimized,
             initial: urls,
+            first: matches!(first, Instance::First),
         }),
     }
 }
@@ -107,6 +109,12 @@ struct Installed {
 impl Global for Installed {}
 
 impl Platform {
+    /// Whether this process owns the single-instance socket (not a failed claim); only that one
+    /// may open the browser-extension port.
+    pub fn is_first(&self) -> bool {
+        self.first
+    }
+
     /// Sets up the tray, notifications, event pump and (release builds) protocol registration.
     /// Returns whether the app should open its first window now (false for `--minimized` with a tray).
     pub fn install(self, hooks: Hooks, register_protocol: bool, cx: &mut App) -> bool {
@@ -115,6 +123,7 @@ impl Platform {
             mut rx,
             minimized,
             initial,
+            ..
         } = self;
         let tray = tray::Tray::new(tx.clone());
         let open = !(minimized && tray.is_some());
@@ -151,6 +160,13 @@ impl Platform {
             _pump: pump,
         });
         open
+    }
+}
+
+/// Sends `event` through the event pump, as if it came from a second launch.
+pub fn emit(event: Event, cx: &App) {
+    if let Some(p) = cx.try_global::<Installed>() {
+        p.tx.unbounded_send(event).ok();
     }
 }
 

@@ -12,6 +12,7 @@ real-engine = ["dep:engine"]
 
 [dependencies]
 anyhow.workspace = true
+bridge.workspace = true
 cli.workspace = true
 clap.workspace = true
 engine = { workspace = true, optional = true }

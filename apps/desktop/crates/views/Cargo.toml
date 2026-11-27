@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+bridge.workspace = true
 domain.workspace = true
 gpui.workspace = true
 i18n.workspace = true

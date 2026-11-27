@@ -2,6 +2,7 @@
 //! `state::AppSettings` (settings.json), so edits in the UI and edits of the file show in both.
 
 mod args;
+mod browser;
 mod cookies;
 mod fields;
 mod layout;
@@ -93,6 +94,10 @@ pub struct SettingsView {
     arg_lists: Vec<args::ArgList>,
     /// Waits for typing to pause before yt-dlp reads the lines.
     arg_check: Option<Task<()>>,
+    /// The pairing code on show and when it stops working.
+    pair: Option<(String, std::time::Instant)>,
+    /// Repaints the Browser page each second while a code counts down.
+    pair_tick: Option<Task<()>>,
 }
 
 impl SettingsView {
@@ -187,6 +192,8 @@ impl SettingsView {
             ytdlp_version: None,
             arg_lists,
             arg_check: None,
+            pair: None,
+            pair_tick: None,
         };
         this.refresh_preview(cx);
         this.load_ytdlp_version(cx);
@@ -629,6 +636,7 @@ pub(crate) fn page_icon(page: SettingsPage) -> &'static str {
         SettingsPage::Downloads => "icons/download.svg",
         SettingsPage::Formats => "icons/film.svg",
         SettingsPage::Network => "icons/radio.svg",
+        SettingsPage::Browser => "icons/compass.svg",
         SettingsPage::Cookies => "icons/cookie.svg",
         SettingsPage::Rules => "icons/funnel.svg",
         SettingsPage::Tools => "icons/settings.svg",
@@ -672,6 +680,7 @@ impl Render for SettingsView {
             SettingsPage::Downloads => self.page_downloads(&s, cx),
             SettingsPage::Formats => self.page_formats(&s, cx),
             SettingsPage::Network => self.page_network(&s, window, cx),
+            SettingsPage::Browser => self.page_browser(&s, cx),
             SettingsPage::Cookies => self.page_cookies(&s, window, cx),
             SettingsPage::Rules => self.page_rules(&s, window, cx),
             SettingsPage::Tools => self.page_tools(cx),
