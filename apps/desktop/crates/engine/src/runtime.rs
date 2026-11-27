@@ -217,6 +217,12 @@ fn start(home: &Path, updates: Option<&Path>) -> Result<(), String> {
             let sys = py.import("sys")?;
             sys.setattr("stdout", Py::new(py, LogWriter::new("info"))?)?;
             sys.setattr("stderr", Py::new(py, LogWriter::new("warning"))?)?;
+            // import yt-dlp once here: first imports racing on several threads trip Python's
+            // module-lock deadlock detection (`_ModuleLock('yt_dlp.version')`); a failure shows
+            // up again at the first real use, so it is not fatal here
+            if let Err(e) = py.import("yt_dlp") {
+                log::warn!("engine: cannot import yt_dlp at start: {e}");
+            }
             Ok(())
         })();
         let _ = ffi::PyEval_SaveThread(); // release the GIL: no thread holds it idle
