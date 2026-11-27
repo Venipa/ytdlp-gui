@@ -178,6 +178,8 @@ pub struct Settings {
     pub encoder: String,
     pub notifications: bool,
     pub close_to_tray: bool,
+    /// Whether the localhost bridge for the browser extension runs (Settings > Browser).
+    pub browser_extension: bool,
     pub start_minimized: bool,
     pub window: Option<WindowState>,
     pub detail_panel_width: f32,
@@ -232,6 +234,7 @@ impl Default for Settings {
             encoder: "auto".into(),
             notifications: true,
             close_to_tray: false,
+            browser_extension: false,
             start_minimized: false,
             window: None,
             detail_panel_width: 360.0,
