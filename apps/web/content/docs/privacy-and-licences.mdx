@@ -13,6 +13,8 @@ ytdlpd has no account, no telemetry and no analytics. It connects only to:
 
 Your settings, the downloads database, the tools and the logs stay on your computer (see [where things live](/docs/troubleshooting#where-things-live)). Cookies you import or paste are stored there too, and are sent only to the sites they belong to, by yt-dlp. **Clear cookies** in Settings, Network removes them.
 
+The [browser extension](/docs/browser-extension) talks only to ytdlpd on this computer (`127.0.0.1`), and only while **Accept links from the browser** is on. It sends page and link addresses and nothing else; it has no server of its own.
+
 The clipboard is read only when **Watch the clipboard for links** is on, and never cleared.
 
 This website is static. It makes no requests to GitHub from your browser; the download list and figures are fetched when the site is built.

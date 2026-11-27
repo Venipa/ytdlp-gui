@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "downloading",
+    "browser-extension",
     "settings",
     "tools",
     "troubleshooting",
