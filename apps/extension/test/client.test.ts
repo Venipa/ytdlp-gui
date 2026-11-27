@@ -62,6 +62,22 @@ describe("client", () => {
     expect(store.data.port).toBe(app.port);
   });
 
+  test("the last port gets the long timeout: a socket Chromium holds back still connects", async () => {
+    const app = fakeApp({ instance: "a", tokens: ["t"] });
+    closers.push(app.stop);
+    // opens 400 ms late, past connectMs (300), as Chromium does after failed sockets
+    class Slow extends WebSocket {
+      set onopen(f: ((e: Event) => void) | null) { super.onopen = f && ((e) => void setTimeout(() => f(e), 400)); }
+    }
+    const store = memory({ tokens: { a: "t" }, port: app.port });
+    const c = new Client({ ...opts(store, [app.port]), WS: Slow as typeof WebSocket, knownMs: 2000 });
+    closers.push(() => c.close());
+    expect(await c.connect()).toBe("ready");
+    const cold = new Client({ ...opts(memory({ tokens: { a: "t" } }), [app.port]), WS: Slow as typeof WebSocket, knownMs: 2000 });
+    closers.push(() => cold.close());
+    expect(await cold.connect()).not.toBe("ready"); // a scanned port keeps the short timeout
+  });
+
   test("unpaired then pair stores the token under the instance", async () => {
     const app = fakeApp({ instance: "a", code: "12345678" });
     closers.push(app.stop);

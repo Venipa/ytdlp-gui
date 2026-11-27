@@ -10,6 +10,8 @@ export interface Options {
   ports?: number[];
   WS?: typeof WebSocket;
   connectMs?: number;
+  /** Open timeout for the port that worked last: after failed sockets Chromium holds new ones back 1-5 s (its per-process WebSocket throttle). */
+  knownMs?: number;
   requestMs?: number;
   pingMs?: number;
   backoffBase?: number;
@@ -51,7 +53,7 @@ export class Client {
 
   constructor(o: Options) {
     this.o = {
-      ports: PORTS, WS: globalThis.WebSocket, connectMs: 200, requestMs: 5000, pingMs: 20000,
+      ports: PORTS, WS: globalThis.WebSocket, connectMs: 200, knownMs: 6000, requestMs: 5000, pingMs: 20000,
       backoffBase: 1000, backoffMax: 30000, cacheMs: 600000, now: Date.now, ...o,
     };
   }
@@ -70,11 +72,11 @@ export class Client {
     return (await this.o.store.get("tokens")) ?? {};
   }
 
-  private async open(port: number): Promise<{ ws: WebSocket; hello: HelloOk } | null> {
+  private async open(port: number, ms: number): Promise<{ ws: WebSocket; hello: HelloOk } | null> {
     const ws = new this.o.WS(`ws://127.0.0.1:${port}`);
     const dead = (): null => { try { ws.close(); } catch { /* already closed */ } return null; };
     const opened = await new Promise<boolean>((res) => {
-      const t = setTimeout(() => res(false), this.o.connectMs);
+      const t = setTimeout(() => res(false), ms);
       ws.onopen = () => { clearTimeout(t); res(true); };
       ws.onerror = () => { clearTimeout(t); res(false); };
       ws.onclose = () => { clearTimeout(t); res(false); };
@@ -117,7 +119,8 @@ export class Client {
     let removed = false;
     this.removed ||= (await this.o.store.get("removed")) === true;
     for (const port of ports) {
-      const r = await this.open(port);
+      // the scan of the other ports fails fast; those failures make Chromium delay the next socket
+      const r = await this.open(port, port === last ? this.o.knownMs : this.o.connectMs);
       if (!r) continue;
       const tokens = await this.tokens();
       const token = tokens[r.hello.instance];
@@ -227,7 +230,7 @@ export class Client {
     if (this.state === "ready") return;
     const target = this.unpaired;
     if (!target) throw new WireError("offline");
-    const r = await this.open(target.port);
+    const r = await this.open(target.port, this.o.knownMs);
     if (!r) throw new WireError(this.lastError?.code ?? "offline", undefined, this.lastError?.retryAfterMs);
     try {
       const f = await this.raw(r.ws, { type: "pair", code, device }, this.o.requestMs);
