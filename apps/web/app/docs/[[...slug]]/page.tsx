@@ -31,5 +31,13 @@ export async function generateMetadata(props: PageProps<'/docs/[[...slug]]'>): P
   const params = await props.params;
   const page = source.getPage(params.slug);
   if (!page) notFound();
-  return { title: page.data.title, description: page.data.description };
+  const { title, description } = page.data;
+  // relative (no leading slash) so metadataBase keeps the base path
+  const image = { url: ['og', 'docs', ...page.slugs, 'og.png'].join('/'), width: 1200, height: 630, alt: title };
+  return {
+    title,
+    description,
+    openGraph: { type: 'article', siteName: 'ytdlpd', title, description, url: page.url.slice(1), images: [image] },
+    twitter: { card: 'summary_large_image', title, description, images: [image] },
+  };
 }
