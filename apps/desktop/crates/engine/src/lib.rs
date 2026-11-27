@@ -14,6 +14,7 @@ pub mod preview;
 pub mod probe;
 pub mod runtime;
 pub mod spec;
+pub mod suitable;
 pub mod worker;
 
 pub use backend::{EngineBackend, EngineConfig};
@@ -22,3 +23,4 @@ pub use host::{WorkerConfig, WorkerHandle, spawn_worker};
 pub use ipc::{Command, Event};
 pub use preview::preview_filename;
 pub use probe::probe;
+pub use suitable::{Suitable, UrlKind, suitable};

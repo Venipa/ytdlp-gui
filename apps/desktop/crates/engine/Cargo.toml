@@ -9,6 +9,7 @@ description = "yt-dlp engine: embedded CPython (PyO3), worker process, IPC, pres
 workspace = true
 
 [dependencies]
+anyhow.workspace = true
 domain.workspace = true
 futures.workspace = true
 log.workspace = true
