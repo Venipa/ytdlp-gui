@@ -166,6 +166,9 @@ impl AppSettings {
             ffmpeg_location: s.tool_paths.ffmpeg.clone(),
             js_runtime: s.tool_paths.deno.clone().map(|p| ("deno".to_string(), p)),
             extra_args: vec![],
+            aria2c: s.tool_paths.aria2c.clone().filter(|_| s.aria2c),
+            // custom arguments go in once checked (AppState::job_spec)
+            aria2c_args: vec![],
             fix: None,
         }
     }

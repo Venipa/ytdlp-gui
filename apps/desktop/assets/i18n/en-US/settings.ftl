@@ -163,6 +163,37 @@ set-proxy-on = Use a proxy
 set-proxy-on-desc = Send downloads through another server.
 set-proxy-reads = { $scheme } proxy at { $host }, port { $port }
 set-proxy-reads-host = { $scheme } proxy at { $host }
+set-aria2c = Use aria2c
+set-aria2c-desc = Downloads each file over several connections at once. Off uses the downloader built into yt-dlp.
+set-aria2c-using = Uses { $path }
+set-aria2c-missing = aria2c was not found, so downloads use the downloader built into yt-dlp. Install aria2c or choose its file.
+set-aria2c-issues = Known issues: short videos take a few seconds longer to start, and progress can slow near the end while aria2c finishes the last pieces.
+set-sec-advanced = Advanced
+set-args = Custom arguments
+set-args-desc = For options ytdlpd has no setting for, one per line as on the command line. A line with a mark is left out of downloads.
+set-args-add = Add an argument
+set-args-count = { $count ->
+    [0] No arguments
+    [one] 1 argument
+   *[other] { $count } arguments
+}
+set-args-checking = Checking with yt-dlp
+set-args-aria2c-off = Used when aria2c is on
+set-args-reserved = ytdlpd sets this
+set-args-reserved-tip = ytdlpd sets this option from its own settings, so this line is left out.
+set-args-did-you-mean = Did you mean { $option }?
+set-args-did-you-mean-tip = { $message }. Did you mean { $option }?
+set-args-edit-line = Edit { $line }
+set-args-remove = Remove { $line }
+set-args-remove-tip = Remove this line
+set-args-tip-sleep = Wait this many seconds before each download.
+set-args-tip-agent = Send this browser name to the site.
+set-args-tip-mtime = Give files the time they were downloaded, not the upload time.
+set-args-tip-fragments = Fetch this many pieces of a stream at once.
+set-args-tip-tries = Try a broken connection this many times.
+set-args-tip-lowest = Drop a connection slower than this and open a new one.
+set-args-tip-connections = Connections to one server; yt-dlp asks for 16.
+set-tool-optional = Not found. Optional
 set-rate-on = Limit speed
 set-rate-on-desc = Per download. Off is as fast as the site allows.
 set-rate-kb = KB/s

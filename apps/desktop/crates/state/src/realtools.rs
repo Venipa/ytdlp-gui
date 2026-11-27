@@ -11,7 +11,7 @@ use futures::stream::BoxStream;
 use futures::{FutureExt as _, StreamExt as _};
 use tokio::runtime::Handle;
 
-/// Real tool detection and installation (ffmpeg, ffprobe, deno).
+/// Real tool detection and installation (ffmpeg, ffprobe, deno; aria2c is only detected).
 pub struct RealTools {
     handle: Handle,
     dirs: Arc<::tools::Dirs>,
@@ -22,6 +22,7 @@ fn tool_of(kind: ToolKind) -> Option<::tools::Tool> {
         ToolKind::Ffmpeg => Some(::tools::Tool::Ffmpeg),
         ToolKind::Ffprobe => Some(::tools::Tool::Ffprobe),
         ToolKind::Deno => Some(::tools::Tool::Deno),
+        ToolKind::Aria2c => Some(::tools::Tool::Aria2c),
         _ => None,
     }
 }
@@ -31,6 +32,7 @@ fn kind_of(tool: ::tools::Tool) -> ToolKind {
         ::tools::Tool::Ffmpeg => ToolKind::Ffmpeg,
         ::tools::Tool::Ffprobe => ToolKind::Ffprobe,
         ::tools::Tool::Deno => ToolKind::Deno,
+        ::tools::Tool::Aria2c => ToolKind::Aria2c,
     }
 }
 
@@ -103,7 +105,12 @@ impl ToolsApi for RealTools {
         let job = self.handle.spawn(async move {
             ::tools::pair_ffmpeg(&dirs);
             let mut out = vec![];
-            for kind in [ToolKind::Ffmpeg, ToolKind::Ffprobe, ToolKind::Deno] {
+            for kind in [
+                ToolKind::Ffmpeg,
+                ToolKind::Ffprobe,
+                ToolKind::Deno,
+                ToolKind::Aria2c,
+            ] {
                 let tool = tool_of(kind).expect("managed kind");
                 out.push(match ::tools::detect(tool, &dirs, None).await {
                     Some(s) => status_of(s),

@@ -1,6 +1,7 @@
 //! The Settings screen: the form of the page the sidebar has open, every control bound to
 //! `state::AppSettings` (settings.json), so edits in the UI and edits of the file show in both.
 
+mod args;
 mod cookies;
 mod fields;
 mod layout;
@@ -88,6 +89,10 @@ pub struct SettingsView {
     bar: Entity<Scrollbar>,
     /// The version of the bundled yt-dlp, once the engine told.
     ytdlp_version: Option<String>,
+    /// The custom argument lines being edited, a list per tool.
+    arg_lists: Vec<args::ArgList>,
+    /// Waits for typing to pause before yt-dlp reads the lines.
+    arg_check: Option<Task<()>>,
 }
 
 impl SettingsView {
@@ -157,6 +162,7 @@ impl SettingsView {
             })
             .collect();
         let bar = cx.new(|cx| Scrollbar::new(gpui::ScrollHandle::new()).watching(cx.entity_id()));
+        let arg_lists = Self::arg_lists(&current, cx);
         let mut this = Self {
             state,
             navigation,
@@ -179,6 +185,8 @@ impl SettingsView {
             on_downloads: false,
             bar,
             ytdlp_version: None,
+            arg_lists,
+            arg_check: None,
         };
         this.refresh_preview(cx);
         this.load_ytdlp_version(cx);
@@ -297,6 +305,7 @@ impl SettingsView {
             self.window_look = None;
         }
         self.cookies_changed(&current, cx);
+        self.args_changed(&current, cx);
         if current.language != self.language {
             self.language = current.language.clone();
             i18n::set(i18n::resolve(&current.language));
@@ -313,10 +322,11 @@ impl SettingsView {
                 .filter(|s| s.source == Some(ToolSource::Custom))
                 .and_then(|s| s.path.clone())
         };
-        let (ffmpeg, ffprobe, deno) = (
+        let (ffmpeg, ffprobe, deno, aria2c) = (
             custom(ToolKind::Ffmpeg),
             custom(ToolKind::Ffprobe),
             custom(ToolKind::Deno),
+            custom(ToolKind::Aria2c),
         );
         self.settings().update(cx, |s, cx| {
             s.update(
@@ -325,6 +335,7 @@ impl SettingsView {
                         (&mut st.tool_paths.ffmpeg, ffmpeg),
                         (&mut st.tool_paths.ffprobe, ffprobe),
                         (&mut st.tool_paths.deno, deno),
+                        (&mut st.tool_paths.aria2c, aria2c),
                     ] {
                         if path.is_some() && *slot != path {
                             *slot = path;
@@ -635,6 +646,7 @@ pub(crate) fn tool_key(kind: ToolKind) -> &'static str {
         ToolKind::Ffprobe => "welcome-tool-ffprobe",
         ToolKind::Deno => "welcome-tool-deno",
         ToolKind::Python => "welcome-tool-python",
+        ToolKind::Aria2c => "welcome-tool-aria2c",
     }
 }
 
@@ -659,7 +671,7 @@ impl Render for SettingsView {
             SettingsPage::General => self.page_general(&s, cx),
             SettingsPage::Downloads => self.page_downloads(&s, cx),
             SettingsPage::Formats => self.page_formats(&s, cx),
-            SettingsPage::Network => self.page_network(&s, cx),
+            SettingsPage::Network => self.page_network(&s, window, cx),
             SettingsPage::Cookies => self.page_cookies(&s, window, cx),
             SettingsPage::Rules => self.page_rules(&s, window, cx),
             SettingsPage::Tools => self.page_tools(cx),

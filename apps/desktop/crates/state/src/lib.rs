@@ -1,6 +1,7 @@
 //! gpui entities for ytdlpd: settings, downloads (queue, scheduler, lifecycle), probes, tools, logs, toasts.
 //! The engine and tools are reached only through `domain::Backend` / `domain::ToolsApi`.
 
+mod args;
 pub mod cookies;
 mod downloads;
 pub mod fake;
@@ -17,6 +18,7 @@ mod toast;
 mod tools;
 pub mod updates;
 
+pub use args::CustomArgs;
 pub use cookies::CookieFiles;
 pub use downloads::{Downloads, DownloadsEvent, Live, UPDATE_REASON};
 pub use fake::{FakeBackend, FakeTools, Scene};
@@ -131,6 +133,8 @@ pub struct AppState {
     pub intake: Entity<Intake>,
     pub updates: Entity<Updates>,
     pub fixes: Entity<Fixes>,
+    /// Checks of the custom argument lines.
+    pub args: Entity<CustomArgs>,
     pub cookies: CookieFiles,
     pub store: Store,
     /// `Some` for `--demo <scene>`.
@@ -168,6 +172,17 @@ impl AppState {
             .js_runtime
             .or_else(|| found(domain::ToolKind::Deno).map(|p| ("deno".to_string(), p)));
         let s = self.settings.read(cx).get();
+        // aria2c only when switched on; none found leaves yt-dlp's own downloader
+        if s.aria2c {
+            spec.aria2c = spec.aria2c.or_else(|| found(domain::ToolKind::Aria2c));
+        }
+        if s.custom_args {
+            let args = self.args.read(cx);
+            spec.extra_args = args.ytdlp_usable(&s.ytdlp_args);
+            if spec.aria2c.is_some() {
+                spec.aria2c_args = args.aria2c_usable(&s.aria2c_args);
+            }
+        }
         apply_rule(
             &mut spec,
             domain::rule_for(&s.site_rules, url),
@@ -369,6 +384,12 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
     let toasts = cx.new(|_| Toasts::default());
     let intake = cx.new(|_| Intake::default());
     let probes = cx.new(|_| Probes::new(backend.clone()).with_cookies(cookies.clone()));
+    let args = cx.new(|_| CustomArgs::new(backend.clone()));
+    // saved lines are checked once at start; until yt-dlp answers they count as fine
+    let saved = settings.read(cx).get().clone();
+    if saved.custom_args && !saved.ytdlp_args.is_empty() {
+        args.update(cx, |a, cx| a.check(&saved.ytdlp_args, cx));
+    }
     let tools = cx.new(|_| Tools::new(tools_api));
     wire_site(&backend, &store, &tools, cx);
     let downloads = {
@@ -428,6 +449,7 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
         intake,
         updates,
         fixes,
+        args,
         store,
         scene,
     };

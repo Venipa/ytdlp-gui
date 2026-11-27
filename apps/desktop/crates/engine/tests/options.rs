@@ -227,6 +227,38 @@ fn http_429_carries_retry_after() {
 }
 
 #[test]
+fn custom_arguments_are_checked_by_yt_dlp() {
+    runtime::init(runtime::InitOptions {
+        home: None,
+        site_updates: None,
+        sink: runtime::log_sink,
+    })
+    .unwrap();
+    let line = |s: &str| domain::args::split(s).unwrap();
+    let got = engine::args::check_ytdlp(&[
+        line("--sleep-interval 2"),
+        line("--no-mtmie"),
+        line("--format bestaudio"),
+        line("--sleep-interval"),
+        line("hello"),
+        line("--version"),
+    ]);
+    use domain::ArgCheck::{Invalid, Ok, Reserved};
+    assert_eq!(got[0], Ok);
+    assert_eq!(
+        got[1],
+        Invalid {
+            message: "no such option: --no-mtmie".into(),
+            suggestion: Some("--no-mtime".into())
+        }
+    );
+    assert_eq!(got[2], Reserved);
+    assert!(matches!(&got[3], Invalid { message, .. } if message.contains("requires 1 argument")));
+    assert!(matches!(&got[4], Invalid { message, .. } if message == "not an option: hello"));
+    assert!(matches!(&got[5], Invalid { .. }));
+}
+
+#[test]
 fn outtmpl_preview_equals_real_filename() {
     runtime::init(runtime::InitOptions {
         home: None,

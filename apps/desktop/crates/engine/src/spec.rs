@@ -48,6 +48,8 @@ pub fn simple_job(
         ffmpeg_location: None,
         js_runtime: None,
         extra_args: vec![],
+        aria2c: None,
+        aria2c_args: vec![],
         fix: None,
     }
 }
@@ -211,6 +213,16 @@ pub fn to_opts(s: &JobSpec, env: &Env) -> Value {
     }
     if let Some(r) = s.retries {
         o.insert("retries".into(), json!(r));
+    }
+    // a full path works: yt-dlp picks the downloader by the file stem and runs that path; it
+    // already passes aria2c 16 connections in 1 MiB pieces. aria2c saves its control file, which
+    // the worker reads for progress, each second instead of yt-dlp's 10 (the last value wins).
+    if let Some(a) = &s.aria2c {
+        o.insert("external_downloader".into(), json!({ "default": a }));
+        let args: Vec<&str> = std::iter::once("--auto-save-interval=1")
+            .chain(s.aria2c_args.iter().map(String::as_str))
+            .collect();
+        o.insert("external_downloader_args".into(), json!({ "aria2c": args }));
     }
     // the worker pops this key and merges it through `yt_dlp.parse_options` (worker.rs)
     if !s.extra_args.is_empty() {
@@ -417,6 +429,29 @@ mod tests {
         );
         s.subtitles.enabled = false;
         assert!(to_opts(&s, &Env::default()).get("writesubtitles").is_none());
+    }
+
+    #[test]
+    fn aria2c_only_when_set() {
+        let mut s = base(Preset::DEFAULT);
+        let o = to_opts(&s, &Env::default());
+        assert!(o.get("external_downloader").is_none());
+        assert!(o.get("external_downloader_args").is_none());
+        s.aria2c = Some("C:/t/aria2c.exe".into());
+        let o = to_opts(&s, &Env::default());
+        assert_eq!(
+            o["external_downloader"],
+            json!({"default": "C:/t/aria2c.exe"})
+        );
+        assert_eq!(
+            o["external_downloader_args"],
+            json!({"aria2c": ["--auto-save-interval=1"]})
+        );
+        s.aria2c_args = vec!["--max-tries=5".into()];
+        assert_eq!(
+            to_opts(&s, &Env::default())["external_downloader_args"],
+            json!({"aria2c": ["--auto-save-interval=1", "--max-tries=5"]})
+        );
     }
 
     #[test]

@@ -21,6 +21,8 @@ pub enum Tool {
     Ffprobe,
     /// JavaScript runtime for yt-dlp's challenge solving.
     Deno,
+    /// Optional external downloader yt-dlp can hand downloads to; detected only, never installed.
+    Aria2c,
 }
 
 impl Tool {
@@ -30,6 +32,7 @@ impl Tool {
             Tool::Ffmpeg => "ffmpeg",
             Tool::Ffprobe => "ffprobe",
             Tool::Deno => "deno",
+            Tool::Aria2c => "aria2c",
         }
     }
 
@@ -39,7 +42,7 @@ impl Tool {
     }
 
     fn version_arg(self) -> &'static str {
-        if self == Tool::Deno {
+        if matches!(self, Tool::Deno | Tool::Aria2c) {
             "--version"
         } else {
             "-version"
@@ -126,6 +129,10 @@ fn parse_version(name: &str, out: &str) -> Option<String> {
             .split_whitespace()
             .next()?,
         "deno" => first.strip_prefix("deno ")?.split_whitespace().next()?,
+        "aria2c" => first
+            .strip_prefix("aria2 version ")?
+            .split_whitespace()
+            .next()?,
         "node" => first.strip_prefix('v').unwrap_or(first),
         _ => first,
     };
@@ -423,6 +430,7 @@ async fn install(
     dirs: &Dirs,
     progress: ProgressFn<'_>,
 ) -> Result<ToolStatus> {
+    anyhow::ensure!(tool != Tool::Aria2c, "ytdlpd does not download aria2c");
     let plan = matrix::plan(tool, ctx.target, ctx.mirror.as_deref());
     let (tools_dir, dl_dir) = (dirs.tools(), dirs.dl());
     std::fs::create_dir_all(&tools_dir).context("cannot create tools dir")?;

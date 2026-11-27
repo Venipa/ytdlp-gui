@@ -395,9 +395,16 @@ impl FakeTools {
             ToolKind::Ffprobe,
             ToolKind::Deno,
             ToolKind::YtDlp,
+            ToolKind::Aria2c,
         ]
         .into_iter()
-        .map(|k| status(k, !missing || k == ToolKind::YtDlp))
+        // optional aria2c is never installed: it stays missing
+        .map(|k| {
+            status(
+                k,
+                k != ToolKind::Aria2c && (!missing || k == ToolKind::YtDlp),
+            )
+        })
         .collect();
         Self {
             handle,
@@ -541,6 +548,8 @@ fn demo_row(i: usize, status: DownloadStatus, created_at: i64) -> SeedRow {
         ffmpeg_location: None,
         js_runtime: None,
         extra_args: vec![],
+        aria2c: None,
+        aria2c_args: vec![],
         fix: None,
     };
     let mut new = NewDownload::from_spec(&job).expect("spec serialises");

@@ -35,6 +35,8 @@ async fn main() -> anyhow::Result<()> {
             ffmpeg_location: None,
             js_runtime: None,
             extra_args: vec![],
+            aria2c: None,
+            aria2c_args: vec![],
             fix: None,
         };
         let mut d = NewDownload::from_spec(&spec)?;

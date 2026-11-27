@@ -434,6 +434,11 @@ fn version_parsing() {
         pv("ffprobe", "ffprobe version n9.0-3-gabc Copyright").as_deref(),
         Some("n9.0-3-gabc")
     );
+    assert_eq!(
+        pv("aria2c", "aria2 version 1.37.0\nCopyright (C) 2006").as_deref(),
+        Some("1.37.0")
+    );
+    assert_eq!(pv("aria2c", "ffmpeg version 7.0"), None);
     assert_eq!(pv("ffprobe", "ffmpeg version 7.0 x"), None);
     assert_eq!(
         pv(

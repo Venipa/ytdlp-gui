@@ -115,9 +115,13 @@ impl Tools {
         self.detected
     }
 
-    /// True when every listed tool is ready.
+    /// True when every required tool is ready (optional ones such as aria2c never count).
     pub fn all_ready(&self) -> bool {
-        self.detected && self.status.iter().all(|s| s.state == ToolState::Ready)
+        self.detected
+            && self
+                .status
+                .iter()
+                .all(|s| s.kind.optional() || s.state == ToolState::Ready)
     }
 
     /// Re-detects every tool.
@@ -140,12 +144,14 @@ impl Tools {
         cx.notify();
     }
 
-    /// Installs every tool that is missing or failed.
+    /// Installs every required tool that is missing or failed.
     pub fn ensure_missing(&mut self, cx: &mut Context<Self>) {
         let todo: Vec<ToolKind> = self
             .status
             .iter()
-            .filter(|s| matches!(s.state, ToolState::Missing | ToolState::Failed(_)))
+            .filter(|s| {
+                !s.kind.optional() && matches!(s.state, ToolState::Missing | ToolState::Failed(_))
+            })
             .map(|s| s.kind)
             .collect();
         for kind in todo {

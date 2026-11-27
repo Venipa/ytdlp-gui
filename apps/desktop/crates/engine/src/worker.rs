@@ -3,7 +3,10 @@ use std::{
     collections::HashSet,
     ffi::CStr,
     io::BufRead,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -18,6 +21,8 @@ use crate::{
 };
 
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
+/// How often an aria2c control file is read (aria2c saves it each second, see spec.rs).
+const ARIA2_POLL: Duration = Duration::from_secs(1);
 
 #[derive(Default)]
 struct Shared {
@@ -25,6 +30,30 @@ struct Shared {
     seen_files: Mutex<HashSet<String>>,
     paths: Mutex<Vec<String>>,
     downloading: Mutex<bool>,
+}
+
+impl Shared {
+    /// Reports the paths not reported before, for cleanup.
+    fn note_files(&self, paths: impl IntoIterator<Item = String>) {
+        let mut seen = self.seen_files.lock().unwrap();
+        let new: Vec<String> = paths
+            .into_iter()
+            .filter(|p| seen.insert(p.clone()))
+            .collect();
+        if !new.is_empty() {
+            emit(&Event::Files { paths: new });
+        }
+    }
+
+    /// Sends the `downloading` phase once.
+    fn started(&self) {
+        let mut started = self.downloading.lock().unwrap();
+        if !std::mem::replace(&mut *started, true) {
+            emit(&Event::Phase {
+                name: "downloading".into(),
+            });
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -53,39 +82,14 @@ fn text(d: &Bound<'_, PyAny>, k: &str) -> Option<String> {
 
 impl Hooks {
     fn progress(&self, d: &Bound<'_, PyAny>) {
-        let mut new: Vec<String> = vec![];
-        {
-            let mut seen = self.sh.seen_files.lock().unwrap();
-            let mut add = |p: String| {
-                if seen.insert(p.clone()) {
-                    new.push(p);
-                }
-            };
-            if let Some(f) = text(d, "filename") {
-                add(format!("{f}.part"));
-                add(format!("{f}.ytdl"));
-                add(f);
-            }
-            if let Some(t) = text(d, "tmpfilename") {
-                add(t);
-            }
-        }
-        if !new.is_empty() {
-            emit(&Event::Files { paths: new });
-        }
+        let named = text(d, "filename").map(|f| [format!("{f}.part"), format!("{f}.ytdl"), f]);
+        let tmp = text(d, "tmpfilename");
+        self.sh.note_files(named.into_iter().flatten().chain(tmp));
         let status = text(d, "status").unwrap_or_default();
         if status != "downloading" && status != "finished" {
             return;
         }
-        {
-            let mut started = self.sh.downloading.lock().unwrap();
-            if !*started {
-                *started = true;
-                emit(&Event::Phase {
-                    name: "downloading".into(),
-                });
-            }
-        }
+        self.sh.started();
         if status == "downloading" {
             let mut last = self.sh.last_progress.lock().unwrap();
             if last.is_some_and(|t| t.elapsed() < PROGRESS_INTERVAL) {
@@ -140,6 +144,83 @@ impl Hooks {
         }
     }
 }
+
+/// Stands in for the progress hooks yt-dlp never calls while aria2c runs: told when each aria2c
+/// download starts and ends, it names its files for cleanup and reads progress from its control file.
+#[pyclass]
+struct Aria2Watch {
+    sh: Arc<Shared>,
+    stop: Mutex<Option<Arc<AtomicBool>>>,
+}
+
+#[pymethods]
+impl Aria2Watch {
+    fn start(&self, tmp: String) {
+        let control = format!("{tmp}.aria2");
+        self.sh.note_files([tmp, control.clone()]);
+        self.sh.started();
+        let stop = Arc::new(AtomicBool::new(false));
+        if let Some(old) = self.stop.lock().unwrap().replace(stop.clone()) {
+            old.store(true, Ordering::Relaxed);
+        }
+        std::thread::spawn(move || poll_aria2(&control, &stop));
+    }
+
+    fn stop(&self) {
+        if let Some(stop) = self.stop.lock().unwrap().take() {
+            stop.store(true, Ordering::Relaxed);
+        }
+    }
+}
+
+/// Sends progress from `control` each [`ARIA2_POLL`] until `stop`; speed spans the last change.
+fn poll_aria2(control: &str, stop: &AtomicBool) {
+    let (mut last, mut speed): (Option<(Instant, u64)>, Option<f64>) = (None, None);
+    loop {
+        std::thread::sleep(ARIA2_POLL);
+        if stop.load(Ordering::Relaxed) {
+            return;
+        }
+        let Some((done, total)) = std::fs::read(control)
+            .ok()
+            .and_then(|b| crate::aria2::control_progress(&b))
+        else {
+            continue;
+        };
+        let now = Instant::now();
+        match last {
+            Some((_, d)) if d == done => {}
+            Some((t, d)) => {
+                speed = Some(done.saturating_sub(d) as f64 / now.duration_since(t).as_secs_f64());
+                last = Some((now, done));
+            }
+            None => last = Some((now, done)),
+        }
+        emit(&Event::Progress {
+            done,
+            total: Some(total),
+            speed,
+            eta: speed
+                .filter(|s| *s > 0.)
+                .map(|s| ((total - done) as f64 / s) as u64),
+            frag: None,
+        });
+    }
+}
+
+/// Wraps yt-dlp's aria2c downloader so `watch` hears when each aria2c download starts and ends.
+const WATCH_ARIA2: &CStr = c"
+def patch(watch):
+    from yt_dlp.downloader.external import Aria2cFD
+    real = Aria2cFD._call_downloader
+    def call(self, tmpfilename, info_dict):
+        watch.start(tmpfilename)
+        try:
+            return real(self, tmpfilename, info_dict)
+        finally:
+            watch.stop()
+    Aria2cFD._call_downloader = call
+";
 
 fn ipc_sink(level: &str, msg: &str) {
     emit(&Event::Log {
@@ -214,6 +295,19 @@ fn download(py: Python<'_>, url: &str, spec: &Value, sh: &Arc<Shared>) -> PyResu
     opts.set_item("postprocessor_hooks", vec![hook(Kind::Postprocessor)?])?;
     opts.set_item("post_hooks", vec![hook(Kind::Post)?])?;
     opts.set_item("logger", Py::new(py, YdlLogger)?)?;
+    // one job per worker process, so the downloader class is patched once
+    if get(&opts, "external_downloader").is_some() {
+        let watch = Py::new(
+            py,
+            Aria2Watch {
+                sh: sh.clone(),
+                stop: Mutex::new(None),
+            },
+        )?;
+        PyModule::from_code(py, WATCH_ARIA2, c"watch_aria2.py", c"watch_aria2")?
+            .getattr("patch")?
+            .call1((watch,))?;
+    }
     if let Some(c) = get(&opts, "cookiesfrombrowser") {
         opts.set_item(
             "cookiesfrombrowser",

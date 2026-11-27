@@ -2,6 +2,8 @@
 //!
 //! Host process: [`runtime::init`] + [`probe::probe`] (in-process), [`host::spawn_worker`] for downloads.
 //! Worker process (`<exe> --engine-worker`): [`worker::run_worker`].
+pub mod args;
+mod aria2;
 pub mod backend;
 pub mod classify;
 pub mod cookies;

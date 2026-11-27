@@ -1314,14 +1314,14 @@ impl Downloads {
         if !tools.detected() || tools.all_ready() {
             return None;
         }
-        let missing: Vec<SharedString> = tools
-            .all()
+        // an optional tool (aria2c) is never asked for
+        let required: Vec<_> = tools.all().iter().filter(|s| !s.kind.optional()).collect();
+        let missing: Vec<SharedString> = required
             .iter()
             .filter(|s| s.state != ToolState::Ready)
             .map(|s| crate::welcome::tool_name(s.kind))
             .collect();
-        let busy = tools
-            .all()
+        let busy = required
             .iter()
             .find(|s| matches!(s.state, ToolState::Downloading { .. }));
         let message = match busy {
@@ -1341,8 +1341,7 @@ impl Downloads {
             }
             None => t!("dl-notice-tools", tools = missing.join(", ")),
         };
-        let failed = tools
-            .all()
+        let failed = required
             .iter()
             .any(|s| matches!(s.state, ToolState::Failed(_)));
         let busy = busy.is_some();

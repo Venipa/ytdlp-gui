@@ -6,6 +6,7 @@ welcome-tool-ffprobe = ffprobe
 welcome-tool-deno = JavaScript
 welcome-tool-python = Python
 welcome-tool-yt-dlp-ejs = yt-dlp-ejs
+welcome-tool-aria2c = aria2c
 welcome-ready = Ready
 welcome-waiting = Waiting
 welcome-checking = Checking

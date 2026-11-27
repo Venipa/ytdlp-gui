@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use domain::{Preset, Settings, SponsorBlockMode, ToolKind, ToolSource, ToolState, ToolStatus};
 use gpui::prelude::*;
-use gpui::{AnyElement, Context, SharedString, div, px};
+use gpui::{AnyElement, Context, SharedString, Window, div, px};
 use i18n::t;
 use router::{Destination, SettingsPage};
 use ui::{
@@ -325,7 +325,12 @@ impl SettingsView {
         ]
     }
 
-    pub(super) fn page_network(&self, s: &Settings, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    pub(super) fn page_network(
+        &self,
+        s: &Settings,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
         let theme = *cx.theme();
         let proxy_on = self.proxy_open || s.proxy.is_some();
         let proxy = proxy_on.then(|| {
@@ -379,7 +384,57 @@ impl SettingsView {
                 )
                 .into_any_element()
         });
+        // the path set in settings, else the one found, as downloads get it (AppState::job_spec)
+        let aria2c_path = s.tool_paths.aria2c.clone().or_else(|| {
+            self.state
+                .tools
+                .read(cx)
+                .get(ToolKind::Aria2c)
+                .and_then(|t| t.path.clone())
+        });
+        let small = |line: SharedString| {
+            div()
+                .text_size(theme.text(Text::Small))
+                .text_color(theme.muted_foreground)
+                .child(line)
+        };
+        // the known issues show before it is switched on, so nobody is surprised after
+        let aria2c_found = s.aria2c.then(|| {
+            let line = match &aria2c_path {
+                Some(path) => t!("set-aria2c-using", path = path.clone()),
+                None => t!("set-aria2c-missing"),
+            };
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(px(16.))
+                .child(small(line).flex_1().min_w_0())
+                .child(
+                    Button::new("aria2c-choose")
+                        .outline()
+                        .label(t!("set-tool-choose"))
+                        .on_click(
+                            cx.listener(|this, _, _, cx| this.choose_tool(ToolKind::Aria2c, cx)),
+                        ),
+                )
+        });
+        let aria2c = div()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .child(small(t!("set-aria2c-issues")))
+            .children(aria2c_found)
+            .into_any_element();
+        let aria2c_on = s.aria2c;
+        let args_on = s.custom_args;
         let connection = vec![
+            collapsible(
+                SwitchRow::new("aria2c-on", t!("set-aria2c"), aria2c_on)
+                    .detail(t!("set-aria2c-desc"))
+                    .on_click(self.edit(move |st| st.aria2c = !aria2c_on)),
+                Some(aria2c),
+            ),
             collapsible(
                 SwitchRow::new("proxy-on", t!("set-proxy-on"), proxy_on)
                     .detail(t!("set-proxy-on-desc"))
@@ -427,6 +482,16 @@ impl SettingsView {
                 )],
                 cx,
             ),
+            section(
+                Some(t!("set-sec-advanced")),
+                vec![collapsible(
+                    SwitchRow::new("args-on", t!("set-args"), args_on)
+                        .detail(t!("set-args-desc"))
+                        .on_click(self.edit(move |st| st.custom_args = !args_on)),
+                    args_on.then(|| self.args_lists(s, window, cx)),
+                )],
+                cx,
+            ),
         ]
     }
 
@@ -438,7 +503,9 @@ impl SettingsView {
             ToolKind::Ffmpeg,
             ToolKind::Ffprobe,
             ToolKind::Deno,
+            ToolKind::Aria2c,
         ];
+        let saved_aria2c = self.settings().read(cx).get().tool_paths.aria2c.clone();
         let ytdlp = self.ytdlp_version.clone();
         let rows: Vec<AnyElement> = ToolKind::ALL
             .iter()
@@ -460,6 +527,15 @@ impl SettingsView {
                 {
                     tool.state = ToolState::Ready;
                     tool.version = Some(version.clone());
+                }
+                // detection does not read settings: a chosen aria2c is the one downloads use
+                if tool.kind == ToolKind::Aria2c
+                    && tool.state == ToolState::Missing
+                    && let Some(path) = &saved_aria2c
+                {
+                    tool.state = ToolState::Ready;
+                    tool.source = Some(ToolSource::Custom);
+                    tool.path = Some(path.clone());
                 }
                 tool
             })
@@ -483,6 +559,7 @@ impl SettingsView {
         let kind = tool.kind;
         let path = tool.path.clone().unwrap_or_default();
         let note: SharedString = match (&tool.state, tool.source) {
+            (ToolState::Missing, _) if kind.optional() => t!("set-tool-optional"),
             (ToolState::Missing, _) => t!("welcome-missing"),
             (ToolState::Checking, _) => t!("welcome-waiting"),
             (ToolState::Failed(error), _) => SharedString::from(error.message.clone()),
@@ -514,21 +591,13 @@ impl SettingsView {
             }
             _ => {}
         }
-        if matches!(kind, ToolKind::Ffmpeg | ToolKind::Ffprobe | ToolKind::Deno) {
+        if matches!(
+            kind,
+            ToolKind::Ffmpeg | ToolKind::Ffprobe | ToolKind::Deno | ToolKind::Aria2c
+        ) {
             actions.push(
-                button("tool-choose", t!("set-tool-choose")).on_click(cx.listener(
-                    move |this, _, _, cx| {
-                        this.choose_file(
-                            move |this, path, cx| {
-                                let path = path.to_string_lossy().into_owned();
-                                this.state
-                                    .tools
-                                    .update(cx, |t, cx| t.use_custom(kind, path, cx));
-                            },
-                            cx,
-                        )
-                    },
-                )),
+                button("tool-choose", t!("set-tool-choose"))
+                    .on_click(cx.listener(move |this, _, _, cx| this.choose_tool(kind, cx))),
             );
         }
         let (rule, progress_text) = match &tool.state {
@@ -592,6 +661,19 @@ impl SettingsView {
             )
             .children(rule.map(|rule| div().pb(px(8.)).child(ProgressRule::new(rule))))
             .into_any_element()
+    }
+
+    /// Asks for a `kind` binary and points the tool at it (kept in settings once it checks out).
+    fn choose_tool(&self, kind: ToolKind, cx: &mut Context<Self>) {
+        self.choose_file(
+            move |this, path, cx| {
+                let path = path.to_string_lossy().into_owned();
+                this.state
+                    .tools
+                    .update(cx, |t, cx| t.use_custom(kind, path, cx));
+            },
+            cx,
+        )
     }
 
     pub(super) fn page_appearance(&self, s: &Settings, cx: &mut Context<Self>) -> Vec<AnyElement> {

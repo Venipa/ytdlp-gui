@@ -21,6 +21,7 @@ pub(crate) fn tool_key(kind: ToolKind) -> &'static str {
         ToolKind::Ffprobe => "welcome-tool-ffprobe",
         ToolKind::Deno => "welcome-tool-deno",
         ToolKind::Python => "welcome-tool-python",
+        ToolKind::Aria2c => "welcome-tool-aria2c",
     }
 }
 
@@ -84,6 +85,7 @@ fn tool_icon(kind: ToolKind) -> &'static str {
         ToolKind::Ffprobe => "icons/info.svg",
         ToolKind::Deno => "icons/settings.svg",
         ToolKind::Python => "icons/list.svg",
+        ToolKind::Aria2c => "icons/gauge.svg",
     }
 }
 
@@ -92,7 +94,11 @@ pub fn welcome(cx: &App) -> AnyElement {
     let theme = *cx.theme();
     let pencil = theme.muted_foreground;
     let tools = AppState::global(cx).tools;
-    let statuses = tools.read(cx).all().to_vec();
+    // an optional tool (aria2c) is never asked for here
+    let statuses: Vec<_> = (tools.read(cx).all().iter())
+        .filter(|tool| !tool.kind.optional())
+        .cloned()
+        .collect();
     let failed = statuses
         .iter()
         .any(|s| matches!(s.state, ToolState::Failed(_)));

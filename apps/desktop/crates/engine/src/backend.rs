@@ -139,6 +139,32 @@ impl Backend for EngineBackend {
         .boxed()
     }
 
+    fn check_args(&self, lines: Vec<Vec<String>>) -> BoxFuture<'static, Vec<domain::ArgCheck>> {
+        let cfg = self.cfg.clone();
+        let site = self.site.read().map(|s| s.clone()).unwrap_or_default();
+        let n = lines.len();
+        async move {
+            let (tx, rx) = oneshot::channel();
+            // the probe's interpreter: already warm after the first lookup
+            std::thread::spawn(move || {
+                let ready = runtime::init(runtime::InitOptions {
+                    home: cfg.python_home.clone(),
+                    site_updates: site,
+                    sink: runtime::log_sink,
+                });
+                let _ = tx.send(match ready {
+                    Ok(_) => crate::args::check_ytdlp(&lines),
+                    Err(error) => {
+                        log::warn!("engine: cannot check arguments: {error:#}");
+                        vec![domain::ArgCheck::Ok; lines.len()]
+                    }
+                });
+            });
+            rx.await.unwrap_or_else(|_| vec![domain::ArgCheck::Ok; n])
+        }
+        .boxed()
+    }
+
     fn start(
         &self,
         id: DownloadId,
