@@ -1,13 +1,13 @@
 //! The Logs page over `state::Logs`: level chips, a job picker, copy all.
 
-use std::ops::Range;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use domain::DownloadId;
 use gpui::prelude::*;
 use gpui::{
-    ClipboardItem, Context, Entity, ListHorizontalSizingBehavior, ScrollStrategy, ScrollWheelEvent,
-    Subscription, UniformListScrollHandle, Window, div, px, uniform_list,
+    AnyElement, ClipboardItem, Context, Entity, FollowMode, ListAlignment, ListState, Subscription,
+    Window, accesskit::Role, div, list, px,
 };
 use i18n::t;
 use state::{AppState, LogEntry};
@@ -36,13 +36,16 @@ pub struct LogsView {
     least: u8,
     job: Option<DownloadId>,
     picker: Option<gpui::Point<gpui::Pixels>>,
-    scroll: UniformListScrollHandle,
+    /// Rows of different heights: a line opens to its whole message.
+    lines: ListState,
     bar: gpui::Entity<Scrollbar>,
-    seen: usize,
+    /// The filter and count the list was last laid out for, so new lines are appended.
+    laid_out: (u8, Option<DownloadId>, String, usize),
     search: Entity<Input>,
-    /// Whether new lines scroll into view; a wheel turn up pauses it until the end is reached again.
+    /// Whether new lines scroll into view; scrolling up pauses it until the end is reached again.
     follow: bool,
-    resume_at_end: bool,
+    /// The open lines, by time and message.
+    open: HashSet<(i64, String)>,
     _subs: Vec<Subscription>,
 }
 
@@ -50,10 +53,9 @@ impl LogsView {
     /// Builds the page over the registered state.
     pub fn new(cx: &mut Context<Self>) -> Self {
         let app = AppState::global(cx);
-        let scroll = UniformListScrollHandle::new();
-        let bar = cx.new(|cx| {
-            Scrollbar::new(scroll.0.borrow().base_handle.clone()).watching(cx.entity_id())
-        });
+        let lines = ListState::new(0, ListAlignment::Top, px(200.));
+        lines.set_follow_mode(FollowMode::Tail);
+        let bar = cx.new(|cx| Scrollbar::list(lines.clone()).watching(cx.entity_id()));
         let search = cx.new(|cx| {
             Input::new(t!("dl-logs-search-hint"), cx)
                 .name("dl-logs-search-name")
@@ -70,11 +72,11 @@ impl LogsView {
             job: None,
             picker: None,
             bar,
-            scroll,
-            seen: 0,
+            lines,
+            laid_out: (0, None, String::new(), 0),
             search,
             follow: true,
-            resume_at_end: false,
+            open: HashSet::new(),
             _subs: subs,
         }
     }
@@ -179,17 +181,22 @@ impl Render for LogsView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = *cx.theme();
         let entries = Rc::new(self.shown(cx));
-        if !self.follow && self.resume_at_end && self.scroll.is_scrolled_to_end() == Some(true) {
-            self.follow = true;
-            self.resume_at_end = false;
-        }
-        if entries.len() != self.seen {
-            self.seen = entries.len();
-            if self.follow && !entries.is_empty() {
-                self.scroll
-                    .scroll_to_item(entries.len() - 1, ScrollStrategy::Bottom);
+        let filter = (
+            self.least,
+            self.job,
+            self.search.read(cx).text().trim().to_owned(),
+        );
+        let (least, job, needle, count) = &self.laid_out;
+        let count = *count;
+        if (*least, *job, needle) != (filter.0, filter.1, &filter.2) || entries.len() < count {
+            self.lines.reset(entries.len());
+            if self.follow {
+                self.lines.set_follow_mode(FollowMode::Tail);
             }
+        } else if entries.len() > count {
+            self.lines.splice(count..count, entries.len() - count);
         }
+        self.laid_out = (filter.0, filter.1, filter.2, entries.len());
         let job_label = match self.job {
             Some(id) => format!("{} {:04}", t!("dl-logs-job"), id.0),
             None => t!("dl-logs-all-jobs").to_string(),
@@ -209,108 +216,27 @@ impl Render for LogsView {
             .size_full()
             .into_any_element(),
             false => {
-                let items = entries.clone();
-                // the longest message sets every row's width, so the list scrolls sideways
-                let widest = entries
-                    .iter()
-                    .enumerate()
-                    .max_by_key(|(_, l)| l.message.len())
-                    .map(|(at, _)| at);
+                let view = cx.entity().downgrade();
+                let open = self.open.clone();
                 Scroller::listing("logs-scroll", &self.bar)
                     .child(
-                        uniform_list(
-                            "log-lines",
-                            entries.len(),
-                            cx.processor(move |_, range: Range<usize>, window, cx| {
-                                let theme = *cx.theme();
-                                // a narrow window keeps the level word and drops its dot
-                                let narrow = window.viewport_size().width < px(900.);
-                                range
-                                    .filter_map(|at| items.get(at).map(|l| (at, l)))
-                                    .map(|(at, l)| {
-                                        let tone = match rank(&l.level) {
-                                            3 => theme.danger,
-                                            2 => theme.progress_bar,
-                                            _ => theme.muted_foreground,
-                                        };
-                                        let line = format!(
-                                            "{} {} {}",
-                                            format::clock(l.at),
-                                            l.level,
-                                            l.message
-                                        );
-                                        div()
-                                            .id(("log-line", at))
-                                            .min_w_full()
-                                            .flex()
-                                            .gap(px(12.))
-                                            .h(px(24.))
-                                            .px(theme.metrics.gutter)
-                                            .items_center()
-                                            .cursor_pointer()
-                                            // warnings and errors carry a faint wash of their tone
-                                            .when(rank(&l.level) >= 2, |this| {
-                                                this.bg(tone.opacity(0.08))
-                                            })
-                                            .hover(|style| style.bg(theme.table_hover))
-                                            .on_click(move |_, _, cx| {
-                                                cx.write_to_clipboard(
-                                                    gpui::ClipboardItem::new_string(line.clone()),
-                                                )
-                                            })
-                                            .font_family(MONO)
-                                            .text_size(theme.text(Text::Small))
-                                            .child(
-                                                div()
-                                                    .w(px(64.))
-                                                    .flex_none()
-                                                    .text_color(theme.muted_foreground)
-                                                    .child(format::clock(l.at)),
-                                            )
-                                            .child(
-                                                div()
-                                                    .w(px(if narrow { 40. } else { 56. }))
-                                                    .flex_none()
-                                                    .flex()
-                                                    .items_center()
-                                                    .gap(px(6.))
-                                                    .text_color(tone)
-                                                    .when(!narrow, |this| {
-                                                        this.child(
-                                                            div()
-                                                                .size(px(6.))
-                                                                .rounded_full()
-                                                                .bg(tone),
-                                                        )
-                                                    })
-                                                    .child(l.level.clone()),
-                                            )
-                                            .child(
-                                                div()
-                                                    .w(px(40.))
-                                                    .flex_none()
-                                                    .text_color(theme.muted_foreground)
-                                                    .child(
-                                                        l.job
-                                                            .map(|j| format!("{:04}", j.0))
-                                                            .unwrap_or_default(),
-                                                    ),
-                                            )
-                                            .child(
-                                                div()
-                                                    .flex_none()
-                                                    .whitespace_nowrap()
-                                                    .child(l.message.clone()),
-                                            )
-                                    })
-                                    .collect::<Vec<_>>()
-                            }),
-                        )
-                        .with_horizontal_sizing_behavior(
-                            ListHorizontalSizingBehavior::Unconstrained,
-                        )
-                        .with_width_from_item(widest)
-                        .track_scroll(&self.scroll)
+                        list(self.lines.clone(), move |at, window, cx| {
+                            let Some(entry) = entries.get(at) else {
+                                return div().into_any_element();
+                            };
+                            let key = (entry.at, entry.message.clone());
+                            let is_open = open.contains(&key);
+                            let view = view.clone();
+                            row(at, entry, is_open, window, cx, move |cx| {
+                                view.update(cx, |this, cx| {
+                                    if !this.open.remove(&key) {
+                                        this.open.insert(key.clone());
+                                    }
+                                    cx.notify();
+                                })
+                                .ok();
+                            })
+                        })
                         .size_full(),
                     )
                     .into_any_element()
@@ -371,10 +297,10 @@ impl Render for LogsView {
                                     .selected(self.follow)
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.follow = !this.follow;
-                                        this.resume_at_end = false;
-                                        if this.follow {
-                                            this.seen = 0;
-                                        }
+                                        this.lines.set_follow_mode(match this.follow {
+                                            true => FollowMode::Tail,
+                                            false => FollowMode::Normal,
+                                        });
                                         cx.notify();
                                     })),
                             )
@@ -393,15 +319,126 @@ impl Render for LogsView {
                     .min_h_0()
                     .border_t_1()
                     .border_color(theme.border)
-                    .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, cx| {
-                        if event.delta.pixel_delta(px(20.)).y > px(0.) && this.follow {
-                            this.follow = false;
-                            this.resume_at_end = true;
-                            cx.notify();
-                        }
-                    }))
                     .child(body),
             )
             .children(picker)
     }
+}
+
+/// One log line: time, level, job and the first line of the message cut to the width; open, the
+/// whole message wraps below, with a button that copies it.
+fn row(
+    at: usize,
+    entry: &LogEntry,
+    open: bool,
+    window: &Window,
+    cx: &gpui::App,
+    toggle: impl Fn(&mut gpui::App) + 'static,
+) -> AnyElement {
+    let theme = *cx.theme();
+    // a narrow window keeps the level word and drops its dot
+    let narrow = window.viewport_size().width < px(900.);
+    let tone = match rank(&entry.level) {
+        3 => theme.danger,
+        2 => theme.progress_bar,
+        _ => theme.muted_foreground,
+    };
+    let first = entry.message.lines().next().unwrap_or_default().to_owned();
+    let more = entry.message.lines().count().saturating_sub(1);
+    let copied = format!(
+        "{} {} {}",
+        format::clock(entry.at),
+        entry.level,
+        entry.message
+    );
+    let message = match open {
+        true => div()
+            .flex_1()
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .items_start()
+            .gap(px(6.))
+            .child(div().w_full().child(entry.message.clone()))
+            .child(
+                Button::new(("log-copy", at))
+                    .small()
+                    .ghost()
+                    .icon("icons/copy.svg")
+                    .label(t!("dl-logs-copy-line"))
+                    .on_click(move |_, _, cx| {
+                        cx.write_to_clipboard(ClipboardItem::new_string(copied.clone()));
+                        toast(cx, Kind::Success, t!("dl-logs-copied"), None);
+                    }),
+            )
+            .into_any_element(),
+        false => div()
+            .flex_1()
+            .min_w_0()
+            .flex()
+            .gap(px(8.))
+            .child(div().min_w_0().truncate().child(first))
+            .when(more > 0, |this| {
+                this.child(
+                    div()
+                        .flex_none()
+                        .text_color(theme.muted_foreground)
+                        .child(t!("dl-logs-more-lines", count = more)),
+                )
+            })
+            .into_any_element(),
+    };
+    div()
+        .id(("log-line", at))
+        .role(Role::Button)
+        .aria_label(match open {
+            true => t!("dl-logs-line-close"),
+            false => t!("dl-logs-line-open"),
+        })
+        .w_full()
+        .flex()
+        .items_start()
+        .gap(px(12.))
+        .min_h(px(24.))
+        .py(px(4.))
+        .px(theme.metrics.gutter)
+        .cursor_pointer()
+        // warnings and errors carry a faint wash of their tone
+        .when(rank(&entry.level) >= 2, |this| this.bg(tone.opacity(0.08)))
+        .when(open && rank(&entry.level) < 2, |this| {
+            this.bg(theme.secondary_hover)
+        })
+        .hover(|style| style.bg(theme.table_hover))
+        .on_click(move |_, _, cx| toggle(cx))
+        .font_family(MONO)
+        .text_size(theme.text(Text::Small))
+        .child(
+            div()
+                .w(px(64.))
+                .flex_none()
+                .text_color(theme.muted_foreground)
+                .child(format::clock(entry.at)),
+        )
+        .child(
+            div()
+                .w(px(if narrow { 40. } else { 56. }))
+                .flex_none()
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .text_color(tone)
+                .when(!narrow, |this| {
+                    this.child(div().size(px(6.)).rounded_full().bg(tone))
+                })
+                .child(entry.level.clone()),
+        )
+        .child(
+            div()
+                .w(px(40.))
+                .flex_none()
+                .text_color(theme.muted_foreground)
+                .child(entry.job.map(|j| format!("{:04}", j.0)).unwrap_or_default()),
+        )
+        .child(message)
+        .into_any_element()
 }

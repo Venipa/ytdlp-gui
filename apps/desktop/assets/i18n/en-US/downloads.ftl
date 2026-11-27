@@ -146,6 +146,13 @@ dl-logs-search-hint = Search the log
 dl-logs-search-name = Search log lines
 dl-logs-follow = Follow
 dl-logs-no-match = No log line matches.
+dl-logs-copy-line = Copy
+dl-logs-more-lines = { $count ->
+    [one] +1 line
+   *[other] +{ $count } lines
+}
+dl-logs-line-open = Show the whole message
+dl-logs-line-close = Show only the first line
 dl-cover-alt = Cover image
 
 # UI refine round 2
