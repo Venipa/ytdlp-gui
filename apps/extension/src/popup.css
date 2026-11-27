@@ -5,7 +5,7 @@ body{background:var(--bg);color:var(--paper);font:var(--font-size)/1.25 var(--fo
 .pop{border:1px solid var(--edge)}
 .hd{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--edge)}
 .hd b{font-weight:600;font-size:13px}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--ink);flex:none}.dot.off{background:var(--pencil)}.dot.warn{background:var(--amber)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--st-ok);flex:none}.dot.off{background:var(--st-off)}.dot.warn{background:var(--st-warn)}
 .st{margin-left:auto;font-size:11px;color:var(--pencil)}
 .pad{padding:8px 12px}
 .lead{margin-bottom:4px}

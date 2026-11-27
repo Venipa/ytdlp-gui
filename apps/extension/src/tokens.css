@@ -1,5 +1,7 @@
 :host,:root{
   --bg:#15130f;--drawer:#1e1b16;--edge:#2a2620;--paper:#ece5d8;--pencil:#9c9384;--amber:#e9a23b;--ink:#8fb0d6;--danger:#e86a58;
+  /* connection status: saturated so the state reads at a glance */
+  --st-ok:#22c55e;--st-warn:#f59e0b;--st-off:#ef4444;
   --bd:color-mix(in srgb,var(--paper) 14%,transparent);
   --hover:color-mix(in srgb,var(--paper) 7%,transparent);
   --inkbg:color-mix(in srgb,var(--ink) 14%,transparent);
@@ -8,4 +10,5 @@
 }
 @media (prefers-color-scheme:light){:host,:root{
   --bg:#f2ede3;--drawer:#e8e1d4;--edge:#dcd3c3;--paper:#1d1a15;--pencil:#6b6253;--amber:#8a4f00;--ink:#2f4a6b;--danger:#b3261e;
+  --st-ok:#16a34a;--st-warn:#d97706;--st-off:#dc2626;
 }}

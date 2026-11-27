@@ -107,6 +107,8 @@ function activate(v: HTMLVideoElement) {
     s = { video: v, state: "none", askedAt: 0, cover: v.getBoundingClientRect().width * v.getBoundingClientRect().height >= 0.5 * innerWidth * innerHeight };
     sessions.set(v, s);
   }
+  // the open preset list lives over the video: moving onto it must not re-render (that drops the list)
+  if (active === s && bar.open) return;
   active = s;
   // ask once; a "none" answer (app away, unsupported) is asked again after a pause
   if (!s.checked && Date.now() - s.askedAt > RECHECK_MS) void ask(s);

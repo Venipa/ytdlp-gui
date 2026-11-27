@@ -80,6 +80,8 @@ export function makeHandler(d: Deps) {
           return { ok: true };
         case "check": {
           if (!content) return { ok: false, code: "unauthorized" };
+          // not connected: answer at once (no "checking" flash on every hover) and reconnect behind it
+          if (client.state !== "ready") { void client.connect(); return { ok: false, code: client.state }; }
           const r = await find(candidateUrls(s, !!msg.cover, await topOf(s)));
           return { ok: true, supported: r.checked.supported, checked: r.checked };
         }

@@ -11,8 +11,8 @@ const store: Store = {
   set: (k, v) => chrome.storage.local.set({ [k]: v }),
 };
 
-// the amber of the Ledger palette (tokens.css --amber); a service worker has no CSS to read it from
-const BADGE = "#e9a23b";
+// tokens.css --st-warn; a service worker has no CSS to read it from
+const BADGE = "#f59e0b";
 
 async function paintBadge(state: State) {
   const needsPairing = state === "unpaired" || state === "removed";
@@ -27,6 +27,8 @@ const client = new Client({
   ext: chrome.runtime.getManifest().version,
   device: () => chrome.i18n.getMessage("device_name", [platform]),
   onState: (s) => void paintBadge(s),
+  // a refused loopback connect costs nothing: retry often so an app restart is picked up quickly
+  backoffMax: 5000,
 });
 
 const tops = new Map<number, string>();

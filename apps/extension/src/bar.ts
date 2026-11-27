@@ -118,7 +118,6 @@ export class Bar {
     this.bar.className = `bar show vis${view.inside ? " inside" : ""}${multi ? "" : " single"} s-${view.state}`;
     this.live.textContent = view.state === "ready" || view.state === "checking" ? "" : text;
     this.place();
-    if (this.menu.classList.contains("show")) this.fillMenu();
   }
 
   /** Re-position after scroll/resize without re-rendering. */
