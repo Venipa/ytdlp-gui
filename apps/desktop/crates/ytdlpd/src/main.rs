@@ -174,6 +174,9 @@ fn main() -> ExitCode {
             Theme::init(look, &ThemeOverrides::default(), cx);
             cx.bind_keys(input::bindings());
             cx.on_action(|_: &input::Quit, cx| cx.quit());
+            // gpui quits with the last window on Windows and Linux; the app decides that itself
+            // below, so close-to-tray can keep it running
+            cx.set_quit_mode(gpui::QuitMode::Explicit);
             cx.on_window_closed(|cx, _| {
                 if cx.windows().is_empty() && !platform::keeps_running(cx) {
                     cx.quit();
@@ -195,13 +198,17 @@ fn main() -> ExitCode {
             if platform.is_first() {
                 browser::install(&state, cx);
             }
+            let settings = state.settings.clone();
             let hooks = platform::Hooks {
                 open_window: Box::new(move |cx| open_window(scene.clone(), size, frame_stats, cx)),
                 on_event: Box::new(move |event, cx| route_event(&state, event.clone(), cx)),
             };
             // release builds with the real data dir register the ytdlpd:// scheme
             let register = !cfg!(debug_assertions) && args.data_dir.is_none();
-            if platform.install(hooks, register, cx) {
+            let open = platform.install(hooks, register, cx);
+            // the settings were read before the tray existed: apply close-to-tray now too
+            platform::set_close_to_tray(settings.read(cx).get().close_to_tray, cx);
+            if open {
                 open_window(args.screen, size, frame_stats, cx);
             }
             cx.activate(true);
