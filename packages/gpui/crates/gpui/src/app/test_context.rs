@@ -870,6 +870,14 @@ impl VisualTestContext {
             .unwrap()
     }
 
+    /// Delivers one frame request to the window, as the display link would: the window draws
+    /// and runs its `on_next_frame` callbacks (animations, smooth scrolling).
+    pub fn simulate_frame(&mut self) {
+        self.cx
+            .test_window(self.window)
+            .simulate_frame_request(Default::default());
+    }
+
     /// Creates a new VisualTestContext. You would typically shadow the passed in
     /// TestAppContext with this, as this is typically more useful.
     /// `let cx = VisualTestContext::from_window(window, cx);`
