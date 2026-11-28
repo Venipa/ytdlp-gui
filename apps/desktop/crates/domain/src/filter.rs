@@ -197,6 +197,7 @@ pub(crate) fn test_summary(
         bytes_total: None,
         file_path: None,
         file_size: size,
+        size_before_fix: None,
         file_missing: false,
         error_code: None,
         error_message: None,

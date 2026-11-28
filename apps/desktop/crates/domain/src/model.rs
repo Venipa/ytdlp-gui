@@ -220,8 +220,18 @@ pub struct JobSpec {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub aria2c_args: Vec<String>,
     /// The ffmpeg fix run on the finished file (site rule or default); older specs have none.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::FixChain::is_empty",
+        deserialize_with = "crate::chain_or_fix"
+    )]
+    pub fix: crate::FixChain,
+    /// The site rule's Smaller file quality; `None` uses the setting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub fix: Option<crate::Fix>,
+    pub smaller_quality: Option<u8>,
+    /// The site rule's Smaller file largest size; `None` uses the setting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub smaller_height: Option<u32>,
 }
 
 /// List row; never carries `options_json` or `info_json`. `title_lc`/`uploader_lc` are precomputed for filtering.
@@ -250,6 +260,8 @@ pub struct DownloadSummary {
     pub bytes_total: Option<i64>,
     pub file_path: Option<String>,
     pub file_size: Option<i64>,
+    /// The size before the first fix ran on the file; `None` when no fix changed it.
+    pub size_before_fix: Option<i64>,
     pub file_missing: bool,
     pub error_code: Option<String>,
     pub error_message: Option<String>,
@@ -291,6 +303,7 @@ impl DownloadSummary {
             bytes_total: None,
             file_path: None,
             file_size: None,
+            size_before_fix: None,
             file_missing: false,
             error_code: None,
             error_message: None,

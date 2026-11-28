@@ -54,6 +54,76 @@ impl Fix {
     ];
 }
 
+impl Fix {
+    /// Whether this fix re-encodes the video; those conflict, a [`FixChain`] holds one.
+    pub fn is_video(self) -> bool {
+        matches!(self, Fix::Compatible | Fix::EditFriendly | Fix::Smaller)
+    }
+}
+
+/// The fixes run after a download, merged into one ffmpeg pass: at most one video fix, plus
+/// loudness normalising and timestamp repair.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FixChain {
+    /// Compatible, EditFriendly or Smaller; `None` keeps the video.
+    pub video: Option<Fix>,
+    /// Loudness normalising of the audio.
+    pub normalize: bool,
+    /// Rebuilds the timestamps.
+    pub repair: bool,
+}
+
+impl FixChain {
+    /// Nothing runs.
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Sets the video fix; a non-video fix is ignored (keeps the invariant).
+    pub fn set_video(&mut self, fix: Option<Fix>) {
+        self.video = fix.filter(|f| f.is_video());
+    }
+
+    /// The fixes that run, in order: video, Normalize, Repair.
+    pub fn fixes(&self) -> Vec<Fix> {
+        self.video
+            .into_iter()
+            .chain(self.normalize.then_some(Fix::Normalize))
+            .chain(self.repair.then_some(Fix::Repair))
+            .collect()
+    }
+}
+
+impl From<Fix> for FixChain {
+    fn from(fix: Fix) -> Self {
+        Self {
+            video: fix.is_video().then_some(fix),
+            normalize: fix == Fix::Normalize,
+            repair: fix == Fix::Repair,
+        }
+    }
+}
+
+/// Reads a stored fix: null (none), a single fix name (older files) or a [`FixChain`] object.
+pub fn chain_or_fix<'de, D: serde::Deserializer<'de>>(d: D) -> Result<FixChain, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Stored {
+        Chain(FixChain),
+        One(Fix),
+        None(()),
+    }
+    Ok(match Stored::deserialize(d)? {
+        Stored::Chain(mut c) => {
+            c.set_video(c.video);
+            c
+        }
+        Stored::One(fix) => fix.into(),
+        Stored::None(()) => FixChain::default(),
+    })
+}
+
 /// One site rule. `None` choices keep the default.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -64,13 +134,20 @@ pub struct SiteRule {
     pub pattern: String,
     pub clipboard: Option<ClipAction>,
     pub preset: Option<Preset>,
-    pub fix: Option<Fix>,
+    #[serde(deserialize_with = "chain_or_fix")]
+    pub fix: FixChain,
     /// The folder matching downloads are saved to.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_dir: Option<String>,
     /// The yt-dlp output template for matching single downloads (playlist entries keep theirs).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub outtmpl: Option<String>,
+    /// Smaller file quality for matching downloads; `None` uses the setting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub smaller_quality: Option<u8>,
+    /// Smaller file largest size for matching downloads; `None` uses the setting, 0 keeps the size.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub smaller_height: Option<u32>,
 }
 
 impl SiteRule {
@@ -187,7 +264,7 @@ mod tests {
     #[test]
     fn stored_shape() {
         let r = SiteRule {
-            fix: Some(Fix::EditFriendly),
+            fix: Fix::EditFriendly.into(),
             clipboard: Some(ClipAction::Add),
             preset: Some(Preset::DEFAULT),
             ..rule(MatchKind::Regex, "x")
@@ -198,6 +275,35 @@ mod tests {
                 && json.contains("\"regex\"")
                 && json.contains("\"add\"")
         );
+        assert_eq!(serde_json::from_str::<SiteRule>(&json).unwrap(), r);
+    }
+
+    #[test]
+    fn a_stored_fix_reads_as_null_one_fix_or_a_chain() {
+        let read = |fix: &str| {
+            serde_json::from_str::<SiteRule>(&format!(r#"{{"fix":{fix}}}"#))
+                .unwrap()
+                .fix
+        };
+        assert!(read("null").is_empty());
+        assert!(
+            serde_json::from_str::<SiteRule>("{}")
+                .unwrap()
+                .fix
+                .is_empty()
+        );
+        assert_eq!(read(r#""smaller""#).video, Some(Fix::Smaller));
+        assert!(read(r#""normalize""#).normalize);
+        assert!(read(r#""repair""#).repair);
+        let chain = read(r#"{"video":"compatible","normalize":true}"#);
+        assert_eq!(chain.fixes(), [Fix::Compatible, Fix::Normalize]);
+        // a non-video fix cannot sit in the video slot
+        assert!(read(r#"{"video":"repair"}"#).is_empty());
+        let r = SiteRule {
+            fix: chain,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&r).unwrap();
         assert_eq!(serde_json::from_str::<SiteRule>(&json).unwrap(), r);
     }
 }

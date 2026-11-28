@@ -173,9 +173,16 @@ pub struct Settings {
     /// `default_fix` are the "Everything else" rule.
     pub site_rules: Vec<crate::SiteRule>,
     /// The fix run on downloads no rule matches.
-    pub default_fix: Option<crate::Fix>,
+    #[serde(deserialize_with = "crate::chain_or_fix")]
+    pub default_fix: crate::FixChain,
     /// Video encoder for fixes that convert: `auto` (hardware when ffmpeg has it), `hardware`, `software`.
     pub encoder: String,
+    /// Smaller file: 100 keeps the quality of the download, lower gives a smaller file (50 to 100).
+    pub smaller_quality: u8,
+    /// Smaller file: videos taller than this are scaled down to it; 0 keeps the size.
+    pub smaller_height: u32,
+    /// How many fixes (ffmpeg conversions) run at once, 1 to 4.
+    pub fix_concurrency: u8,
     pub notifications: bool,
     pub close_to_tray: bool,
     /// Whether the localhost bridge for the browser extension runs (Settings > Browser).
@@ -230,8 +237,11 @@ impl Default for Settings {
             clipboard_watch: true,
             clipboard_auto_add: false,
             site_rules: vec![],
-            default_fix: None,
+            default_fix: Default::default(),
             encoder: "auto".into(),
+            smaller_quality: 80,
+            smaller_height: 0,
+            fix_concurrency: 1,
             notifications: true,
             close_to_tray: false,
             browser_extension: false,
