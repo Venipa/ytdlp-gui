@@ -190,8 +190,12 @@ function onPointer(e: PointerEvent) {
   raf = requestAnimationFrame(() => {
     raf = 0;
     const stack = document.elementsFromPoint(x, y);
-    const v = stack.find((n): n is HTMLVideoElement => n instanceof HTMLVideoElement && eligible(n)); // videos win over links
-    const a = v ? undefined : stack.map((n) => n.closest?.("a[href]")).find((n): n is HTMLAnchorElement => n instanceof HTMLAnchorElement);
+    const anchors = stack.map((n) => n.closest?.("a[href]")).map((n) => (n instanceof HTMLAnchorElement ? n : undefined));
+    const vi = stack.findIndex((n) => n instanceof HTMLVideoElement && eligible(n));
+    // a video over (or inside) a link to another page is that link's hover preview (YouTube home), not this page's player
+    const under = vi < 0 ? undefined : anchors.slice(vi).find((n) => n && linkTarget(n.href, location.href, n.getBoundingClientRect()));
+    const v = under || vi < 0 ? undefined : (stack[vi] as HTMLVideoElement); // otherwise videos win over links
+    const a = v ? undefined : under ?? anchors.find(Boolean);
     if (a !== linkCand) { clearTimeout(linkTimer); linkTimer = undefined; linkCand = a; }
     if (v) activate(v);
     else if (a) {
