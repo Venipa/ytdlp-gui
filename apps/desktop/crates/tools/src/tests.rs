@@ -469,3 +469,15 @@ fn js_dict_shape() {
         serde_json::json!({"deno": {"path": "/x/deno"}})
     );
 }
+
+#[cfg(windows)]
+#[test]
+fn reads_the_stored_path() {
+    // the system PATH always holds System32
+    let dirs = crate::saved_path();
+    assert!(
+        dirs.iter()
+            .any(|d| d.to_string_lossy().to_lowercase().ends_with("system32")),
+        "{dirs:?}"
+    );
+}

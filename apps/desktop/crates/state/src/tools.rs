@@ -42,6 +42,9 @@ pub struct Tools {
     /// The updated yt-dlp site in use, if one was installed.
     site: Option<String>,
     updating: bool,
+    /// Binaries the user picked (settings), checked after every detection: they win over the
+    /// detected ones while they still are that tool.
+    saved: Vec<(ToolKind, String)>,
 }
 
 impl EventEmitter<ToolsEvent> for Tools {}
@@ -58,7 +61,21 @@ impl Tools {
             retry_delay: RETRY_DELAY,
             site: None,
             updating: false,
+            saved: vec![],
         }
+    }
+
+    /// The binaries the user picked (from settings); the next detection checks them.
+    pub fn set_saved(&mut self, paths: &domain::ToolPaths) {
+        self.saved = [
+            (ToolKind::Ffmpeg, &paths.ffmpeg),
+            (ToolKind::Ffprobe, &paths.ffprobe),
+            (ToolKind::Deno, &paths.deno),
+            (ToolKind::Aria2c, &paths.aria2c),
+        ]
+        .into_iter()
+        .filter_map(|(kind, path)| Some((kind, path.clone()?)))
+        .collect();
     }
 
     /// The updated site dir in use, set at start-up and after each update.
@@ -127,8 +144,27 @@ impl Tools {
     /// Re-detects every tool.
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         let status = self.api.status();
+        let saved: Vec<_> = self
+            .saved
+            .iter()
+            .map(|(kind, path)| (*kind, self.api.set_custom_path(*kind, path.clone())))
+            .collect();
         self.detect = Some(cx.spawn(async move |this, cx| {
-            let found = status.await;
+            let mut found = status.await;
+            // a picked binary wins over a detected one; one that is gone falls back to detection
+            for (kind, check) in saved {
+                match check.await {
+                    Ok(status) => {
+                        log::info!("tools: {kind} is the one picked in settings");
+                        found.retain(|s| s.kind != kind);
+                        found.push(status);
+                    }
+                    // the message names the path, which holds the account name: kept out of the log
+                    Err(_) => log::warn!(
+                        "tools: the {kind} picked in settings is not usable, using the detected one"
+                    ),
+                }
+            }
             this.update(cx, |this, cx| {
                 for s in found {
                     // keep a running install's progress

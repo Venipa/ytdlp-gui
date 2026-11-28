@@ -148,9 +148,75 @@ async fn probe(tool: Tool, path: &Path) -> Option<String> {
 fn on_path(name: &str) -> Vec<PathBuf> {
     let path = std::env::var_os("PATH").unwrap_or_default();
     std::env::split_paths(&path)
+        .chain(saved_path())
         .map(|d| d.join(name))
         .filter(|p| p.is_file())
         .collect()
+}
+
+/// The PATH as stored now (user, then system). A program started from Explorer gets the PATH
+/// of the moment the user logged in, so a tool installed since (winget, scoop) is missing from it.
+#[cfg(windows)]
+fn saved_path() -> Vec<PathBuf> {
+    use windows_sys::Win32::System::Registry::{
+        HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ, RegGetValueW,
+    };
+    let wide = |s: &str| s.encode_utf16().chain([0]).collect::<Vec<u16>>();
+    let read = |root: HKEY, key: &str| -> Option<String> {
+        let (key, name) = (wide(key), wide("Path"));
+        // REG_EXPAND_SZ values come back expanded and pass as REG_SZ
+        let mut len = 0u32;
+        // SAFETY: the key and name are NUL-terminated; a null buffer asks for the size
+        let size = unsafe {
+            RegGetValueW(
+                root,
+                key.as_ptr(),
+                name.as_ptr(),
+                RRF_RT_REG_SZ,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut len,
+            )
+        };
+        if size != 0 {
+            return None;
+        }
+        let mut buf = vec![0u16; len as usize / 2 + 1];
+        let mut len = (buf.len() * 2) as u32;
+        // SAFETY: `buf` holds `len` bytes
+        let read = unsafe {
+            RegGetValueW(
+                root,
+                key.as_ptr(),
+                name.as_ptr(),
+                RRF_RT_REG_SZ,
+                std::ptr::null_mut(),
+                buf.as_mut_ptr().cast(),
+                &mut len,
+            )
+        };
+        if read != 0 {
+            return None;
+        }
+        let end = buf.iter().position(|c| *c == 0).unwrap_or(buf.len());
+        Some(String::from_utf16_lossy(&buf[..end]))
+    };
+    [
+        read(HKEY_CURRENT_USER, "Environment"),
+        read(
+            HKEY_LOCAL_MACHINE,
+            r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+        ),
+    ]
+    .into_iter()
+    .flatten()
+    .flat_map(|p| std::env::split_paths(&p).collect::<Vec<_>>())
+    .collect()
+}
+
+#[cfg(not(windows))]
+fn saved_path() -> Vec<PathBuf> {
+    vec![]
 }
 
 fn well_known_dirs(tool: Tool) -> Vec<PathBuf> {

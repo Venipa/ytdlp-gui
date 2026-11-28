@@ -23,5 +23,8 @@ tempfile.workspace = true
 tokio = { workspace = true, features = ["fs"] }
 zip.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
+
 [dev-dependencies]
 env_logger.workspace = true

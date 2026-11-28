@@ -453,7 +453,19 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
         })
     };
     downloads.update(cx, |d, cx| d.load(cx));
-    tools.update(cx, |t, cx| t.refresh(cx));
+    tools.update(cx, |t, cx| {
+        t.set_saved(&settings.read(cx).get().tool_paths);
+        t.refresh(cx)
+    });
+    // a path picked or cleared in settings counts from the next detection on
+    cx.observe(&settings, {
+        let tools = tools.clone();
+        move |settings, cx| {
+            let paths = settings.read(cx).get().tool_paths.clone();
+            tools.update(cx, |t, _| t.set_saved(&paths));
+        }
+    })
+    .detach();
     let updates = {
         let (settings, downloads, store, io) = (
             settings.clone(),
