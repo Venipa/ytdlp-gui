@@ -199,6 +199,12 @@ impl RenderOnce for Scroller {
                     true => gliding.update(cx, |bar, _| bar.stirred()),
                     false => gliding.update(cx, |bar, _| bar.nudge(window)),
                 }
+                // gpui scrolls every region under the pointer: a region that can scroll keeps
+                // a vertical wheel, so the one around it stays put (this runs after its own scroll)
+                let delta = event.delta.pixel_delta(window.line_height());
+                if delta.y.abs() >= delta.x.abs() && gliding.read(cx).scrolls() {
+                    cx.stop_propagation();
+                }
             })
             .children(children);
 

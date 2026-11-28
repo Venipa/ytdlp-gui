@@ -271,8 +271,8 @@ impl Scrollbar {
     /// no smoothing, but it is still theirs, and anything following the view has
     /// to know to stop.
     pub fn stirred(&mut self) {
-        if let Some(list) = &self.list {
-            self.glide.jump(list, list.scroll_px_offset_for_scrollbar());
+        if self.list.is_some() {
+            // the list scrolled itself; setting its offset back would land on a stale pixel
             self.following = false;
         } else if self.glide.stop_spring(&self.scroll) {
             self.following = false;
@@ -284,7 +284,10 @@ impl Scrollbar {
         self.following = false;
         self.nudges = self.nudges.wrapping_add(1);
         match &self.list {
-            Some(list) => self.glide.nudge(list, window),
+            // a list measures rows as they come into view, so its pixel offsets move under a
+            // glide's target from one frame to the next (the Logs list jumped up): it scrolls
+            // itself, unsmoothed
+            Some(_) => {}
             None => self.glide.nudge(&self.scroll, window),
         }
     }
@@ -335,6 +338,11 @@ impl Scrollbar {
     /// How far down the region is scrolled, whichever kind of scrolling it does.
     pub fn offset(&self) -> Pixels {
         self.target().offset()
+    }
+
+    /// Whether the content is taller than the region, so there is something to scroll.
+    pub fn scrolls(&self) -> bool {
+        self.target().hidden() > px(0.5)
     }
 
     /// The height of the part on screen.
