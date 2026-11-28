@@ -18,6 +18,16 @@ use super::layout::{collapsible, full_bleed, row, section, stacked};
 use super::{Edit, SPONSOR_CATEGORIES, SettingsView, look, tool_key};
 use crate::format;
 
+/// The largest sizes Smaller file offers, as a height (0 keeps the size) and its Fluent key.
+pub(super) const HEIGHTS: [(u32, &str); 6] = [
+    (0, "rule-smaller-keep"),
+    (2160, "rule-height-2160"),
+    (1440, "rule-height-1440"),
+    (1080, "rule-height-1080"),
+    (720, "rule-height-720"),
+    (480, "rule-height-480"),
+];
+
 /// The licence notices, bundled so About can open them without the repository around.
 const THIRD_PARTY: &str = include_str!("../../../../../../../THIRD-PARTY.md");
 
@@ -258,6 +268,17 @@ impl SettingsView {
                 )
             }),
         );
+        let sizes = self.chips(
+            "smh",
+            HEIGHTS.map(|(height, key)| {
+                (
+                    key,
+                    key,
+                    s.smaller_height == height,
+                    Rc::new(move |st: &mut Settings| st.smaller_height = height) as super::Edit,
+                )
+            }),
+        );
         vec![
             section(
                 Some(t!("set-sec-defaults")),
@@ -314,12 +335,32 @@ impl SettingsView {
             section(Some(t!("set-sponsorblock")), sponsor, cx),
             section(
                 Some(t!("rule-converting")),
-                vec![stacked(
-                    t!("rule-encoder"),
-                    Some(t!("rule-encoder-desc")),
-                    encoders,
-                    cx,
-                )],
+                vec![
+                    stacked(
+                        t!("rule-encoder"),
+                        Some(t!("rule-encoder-desc")),
+                        encoders,
+                        cx,
+                    ),
+                    row(
+                        t!("rule-smaller-quality"),
+                        Some(t!("rule-smaller-quality-desc")),
+                        self.stepper(Field::SmallerQuality, cx),
+                        cx,
+                    ),
+                    stacked(
+                        t!("rule-smaller-height"),
+                        Some(t!("rule-smaller-height-desc")),
+                        sizes,
+                        cx,
+                    ),
+                    row(
+                        t!("rule-fix-concurrency"),
+                        Some(t!("rule-fix-concurrency-desc")),
+                        self.stepper(Field::FixConcurrency, cx),
+                        cx,
+                    ),
+                ],
                 cx,
             ),
         ]

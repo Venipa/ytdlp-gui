@@ -49,9 +49,29 @@ fn height(thumbs: bool) -> gpui::Pixels {
     }
 }
 
-/// The status words of a row and the colour they take.
-pub(crate) fn status_text(s: &DownloadSummary, theme: &ui::Theme) -> (SharedString, Hsla) {
+/// The status words of a row and the colour they take; `fixing` is the fix on its file and
+/// whether it still waits for a free place.
+pub(crate) fn status_text(
+    s: &DownloadSummary,
+    fixing: Option<(domain::FixChain, bool)>,
+    theme: &ui::Theme,
+) -> (SharedString, Hsla) {
     let pencil = theme.muted_foreground;
+    match fixing {
+        Some((fix, true)) => {
+            return (
+                t!("dl-status-fix-queued", fix = crate::format::chain_name(fix)),
+                pencil,
+            );
+        }
+        Some((fix, false)) => {
+            return (
+                t!("dl-status-fixing", fix = crate::format::chain_name(fix)),
+                theme.progress_bar,
+            );
+        }
+        None => {}
+    }
     match s.status {
         DownloadStatus::Queued => (t!("dl-status-queued"), pencil),
         DownloadStatus::Probing => (t!("dl-status-probing"), pencil),
@@ -467,9 +487,18 @@ impl Downloads {
         let theme = *cx.theme();
         let id = s.id;
         let selected = self.selected == Some(id);
-        let (status, tone) = status_text(s, &theme);
+        let fixing = {
+            let fixes = self.app.fixes.read(cx);
+            fixes
+                .running(id)
+                .map(|fix| (fix, false))
+                .or_else(|| fixes.queued(id).map(|fix| (fix, true)))
+        };
+        let (status, tone) = status_text(s, fixing, &theme);
         let (size, speed, eta) = self.numbers(s, cx);
-        let percent = percent(s);
+        // a running fix shows its own progress, as a download does
+        let fix_share = self.app.fixes.read(cx).progress(id);
+        let percent = fix_share.map(f64::from).or_else(|| percent(s));
         let title = s.title.clone().unwrap_or_else(|| s.url.clone());
         let more = self.row_menu_button(id, selected && focus.within, cx);
         let tick = self.tick_slot(
@@ -500,7 +529,9 @@ impl Downloads {
         let paused = s.status == DownloadStatus::Paused;
         let glyph = match s.status {
             DownloadStatus::Paused => Some("icons/pause.svg"),
-            DownloadStatus::Completed if !s.file_missing => Some("icons/check.svg"),
+            DownloadStatus::Completed if !s.file_missing && fixing.is_none() => {
+                Some("icons/check.svg")
+            }
             DownloadStatus::Failed => Some("icons/circle-alert.svg"),
             _ => None,
         };
@@ -653,7 +684,7 @@ impl Downloads {
                     .h(px(1.))
                     .bg(theme.border),
             )
-            .children(rule(s).map(|rule| {
+            .children(fix_share.map(Rule::Fill).or_else(|| rule(s)).map(|rule| {
                 div()
                     .absolute()
                     .left(theme.metrics.gutter)

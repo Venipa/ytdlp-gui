@@ -16,7 +16,6 @@ bridge.workspace = true
 cli.workspace = true
 clap.workspace = true
 engine = { workspace = true, optional = true }
-env_logger.workspace = true
 futures.workspace = true
 gpui.workspace = true
 gpui_platform.workspace = true

@@ -550,7 +550,9 @@ fn demo_row(i: usize, status: DownloadStatus, created_at: i64) -> SeedRow {
         extra_args: vec![],
         aria2c: None,
         aria2c_args: vec![],
-        fix: None,
+        fix: Default::default(),
+        smaller_quality: None,
+        smaller_height: None,
     };
     let mut new = NewDownload::from_spec(&job).expect("spec serialises");
     let (a, b, c) = (

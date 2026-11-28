@@ -37,7 +37,9 @@ async fn main() -> anyhow::Result<()> {
             extra_args: vec![],
             aria2c: None,
             aria2c_args: vec![],
-            fix: None,
+            fix: Default::default(),
+            smaller_quality: None,
+            smaller_height: None,
         };
         let mut d = NewDownload::from_spec(&spec)?;
         d.title = Some(format!("Seeded video number {i}"));

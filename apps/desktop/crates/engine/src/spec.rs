@@ -27,7 +27,7 @@ pub struct Env {
 }
 
 /// The folder ytdlpd keeps partial files in, inside the download folder.
-pub const TEMP_NAME: &str = ".ytdlpd-tmp";
+pub const TEMP_NAME: &str = domain::fixes::TEMP_NAME;
 
 /// The temp folder for a job: `<output>/.ytdlpd-tmp` when it can be made and written, else
 /// `fallback` (made if missing). `None` when neither works; yt-dlp then keeps parts beside the file.
@@ -42,9 +42,16 @@ pub fn temp_dir(output_dir: &str, fallback: Option<&str>) -> Option<String> {
     if !output_dir.is_empty() && usable(&inside) {
         return Some(inside.to_string_lossy().into_owned());
     }
-    fallback
+    let picked = fallback
         .filter(|f| usable(std::path::Path::new(f)))
-        .map(str::to_owned)
+        .map(str::to_owned);
+    match &picked {
+        Some(_) => log::warn!(
+            "engine: cannot write {TEMP_NAME} in the download folder, partial files go to the fallback"
+        ),
+        None => log::warn!("engine: no writable temp folder, partial files go beside the file"),
+    }
+    picked
 }
 
 /// A spec with only the essentials set; for examples, tests and dev tools.
@@ -74,7 +81,9 @@ pub fn simple_job(
         extra_args: vec![],
         aria2c: None,
         aria2c_args: vec![],
-        fix: None,
+        fix: Default::default(),
+        smaller_quality: None,
+        smaller_height: None,
     }
 }
 
@@ -168,7 +177,7 @@ pub fn to_opts(s: &JobSpec, env: &Env) -> Value {
     }
     // "Compatible": prefer H.264 video and AAC audio over the codec-blind default, so most sites
     // need no conversion; ahead of the resolution cap, which can mean a lower resolution
-    if s.fix == Some(domain::Fix::Compatible) && s.preset.kind() == domain::MediaKind::Video {
+    if s.fix.video == Some(domain::Fix::Compatible) && s.preset.kind() == domain::MediaKind::Video {
         let mut sort = vec![json!("vcodec:h264"), json!("acodec:m4a")];
         if let Some(Value::Array(rest)) = o.get("format_sort") {
             sort.extend(rest.iter().cloned());
@@ -189,6 +198,11 @@ pub fn to_opts(s: &JobSpec, env: &Env) -> Value {
     let mut paths = json!({ "home": s.output_dir });
     if let Some(temp) = &env.temp_dir {
         paths["temp"] = json!(temp);
+        // a fix runs next: the finished file waits in the hidden temp folder, and the fix writes
+        // its result into the download folder (not with the fallback temp, which may be elsewhere)
+        if !s.fix.is_empty() && std::path::Path::new(temp).file_name() == Some(TEMP_NAME.as_ref()) {
+            paths["home"] = json!(temp);
+        }
     }
     o.insert("paths".into(), paths);
     o.insert("updatetime".into(), json!(false));
@@ -387,6 +401,17 @@ mod tests {
         assert_eq!(o["ffmpeg_location"], "C:/t/ffmpeg.exe");
         assert_eq!(o["cachedir"], "C:/cache/yt-dlp");
         assert_eq!(o["paths"]["temp"], "D:/out/.ytdlpd-tmp");
+        assert_eq!(
+            o["paths"]["home"], s.output_dir,
+            "no fix: the file goes home"
+        );
+        let mut fixed = s;
+        fixed.fix = domain::Fix::Smaller.into();
+        assert_eq!(
+            to_opts(&fixed, &env)["paths"]["home"],
+            "D:/out/.ytdlpd-tmp",
+            "a fix follows: the file waits in the temp folder"
+        );
         assert_eq!(o["outtmpl"], PLAYLIST_OUTTMPL);
         assert_eq!(o["noplaylist"], false);
         assert_eq!(o["playlist_items"], "3");
@@ -523,7 +548,7 @@ mod tests {
     #[test]
     fn compatible_prefers_h264_and_aac() {
         let mut s = base(Preset::Video(VideoQuality::P1080));
-        s.fix = Some(domain::Fix::Compatible);
+        s.fix = domain::Fix::Compatible.into();
         let o = to_opts(&s, &Env::default());
         assert_eq!(
             o["format_sort"],

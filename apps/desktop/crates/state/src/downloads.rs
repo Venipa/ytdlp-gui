@@ -152,12 +152,42 @@ impl Downloads {
         size: Option<i64>,
         cx: &mut Context<Self>,
     ) {
+        let mut before = None;
         if let Some(row) = self.rows.iter_mut().find(|r| r.id == id) {
+            // a second fix keeps the size the download had before the first one
+            before = row.size_before_fix.or(row.file_size);
+            row.size_before_fix = before;
             row.file_path = Some(path.clone());
             row.file_size = size.or(row.file_size);
         }
         self.store
+            .write(move |db| async move { db.set_fixed_file(id, &path, size, before).await });
+        cx.notify();
+    }
+
+    /// The finished file of `id` moved, unchanged (out of the temp folder after a failed fix).
+    pub fn move_file(&mut self, id: DownloadId, path: String, cx: &mut Context<Self>) {
+        let Some(row) = self.rows.iter_mut().find(|r| r.id == id) else {
+            return;
+        };
+        row.file_path = Some(path.clone());
+        let size = row.file_size;
+        self.store
             .write(move |db| async move { db.set_final_path(id, &path, size).await });
+        cx.notify();
+    }
+
+    /// What the finished file of `id` holds, read with ffprobe ("1080p · HEVC · AAC · MP4").
+    pub fn set_format(&mut self, id: DownloadId, label: String, cx: &mut Context<Self>) {
+        let Some(row) = self.rows.iter_mut().find(|r| r.id == id) else {
+            return;
+        };
+        if row.format_label.as_deref() == Some(label.as_str()) {
+            return;
+        }
+        row.format_label = Some(label.clone());
+        self.store
+            .write(move |db| async move { db.set_format_label(id, &label).await });
         cx.notify();
     }
 
@@ -234,7 +264,10 @@ impl Downloads {
     /// Recovers interrupted rows (active becomes paused, reason `interrupted`) and reads all rows.
     pub fn load(&mut self, cx: &mut Context<Self>) {
         let read = self.store.read(|db| async move {
-            db.recover_interrupted().await?;
+            let n = db.recover_interrupted().await?;
+            if n > 0 {
+                log::info!("downloads: {n} interrupted downloads paused");
+            }
             db.list_summaries().await
         });
         self.load_task = Some(cx.spawn(async move |this, cx| {
@@ -265,6 +298,9 @@ impl Downloads {
                     })
                     .map(|r| r.id)
                     .collect();
+                if !ids.is_empty() {
+                    log::info!("downloads: resuming {} paused downloads", ids.len());
+                }
                 for id in ids {
                     self.apply(id, StateEvent::Resume, cx);
                 }
@@ -308,7 +344,9 @@ impl Downloads {
             .store
             .read(move |db| async move { db.insert_download(&stored).await });
         cx.spawn(async move |this, cx| {
-            let id = read.await?;
+            let id = read.await.inspect_err(|e| {
+                log::warn!("downloads: cannot store {}: {e:#}", new.url);
+            })?;
             this.update(cx, |this, cx| this.inserted(id, &new, spec, cx))?;
             Ok(id)
         })
@@ -508,7 +546,11 @@ impl Downloads {
         if !files.is_empty() {
             // shortcut: sync delete of a few files on the gpui thread, move to Io if cleanup gets heavy.
             for f in files {
-                std::fs::remove_file(&f).ok();
+                if let Err(e) = std::fs::remove_file(&f)
+                    && e.kind() != std::io::ErrorKind::NotFound
+                {
+                    log::warn!("downloads: cannot remove a partial file: {e}");
+                }
             }
         }
     }
@@ -521,6 +563,13 @@ impl Downloads {
         let now = self.clock.now_ms();
         for id in self.scheduler.pick(&self.rows, now, &self.limits) {
             if self.apply(id, StateEvent::Start, cx).is_some() {
+                if let Some(row) = self.get(id) {
+                    log::info!(
+                        "downloads: {id} starting ({}, try {})",
+                        row.domain,
+                        row.attempts + 1
+                    );
+                }
                 self.spawn_runner(id, cx);
             }
         }
@@ -681,6 +730,10 @@ impl Downloads {
             }
             JobEvent::Files(files) => self.partials.entry(id).or_default().extend(files),
             JobEvent::Log { level, message } => {
+                if matches!(level.as_str(), "error" | "warning" | "stderr") {
+                    // own target: the Logs screen gets the per-job push below, not a second line
+                    log::warn!(target: crate::applog::JOB_TARGET, "downloads: {id}: {message}");
+                }
                 self.logs
                     .update(cx, |l, cx| l.push(Some(id), &level, &message, cx));
                 self.store
@@ -709,6 +762,14 @@ impl Downloads {
         row.progress = 1.0;
         row.file_path = path.clone();
         row.file_size = size.or(row.bytes_total);
+        log::info!(
+            "downloads: {id} finished: {} ({} bytes)",
+            row.file_path
+                .as_deref()
+                .and_then(|p| std::path::Path::new(p).file_name())
+                .map_or_else(String::new, |n| n.to_string_lossy().into_owned()),
+            row.file_size.unwrap_or(0)
+        );
         let (size, total) = (row.file_size, row.bytes_total);
         self.store.write(move |db| async move {
             db.set_progress(id, 1.0, total, total).await?;
@@ -756,7 +817,21 @@ impl Downloads {
             row.error_message = Some(error.message.clone());
             row.next_attempt_at = next;
         }
+        match next {
+            Some(at) => log::warn!(
+                "downloads: {id} failed ({}, try {attempts}/{}), retrying at {at}: {}",
+                error.code.as_str(),
+                self.max_attempts,
+                error.message
+            ),
+            None => log::error!(
+                "downloads: {id} failed for good ({}): {}",
+                error.code.as_str(),
+                error.message
+            ),
+        }
         if error.code == ErrorCode::RateLimited {
+            log::info!("downloads: {domain} is rate limited, fewer slots for a while");
             self.scheduler
                 .penalize(&domain, now, error.retry_after, &self.limits);
         }

@@ -29,7 +29,18 @@ impl Install {
     /// Works out how this copy was installed, once per run.
     pub(super) fn current() -> &'static Self {
         static CURRENT: OnceLock<Install> = OnceLock::new();
-        CURRENT.get_or_init(detect)
+        CURRENT.get_or_init(|| {
+            let install = detect();
+            log::info!(
+                "updates: this copy {}",
+                if install.updates_itself() {
+                    "updates itself"
+                } else {
+                    "only links to releases"
+                }
+            );
+            install
+        })
     }
 
     pub(super) fn updates_itself(&self) -> bool {

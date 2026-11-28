@@ -20,7 +20,7 @@ macro_rules! summary_cols {
     () => {
         "id, url, domain, extractor, video_id, title, uploader, duration_s, thumbnail_url, thumbnail_path, \
     kind, preset, format_label, status, status_reason, phase, progress, bytes_done, bytes_total, file_path, file_size, \
-    file_missing, error_code, error_message, attempts, next_attempt_at, playlist_id, playlist_index, position, \
+    size_before_fix, file_missing, error_code, error_message, attempts, next_attempt_at, playlist_id, playlist_index, position, \
     created_at, started_at, finished_at, updated_at"
     };
 }
@@ -50,6 +50,7 @@ struct SummaryRow {
     bytes_total: Option<i64>,
     file_path: Option<String>,
     file_size: Option<i64>,
+    size_before_fix: Option<i64>,
     file_missing: i64,
     error_code: Option<String>,
     error_message: Option<String>,
@@ -90,6 +91,7 @@ impl SummaryRow {
             bytes_total: self.bytes_total,
             file_path: self.file_path,
             file_size: self.file_size,
+            size_before_fix: self.size_before_fix,
             file_missing: self.file_missing != 0,
             error_code: self.error_code,
             error_message: self.error_message,
@@ -338,6 +340,38 @@ impl Db {
     }
 
     /// Records the final file.
+    /// Records the file a fix made: its path and size, and the size before the first fix.
+    pub async fn set_fixed_file(
+        &self,
+        id: DownloadId,
+        path: &str,
+        size: Option<i64>,
+        size_before_fix: Option<i64>,
+    ) -> Result<()> {
+        sqlx::query("UPDATE downloads SET file_path = ?2, file_size = ?3, size_before_fix = ?4, file_missing = 0, updated_at = ?5 WHERE id = ?1")
+            .bind(id.0)
+            .bind(path)
+            .bind(size)
+            .bind(size_before_fix)
+            .bind(now())
+            .execute(&self.pool)
+            .await
+            .context("cannot store the fixed file")?;
+        Ok(())
+    }
+
+    /// Replaces the format words of `id` with what the finished file holds ("1080p · HEVC · AAC · MP4").
+    pub async fn set_format_label(&self, id: DownloadId, label: &str) -> Result<()> {
+        sqlx::query("UPDATE downloads SET format_label = ?2, updated_at = ?3 WHERE id = ?1")
+            .bind(id.0)
+            .bind(label)
+            .bind(now())
+            .execute(&self.pool)
+            .await
+            .context("cannot store the format")?;
+        Ok(())
+    }
+
     pub async fn set_final_path(
         &self,
         id: DownloadId,
@@ -696,7 +730,9 @@ mod tests {
             extra_args: vec!["--a b".into()],
             aria2c: None,
             aria2c_args: vec![],
-            fix: None,
+            fix: Default::default(),
+            smaller_quality: None,
+            smaller_height: None,
         }
     }
 
@@ -805,6 +841,28 @@ mod tests {
         );
         assert_eq!(s.title.as_deref(), Some("New"));
         assert_eq!(s.uploader, None);
+
+        db.set_fixed_file(id, "C:/v/a.small.mp4", Some(21), Some(42))
+            .await
+            .unwrap();
+        db.set_format_label(id, "1080p · HEVC · AAC · MP4")
+            .await
+            .unwrap();
+        let s = get().await;
+        assert_eq!(
+            (
+                s.file_path.as_deref(),
+                s.file_size,
+                s.size_before_fix,
+                s.format_label.as_deref()
+            ),
+            (
+                Some("C:/v/a.small.mp4"),
+                Some(21),
+                Some(42),
+                Some("1080p · HEVC · AAC · MP4")
+            )
+        );
     }
 
     #[tokio::test]

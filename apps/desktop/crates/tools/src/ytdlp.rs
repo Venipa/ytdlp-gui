@@ -169,6 +169,14 @@ pub async fn install_ytdlp_pair(
     install_with(&Ctx::new()?, dirs, update, current_active, verify).await
 }
 
+/// A folder's own name, for log lines (no home path).
+fn dir_name(dir: &Path) -> String {
+    dir.file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned()
+}
+
 pub(crate) async fn install_with(
     ctx: &Ctx,
     dirs: &Dirs,
@@ -205,15 +213,20 @@ pub(crate) async fn install_with(
     .context("install task failed")
     .and_then(|r| r);
     if let Err(e) = moved {
-        let _ = remove_dir_retry(&tmp);
+        if let Err(e) = remove_dir_retry(&tmp) {
+            log::warn!("tools: cannot remove {}: {e}", dir_name(&tmp));
+        }
         return Err(e);
     }
     let previous = current_active.filter(|p| *p != fin).map(Path::to_path_buf);
     // keep only active + previous
     if let Ok(rd) = std::fs::read_dir(&root) {
         for e in rd.flatten().map(|e| e.path()) {
-            if e != fin && Some(&e) != previous.as_ref() {
-                let _ = remove_dir_retry(&e);
+            if e != fin
+                && Some(&e) != previous.as_ref()
+                && let Err(err) = remove_dir_retry(&e)
+            {
+                log::warn!("tools: cannot remove {}: {err}", dir_name(&e));
             }
         }
     }

@@ -32,6 +32,10 @@ impl AppSettings {
     /// Loads `path` (defaults when missing) and starts watching its directory.
     pub fn new(path: PathBuf, cx: &mut Context<Self>) -> Self {
         let loaded = Settings::load(&path, &Settings::default());
+        if let Some(error) = &loaded.error {
+            let error = error.replace(&path.display().to_string(), "settings.json");
+            log::warn!("settings: {error}, using defaults");
+        }
         let mut this = Self {
             settings: loaded.settings,
             error: loaded.error,
@@ -169,7 +173,9 @@ impl AppSettings {
             aria2c: s.tool_paths.aria2c.clone().filter(|_| s.aria2c),
             // custom arguments go in once checked (AppState::job_spec)
             aria2c_args: vec![],
-            fix: None,
+            fix: Default::default(),
+            smaller_quality: None,
+            smaller_height: None,
         }
     }
 }

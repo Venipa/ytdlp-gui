@@ -142,7 +142,12 @@ impl SettingsView {
             .map(|field| {
                 let numeric = matches!(
                     field,
-                    Field::Global | Field::PerDomain | Field::Retries | Field::Rate
+                    Field::Global
+                        | Field::PerDomain
+                        | Field::Retries
+                        | Field::Rate
+                        | Field::SmallerQuality
+                        | Field::FixConcurrency
                 );
                 let hint = match field {
                     Field::Proxy => "set-proxy-hint",
@@ -155,6 +160,9 @@ impl SettingsView {
                     let mut input = Input::new(hint, cx);
                     if numeric {
                         input = input.joined().align_center();
+                    }
+                    if field == Field::SmallerQuality {
+                        input = input.suffix("set-unit-percent");
                     }
                     input
                 });
@@ -444,7 +452,12 @@ impl SettingsView {
                 Stepper::new(
                     SharedString::from(format!("{field:?}-step")),
                     &state.input,
-                    px(48.),
+                    // room for "100%"
+                    px(if field == Field::SmallerQuality {
+                        64.
+                    } else {
+                        48.
+                    }),
                 )
                 .invalid(state.error.is_some())
                 .on_step(move |delta, _, cx| {

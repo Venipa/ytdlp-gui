@@ -70,6 +70,12 @@ pub fn fix_name(fix: domain::Fix) -> String {
     .to_string()
 }
 
+/// The names of a chain's fixes joined with " + " ("Smaller file + Normalize audio").
+pub fn chain_name(chain: domain::FixChain) -> String {
+    let names: Vec<_> = chain.fixes().into_iter().map(fix_name).collect();
+    names.join(" + ")
+}
+
 /// `at_ms` in local time as `HH:MM`, plus its date when it is not today.
 pub fn when(at_ms: i64) -> (String, Option<String>) {
     let zone = jiff::tz::TimeZone::system();

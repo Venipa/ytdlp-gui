@@ -92,18 +92,30 @@ impl Downloads {
         let theme = *cx.theme();
         let state = self.app.fixes.read(cx).state(id)?.clone();
         let fixes = self.app.fixes.clone();
-        let (tone, text, action): (_, SharedString, Option<(SharedString, domain::Fix)>) =
+        let (tone, text, action): (_, SharedString, Option<(SharedString, domain::FixChain)>) =
             match state {
+                state::FixState::Queued(fix) => (
+                    theme.muted_foreground,
+                    t!("dl-fix-queued", fix = crate::format::chain_name(fix)),
+                    None,
+                ),
                 state::FixState::Running(fix) => (
                     theme.muted_foreground,
-                    t!("dl-fix-running", fix = crate::format::fix_name(fix)),
+                    match self.app.fixes.read(cx).progress(id) {
+                        Some(share) => t!(
+                            "dl-fix-running-at",
+                            fix = crate::format::chain_name(fix),
+                            percent = format!("{:.0}", share * 100.)
+                        ),
+                        None => t!("dl-fix-running", fix = crate::format::chain_name(fix)),
+                    },
                     None,
                 ),
                 state::FixState::Failed(fix, error) => (
                     theme.danger,
                     t!(
                         "dl-fix-failed",
-                        fix = crate::format::fix_name(fix),
+                        fix = crate::format::chain_name(fix),
                         error = error
                     ),
                     Some((t!("dl-fix-retry"), fix)),
@@ -111,7 +123,7 @@ impl Downloads {
                 state::FixState::Unplayable(why) => (
                     theme.progress_bar,
                     t!("dl-fix-unplayable", parts = why.parts.join(", ")),
-                    Some((t!("dl-fix-make-compatible"), domain::Fix::Compatible)),
+                    Some((t!("dl-fix-make-compatible"), domain::Fix::Compatible.into())),
                 ),
             };
         let dismiss = fixes.clone();
@@ -244,7 +256,14 @@ impl Downloads {
                     })),
             );
 
-        let (status_label, tone) = crate::rows::status_text(s, &theme);
+        let fixing = {
+            let fixes = self.app.fixes.read(cx);
+            fixes
+                .running(s.id)
+                .map(|fix| (fix, false))
+                .or_else(|| fixes.queued(s.id).map(|fix| (fix, true)))
+        };
+        let (status_label, tone) = crate::rows::status_text(s, fixing, &theme);
         // the error box under the actions carries the reason, the header only the state
         let status_label = match status {
             DownloadStatus::Failed => t!("dl-status-failed"),
@@ -329,6 +348,9 @@ impl Downloads {
                         false,
                         cx,
                     ))
+                    .children(size_fact(s).map(|size| {
+                        self.fact("d-size", t!("dl-detail-size"), size, false, false, cx)
+                    }))
                     .child(self.fact(
                         "d-options",
                         t!("dl-detail-options"),
@@ -492,4 +514,26 @@ impl Downloads {
             )
             .into_any_element()
     }
+}
+
+/// The file's size, and after a fix what it was before and how much it changed.
+fn size_fact(s: &domain::DownloadSummary) -> Option<String> {
+    let size = s.file_size?;
+    Some(match s.size_before_fix.filter(|b| *b > 0 && *b != size) {
+        Some(before) => {
+            let change = (size as f64 / before as f64 - 1.) * 100.;
+            t!(
+                "dl-detail-size-fixed",
+                size = crate::format::bytes(size),
+                before = crate::format::bytes(before),
+                change = format!(
+                    "{}{:.0}%",
+                    if change < 0. { "−" } else { "+" },
+                    change.abs()
+                )
+            )
+            .to_string()
+        }
+        None => crate::format::bytes(size),
+    })
 }

@@ -133,8 +133,10 @@ impl Backend for EngineBackend {
                 });
                 let _ = tx.send(r);
             });
-            rx.await
-                .unwrap_or_else(|_| Err(EngineError::new(ErrorCode::Unknown, "probe thread died")))
+            rx.await.unwrap_or_else(|_| {
+                log::warn!("engine: the probe thread died");
+                Err(EngineError::new(ErrorCode::Unknown, "probe thread died"))
+            })
         }
         .boxed()
     }
@@ -160,7 +162,10 @@ impl Backend for EngineBackend {
                     }
                 });
             });
-            rx.await.unwrap_or_else(|_| vec![domain::ArgCheck::Ok; n])
+            rx.await.unwrap_or_else(|_| {
+                log::warn!("engine: the argument check thread died");
+                vec![domain::ArgCheck::Ok; n]
+            })
         }
         .boxed()
     }
@@ -205,6 +210,15 @@ impl Backend for EngineBackend {
                 let w = jobs.lock().unwrap().remove(&handle);
                 if let Some(mut w) = w {
                     let status = w.wait();
+                    match (&status, terminal) {
+                        (Ok(s), true) => log::info!("engine: job {} worker exited ({s})", id.0),
+                        (Ok(s), false) => {
+                            log::warn!("engine: job {} worker exited without a result ({s})", id.0)
+                        }
+                        (Err(e), _) => {
+                            log::warn!("engine: cannot wait for job {} worker: {e}", id.0)
+                        }
+                    }
                     if !terminal {
                         let code = status.ok().and_then(|s| s.code());
                         let _ = tx.unbounded_send(JobEvent::Failed(EngineError::new(
@@ -220,6 +234,14 @@ impl Backend for EngineBackend {
     }
 
     fn set_site(&self, site: Option<PathBuf>) {
+        log::info!(
+            "engine: yt-dlp site set to {}",
+            if site.is_some() {
+                "an update"
+            } else {
+                "the bundled one"
+            }
+        );
         runtime::set_site(site.clone());
         if let Ok(mut current) = self.site.write() {
             *current = site;
@@ -231,6 +253,7 @@ impl Backend for EngineBackend {
         async move {
             let w = jobs.lock().unwrap().remove(&handle.0);
             if let Some(mut w) = w {
+                log::info!("engine: killing job worker (handle {})", handle.0);
                 w.kill();
             }
         }

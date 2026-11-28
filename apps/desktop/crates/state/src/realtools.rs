@@ -113,13 +113,30 @@ impl ToolsApi for RealTools {
             ] {
                 let tool = tool_of(kind).expect("managed kind");
                 out.push(match ::tools::detect(tool, &dirs, None).await {
-                    Some(s) => status_of(s),
-                    None => missing(kind),
+                    Some(s) => {
+                        let s = status_of(s);
+                        log::info!(
+                            "tools: {kind} {} ({})",
+                            s.version.as_deref().unwrap_or("?"),
+                            s.source.map_or("?", |x| x.as_str())
+                        );
+                        s
+                    }
+                    None => {
+                        log::info!("tools: {kind} missing");
+                        missing(kind)
+                    }
                 });
             }
             out
         });
-        async move { job.await.unwrap_or_default() }.boxed()
+        async move {
+            job.await.unwrap_or_else(|e| {
+                log::error!("tools: detection task failed: {e}");
+                vec![]
+            })
+        }
+        .boxed()
     }
 
     fn ensure(&self, kind: ToolKind) -> BoxStream<'static, ToolEvent> {
@@ -140,14 +157,21 @@ impl ToolsApi for RealTools {
             match kind {
                 ToolKind::YtDlp => ::tools::check_ytdlp_update(&dirs, current.as_deref())
                     .await
+                    .inspect(|update| match update {
+                        Some(u) => log::info!("tools: yt-dlp {} is available", u.ytdlp.version),
+                        None => log::info!("tools: yt-dlp is up to date"),
+                    })
+                    .inspect_err(|e| log::warn!("tools: cannot check for a yt-dlp update: {e:#}"))
                     .map(|update| update.map(|u| u.ytdlp.version))
                     .map_err(|e| classify(&e)),
                 _ => Ok(None),
             }
         });
         async move {
-            job.await
-                .unwrap_or_else(|e| Err(EngineError::new(ErrorCode::Unknown, e.to_string())))
+            job.await.unwrap_or_else(|e| {
+                log::error!("tools: task failed: {e}");
+                Err(EngineError::new(ErrorCode::Unknown, e.to_string()))
+            })
         }
         .boxed()
     }
@@ -174,7 +198,9 @@ impl ToolsApi for RealTools {
             let installed =
                 ::tools::install_ytdlp_pair(&dirs, &update, active.as_deref(), verify_site)
                     .await
+                    .inspect_err(|e| log::warn!("tools: yt-dlp {version} install failed: {e:#}"))
                     .map_err(|e| classify(&e))?;
+            log::info!("tools: installed yt-dlp {version}");
             Ok(SiteUpdate {
                 version,
                 site: installed.active.to_string_lossy().into_owned(),
@@ -182,8 +208,10 @@ impl ToolsApi for RealTools {
             })
         });
         async move {
-            job.await
-                .unwrap_or_else(|e| Err(EngineError::new(ErrorCode::Unknown, e.to_string())))
+            job.await.unwrap_or_else(|e| {
+                log::error!("tools: task failed: {e}");
+                Err(EngineError::new(ErrorCode::Unknown, e.to_string()))
+            })
         }
         .boxed()
     }
@@ -201,15 +229,24 @@ impl ToolsApi for RealTools {
             let path = PathBuf::from(path);
             match ::tools::detect(tool, &dirs, Some(&path)).await {
                 Some(s) if s.source == ::tools::Source::Custom => Ok(status_of(s)),
-                _ => Err(EngineError::new(
-                    ErrorCode::Unknown,
-                    format!("{} is not {kind}", path.display()),
-                )),
+                _ => {
+                    log::warn!(
+                        "tools: custom {kind} rejected: {} is not {kind}",
+                        path.file_name()
+                            .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+                    );
+                    Err(EngineError::new(
+                        ErrorCode::Unknown,
+                        format!("{} is not {kind}", path.display()),
+                    ))
+                }
             }
         });
         async move {
-            job.await
-                .unwrap_or_else(|e| Err(EngineError::new(ErrorCode::Unknown, e.to_string())))
+            job.await.unwrap_or_else(|e| {
+                log::error!("tools: task failed: {e}");
+                Err(EngineError::new(ErrorCode::Unknown, e.to_string()))
+            })
         }
         .boxed()
     }
@@ -239,8 +276,14 @@ impl RealTools {
                 false => ::tools::ensure(tool, &dirs, None, &progress).await,
             };
             let event = match done {
-                Ok(s) => ToolEvent::Done(status_of(s)),
-                Err(error) => ToolEvent::Failed(classify(&error)),
+                Ok(s) => {
+                    log::info!("tools: installed {kind} {}", s.version);
+                    ToolEvent::Done(status_of(s))
+                }
+                Err(error) => {
+                    log::warn!("tools: cannot install {kind}: {error:#}");
+                    ToolEvent::Failed(classify(&error))
+                }
             };
             tx.unbounded_send(event).ok();
         });

@@ -304,9 +304,18 @@ pub fn install(app: &AppState, cx: &mut App) {
     let site = cx.spawn(async move |_| {
         let site = read
             .await
+            .inspect_err(|e| log::warn!("bridge: cannot read the saved yt-dlp site: {e:#}"))
             .ok()
             .flatten()
-            .filter(|s| std::path::Path::new(s).is_dir());
+            .filter(|s| {
+                let ok = std::path::Path::new(s).is_dir();
+                if !ok {
+                    log::warn!(
+                        "bridge: the saved yt-dlp site folder is gone, using the bundled one"
+                    );
+                }
+                ok
+            });
         SITE.set(site.map(Into::into)).ok();
         warm(&io);
     });

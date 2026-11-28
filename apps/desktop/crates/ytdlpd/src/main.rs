@@ -89,13 +89,13 @@ fn build_app(data_dir: Option<PathBuf>, demo: Option<&str>, cx: &mut App) -> sta
         if let Err(error) =
             std::fs::create_dir_all(&tmp).and_then(|()| std::env::set_current_dir(&tmp))
         {
-            log::warn!(
-                "ytdlpd: cannot move the working folder to {}: {error}",
-                tmp.display()
-            );
+            log::warn!("ytdlpd: cannot move the working folder to the temp folder: {error}");
         }
         let config = engine::EngineConfig {
-            worker_exe: std::env::current_exe().unwrap_or_default(),
+            worker_exe: std::env::current_exe().unwrap_or_else(|e| {
+                log::error!("ytdlpd: cannot find its own exe, downloads cannot start: {e}");
+                Default::default()
+            }),
             python_home: None,
             site_updates: None,
             env: engine::spec::Env {
@@ -124,8 +124,16 @@ fn main() -> ExitCode {
     if let Some(code) = selftest::dispatch() {
         return code;
     }
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("ytdlpd=info"))
-        .init();
+    state::applog::install();
+    log::info!(
+        "ytdlpd: {} starting (engine {})",
+        env!("CARGO_PKG_VERSION"),
+        if cfg!(feature = "real-engine") {
+            "real"
+        } else {
+            "fake"
+        }
+    );
     #[cfg(windows)]
     if let Some(code) = apply::dispatch() {
         return code;
@@ -199,6 +207,7 @@ fn main() -> ExitCode {
             cx.activate(true);
             log::info!("ytdlpd: ready");
         });
+    log::info!("ytdlpd: stopped");
     ExitCode::SUCCESS
 }
 
@@ -253,6 +262,7 @@ fn route_event(state: &state::AppState, event: platform::Event, cx: &mut App) {
         }
         platform::Event::Show => {}
         platform::Event::Quit => {
+            log::info!("ytdlpd: quitting");
             let done = state.shutdown(cx);
             cx.spawn(async move |cx| {
                 done.await;

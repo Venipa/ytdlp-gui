@@ -16,10 +16,14 @@ pub enum Field {
     PerDomain,
     Retries,
     Langs,
+    /// Smaller file quality, a percent.
+    SmallerQuality,
+    /// How many fixes run at once.
+    FixConcurrency,
 }
 
 impl Field {
-    pub const ALL: [Field; 7] = [
+    pub const ALL: [Field; 9] = [
         Field::Template,
         Field::Proxy,
         Field::Rate,
@@ -27,6 +31,8 @@ impl Field {
         Field::PerDomain,
         Field::Retries,
         Field::Langs,
+        Field::SmallerQuality,
+        Field::FixConcurrency,
     ];
 
     /// The text the field shows for `s`.
@@ -39,6 +45,8 @@ impl Field {
             Field::PerDomain => s.concurrent_per_domain.to_string(),
             Field::Retries => s.max_attempts.to_string(),
             Field::Langs => s.subtitles.langs.join(", "),
+            Field::SmallerQuality => s.smaller_quality.to_string(),
+            Field::FixConcurrency => s.fix_concurrency.to_string(),
         }
     }
 
@@ -55,21 +63,32 @@ impl Field {
             Field::PerDomain => s.concurrent_per_domain = number(text, 1, 10)?,
             Field::Retries => s.max_attempts = number(text, 1, 10)?,
             Field::Langs => s.subtitles.langs = langs(text)?,
+            Field::SmallerQuality => s.smaller_quality = percent(text)?,
+            Field::FixConcurrency => {
+                s.fix_concurrency = number(text, 1, 4)?
+                    .try_into()
+                    .map_err(|_| "set-err-number")?
+            }
         }
         Ok(())
     }
 
     /// Moves a numeric field by `delta`, kept inside its range. Other fields ignore it.
     pub fn bump(self, delta: i32, s: &mut Settings) {
+        let (min, max, step) = self.range();
         let current = self.show(s).parse::<i32>().unwrap_or(0);
-        let next = (current + delta).max(0).unsigned_abs();
+        let next = (current + delta * step as i32).max(0).unsigned_abs();
         // out of range clamps to the nearest bound through `apply`
-        let (min, max) = self.range();
         let _ = self.apply(&next.clamp(min, max).to_string(), s);
     }
 
-    fn range(self) -> (u32, u32) {
-        (1, 10)
+    /// The lowest and highest value, and how far one click moves it.
+    fn range(self) -> (u32, u32, u32) {
+        match self {
+            Field::SmallerQuality => (u32::from(domain::fixes::MIN_QUALITY), 100, 5),
+            Field::FixConcurrency => (1, 4, 1),
+            _ => (1, 10, 1),
+        }
     }
 }
 
@@ -78,6 +97,14 @@ fn number(text: &str, min: u32, max: u32) -> Result<u32, Invalid> {
         .ok()
         .filter(|n| (min..=max).contains(n))
         .ok_or("set-err-number")
+}
+
+/// A quality percent, 50 to 100, with or without the trailing `%`.
+pub(super) fn percent(text: &str) -> Result<u8, Invalid> {
+    let digits = text.strip_suffix('%').unwrap_or(text).trim();
+    number(digits, u32::from(domain::fixes::MIN_QUALITY), 100)
+        .map(|n| n as u8)
+        .map_err(|_| "set-err-percent")
 }
 
 /// `http`, `https`, `socks4`, `socks5` or `socks5h` URL with a host; empty clears the proxy.
@@ -211,6 +238,35 @@ mod tests {
             ["en", "pt-BR"]
         );
         assert_eq!(apply(Field::Langs, "en;fr").0, Err("set-err-langs"));
+    }
+
+    #[test]
+    fn quality_takes_50_to_100_with_or_without_a_percent_sign() {
+        assert_eq!(apply(Field::SmallerQuality, "65%").1.smaller_quality, 65);
+        assert_eq!(apply(Field::SmallerQuality, " 100 ").1.smaller_quality, 100);
+        for bad in ["49", "101", "abc", "", "%"] {
+            let (result, s) = apply(Field::SmallerQuality, bad);
+            assert_eq!(result, Err("set-err-percent"), "{bad}");
+            assert_eq!(s.smaller_quality, 80, "{bad}");
+        }
+        let mut s = Settings::default();
+        Field::SmallerQuality.bump(-1, &mut s);
+        assert_eq!(s.smaller_quality, 75);
+        Field::SmallerQuality.bump(-99, &mut s);
+        assert_eq!(s.smaller_quality, 50);
+        Field::SmallerQuality.bump(99, &mut s);
+        assert_eq!(s.smaller_quality, 100);
+    }
+
+    #[test]
+    fn fixes_at_once_stays_between_1_and_4() {
+        assert_eq!(apply(Field::FixConcurrency, "3").1.fix_concurrency, 3);
+        assert_eq!(apply(Field::FixConcurrency, "5").0, Err("set-err-number"));
+        let mut s = Settings::default();
+        Field::FixConcurrency.bump(9, &mut s);
+        assert_eq!(s.fix_concurrency, 4);
+        Field::FixConcurrency.bump(-9, &mut s);
+        assert_eq!(s.fix_concurrency, 1);
     }
 
     #[test]

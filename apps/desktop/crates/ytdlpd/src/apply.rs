@@ -116,8 +116,12 @@ impl Card {
             }
             let result = work.await;
             this.update_in(cx, |this, window, cx| match result {
-                Ok(()) => this.leave(this.plan.relaunch, cx),
+                Ok(()) => {
+                    log::info!("updates: installed {}", this.plan.to);
+                    this.leave(this.plan.relaunch, cx)
+                }
                 Err(failure) => {
+                    log::warn!("updates: install of {} failed: {failure:?}", this.plan.to);
                     this.failure = Some(failure);
                     this.fit(FAILED, window, cx);
                     cx.notify();

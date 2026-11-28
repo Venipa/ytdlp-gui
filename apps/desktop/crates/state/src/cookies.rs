@@ -93,6 +93,7 @@ impl CookieFiles {
         let Ok(rd) = std::fs::read_dir(self.dir.join("sets")) else {
             return;
         };
+        let mut removed = 0;
         for entry in rd.flatten() {
             let path = entry.path();
             let known = path
@@ -100,8 +101,14 @@ impl CookieFiles {
                 .and_then(|s| s.to_str())
                 .is_some_and(|id| sets.iter().any(|set| set.id == id));
             if !known {
-                std::fs::remove_file(&path).ok();
+                match std::fs::remove_file(&path) {
+                    Ok(()) => removed += 1,
+                    Err(e) => log::warn!("cookies: cannot remove an unused cookie set: {e}"),
+                }
             }
+        }
+        if removed > 0 {
+            log::info!("cookies: removed {removed} unused cookie sets");
         }
     }
 
@@ -118,12 +125,20 @@ impl CookieFiles {
         let id = self.new_id(now_ms);
         let source = match (c.mode, &c.file, &c.browser) {
             (CookiesMode::File, Some(file), _) => {
-                let Ok(text) = std::fs::read_to_string(file) else {
-                    return false;
+                let text = match std::fs::read_to_string(file) {
+                    Ok(text) => text,
+                    Err(e) => {
+                        log::warn!("cookies: cannot migrate the cookies file: {e}");
+                        return false;
+                    }
                 };
-                if self.write(&id, &text).is_err() {
+                if let Err(e) = self.write(&id, &text) {
+                    log::warn!(
+                        "cookies: cannot migrate the cookies file, the set was not written: {e}"
+                    );
                     return false;
                 }
+                log::info!("cookies: migrated the cookies file into a set");
                 CookieSource::File
             }
             // read on the Cookies page with Refresh

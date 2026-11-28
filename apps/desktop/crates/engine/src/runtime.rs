@@ -65,13 +65,13 @@ pub fn set_site(site: Option<PathBuf>) {
     }
 }
 
-/// Default sink: the `log` crate, target `py`.
+/// Default sink: the `log` crate, target `engine::py`.
 pub fn log_sink(level: &str, msg: &str) {
     match level {
-        "error" => log::error!(target: "py", "{msg}"),
-        "warning" => log::warn!(target: "py", "{msg}"),
-        "debug" => log::debug!(target: "py", "{msg}"),
-        _ => log::info!(target: "py", "{msg}"),
+        "error" => log::error!(target: "engine::py", "{msg}"),
+        "warning" => log::warn!(target: "engine::py", "{msg}"),
+        "debug" => log::debug!(target: "engine::py", "{msg}"),
+        _ => log::info!(target: "engine::py", "{msg}"),
     }
 }
 
@@ -117,15 +117,27 @@ pub fn init(opts: InitOptions) -> Result<&'static Runtime, InitError> {
         .get_or_init(|| {
             let t = Instant::now();
             let _ = SINK.set(opts.sink);
-            let home = resolve_home(opts.home.as_deref())?;
+            let home = resolve_home(opts.home.as_deref()).inspect_err(|_| {
+                log::error!("engine: python runtime not found");
+            })?;
             let site = opts
                 .site_updates
                 .or_else(|| SITE.lock().ok().and_then(|s| s.clone()));
-            start(&home, site.as_deref()).map_err(InitError::Python)?;
-            Ok(Runtime {
-                home,
-                init_time: t.elapsed(),
-            })
+            start(&home, site.as_deref()).map_err(|e| {
+                log::error!("engine: python failed to start: {e}");
+                InitError::Python(e)
+            })?;
+            let init_time = t.elapsed();
+            log::info!(
+                "engine: python ready in {} ms (yt-dlp {})",
+                init_time.as_millis(),
+                if site.is_some() {
+                    "custom site"
+                } else {
+                    "bundled"
+                }
+            );
+            Ok(Runtime { home, init_time })
         })
         .as_ref()
         .map_err(Clone::clone)

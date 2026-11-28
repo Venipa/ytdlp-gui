@@ -57,7 +57,7 @@ impl LogsView {
         lines.set_follow_mode(FollowMode::Tail);
         let bar = cx.new(|cx| Scrollbar::list(lines.clone()).watching(cx.entity_id()));
         let search = cx.new(|cx| {
-            Input::new(t!("dl-logs-search-hint"), cx)
+            Input::new("dl-logs-search-hint", cx)
                 .name("dl-logs-search-name")
                 .icon("icons/search.svg")
                 .clearable()

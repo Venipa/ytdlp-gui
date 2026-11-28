@@ -58,9 +58,11 @@ fn add_direct_rules(cx: &mut TestAppContext) {
                     pattern: "a.example".into(),
                     clipboard: None,
                     preset: Some(Preset::Video(VideoQuality::P720)),
-                    fix: None,
+                    fix: Default::default(),
                     output_dir: None,
                     outtmpl: None,
+                    smaller_quality: None,
+                    smaller_height: None,
                 }]
             },
             cx,

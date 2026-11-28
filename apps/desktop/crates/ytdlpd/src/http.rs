@@ -68,7 +68,10 @@ impl Client {
             inner: reqwest::Client::builder()
                 .user_agent(USER_AGENT)
                 .build()
-                .unwrap_or_default(),
+                .unwrap_or_else(|e| {
+                    log::warn!("ytdlpd: cannot build the http client, using the default: {e}");
+                    Default::default()
+                }),
             handle: handle.clone(),
             user_agent: HeaderValue::from_static(USER_AGENT),
             cache,

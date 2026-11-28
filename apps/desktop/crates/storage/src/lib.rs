@@ -113,10 +113,13 @@ impl Db {
 
     /// Checkpoints the WAL and closes the pool (shutdown).
     pub async fn close(&self) {
-        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+        if let Err(error) = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
             .execute(&self.pool)
             .await
-            .ok();
+        {
+            log::warn!("storage: cannot checkpoint the database at close: {error}");
+        }
         self.pool.close().await;
+        log::info!("storage: database closed");
     }
 }

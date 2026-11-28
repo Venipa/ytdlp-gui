@@ -29,10 +29,21 @@ const MAX_FAILS: u8 = 3;
 
 pub(crate) async fn accept_loop(inner: Arc<Inner>, listener: TcpListener) {
     let mut ctl = inner.ctl.subscribe();
+    let mut last_warn: Option<Instant> = None;
     loop {
         tokio::select! {
             accepted = listener.accept() => {
-                let Ok((stream, _)) = accepted else { continue };
+                let (stream, _) = match accepted {
+                    Ok(accepted) => accepted,
+                    Err(error) => {
+                        // a broken listener fails every call at once: at most one line per 10 s
+                        if last_warn.is_none_or(|t| t.elapsed() >= Duration::from_secs(10)) {
+                            last_warn = Some(Instant::now());
+                            log::warn!("bridge: cannot accept a connection: {error}");
+                        }
+                        continue;
+                    }
+                };
                 match inner.slots.clone().try_acquire_owned() {
                     Ok(permit) => {
                         let inner = inner.clone();
@@ -218,8 +229,14 @@ impl Conn {
                 };
                 match tokio::time::timeout(HOST_TIMEOUT, self.inner.host.check(url)).await {
                     Ok(Ok(c)) => reply(Resp::Checked(c), id),
-                    Ok(Err(e)) => wire_err(id, e),
-                    Err(_) => err(id, "busy", "the app did not answer in time"),
+                    Ok(Err(e)) => {
+                        log::info!("bridge: check refused: {} {}", e.code, e.message);
+                        wire_err(id, e)
+                    }
+                    Err(_) => {
+                        log::warn!("bridge: the app did not answer a check in time");
+                        err(id, "busy", "the app did not answer in time")
+                    }
                 }
             }
             "add" => {
@@ -242,8 +259,14 @@ impl Conn {
                 };
                 match tokio::time::timeout(HOST_TIMEOUT, self.inner.host.add(req)).await {
                     Ok(Ok(a)) => reply(Resp::Added(a), id),
-                    Ok(Err(e)) => wire_err(id, e),
-                    Err(_) => err(id, "busy", "the app did not answer in time"),
+                    Ok(Err(e)) => {
+                        log::info!("bridge: add refused: {} {}", e.code, e.message);
+                        wire_err(id, e)
+                    }
+                    Err(_) => {
+                        log::warn!("bridge: the app did not answer an add in time");
+                        err(id, "busy", "the app did not answer in time")
+                    }
                 }
             }
             _ => err(id, "unknown_type", "unknown message type"),

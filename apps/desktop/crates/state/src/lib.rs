@@ -1,6 +1,7 @@
 //! gpui entities for ytdlpd: settings, downloads (queue, scheduler, lifecycle), probes, tools, logs, toasts.
 //! The engine and tools are reached only through `domain::Backend` / `domain::ToolsApi`.
 
+pub mod applog;
 mod args;
 pub mod cookies;
 mod direct;
@@ -213,13 +214,15 @@ impl AppState {
 fn apply_rule(
     spec: &mut domain::JobSpec,
     rule: Option<(usize, &domain::SiteRule)>,
-    default_fix: Option<domain::Fix>,
+    default_fix: domain::FixChain,
 ) {
     let Some((_, rule)) = rule else {
         spec.fix = default_fix;
         return;
     };
     spec.fix = rule.fix;
+    spec.smaller_quality = rule.smaller_quality;
+    spec.smaller_height = rule.smaller_height;
     if let Some(dir) = &rule.output_dir {
         spec.output_dir = dir.clone();
     }
@@ -250,30 +253,46 @@ mod rule_tests {
         };
 
         let mut spec = base.clone();
-        apply_rule(&mut spec, Some((0, &rule)), Some(Fix::Repair));
+        apply_rule(&mut spec, Some((0, &rule)), Fix::Repair.into());
         assert_eq!(
             (spec.output_dir.as_str(), spec.outtmpl.as_str(), spec.fix),
-            ("/x", "%(id)s.%(ext)s", None)
+            ("/x", "%(id)s.%(ext)s", Default::default())
+        );
+
+        let tuned = SiteRule {
+            smaller_quality: Some(60),
+            smaller_height: Some(0),
+            ..Default::default()
+        };
+        let mut spec = base.clone();
+        apply_rule(&mut spec, Some((0, &tuned)), Default::default());
+        assert_eq!(
+            (spec.smaller_quality, spec.smaller_height),
+            (Some(60), Some(0))
         );
 
         let mut entry = base.clone();
         entry.playlist_index = Some(1);
-        apply_rule(&mut entry, Some((0, &rule)), None);
+        apply_rule(&mut entry, Some((0, &rule)), Default::default());
         assert_eq!(
             (entry.output_dir.as_str(), &entry.outtmpl),
             ("/x", &base.outtmpl)
         );
 
         let mut plain = base.clone();
-        apply_rule(&mut plain, Some((0, &SiteRule::default())), None);
+        apply_rule(
+            &mut plain,
+            Some((0, &SiteRule::default())),
+            Default::default(),
+        );
         assert_eq!(
             (&plain.output_dir, &plain.outtmpl),
             (&base.output_dir, &base.outtmpl)
         );
 
         let mut none = base;
-        apply_rule(&mut none, None, Some(Fix::Repair));
-        assert_eq!(none.fix, Some(Fix::Repair));
+        apply_rule(&mut none, None, Fix::Repair.into());
+        assert_eq!(none.fix, Fix::Repair.into());
     }
 }
 
@@ -301,9 +320,18 @@ fn wire_site(backend: &Arc<dyn Backend>, store: &Store, tools: &Entity<Tools>, c
     cx.spawn(async move |cx| {
         let site = read
             .await
+            .inspect_err(|e| log::warn!("updates: cannot read the saved yt-dlp site: {e:#}"))
             .ok()
             .flatten()
-            .filter(|s| std::path::Path::new(s).is_dir());
+            .filter(|s| {
+                let ok = std::path::Path::new(s).is_dir();
+                if !ok {
+                    log::warn!(
+                        "updates: the saved yt-dlp site folder is gone, using the bundled one"
+                    );
+                }
+                ok
+            });
         if let Some(site) = site {
             b.set_site(Some(site.clone().into()));
             t.update(cx, |t, _| t.set_site(Some(site)));
@@ -361,6 +389,9 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
             if let Err(error) = paths.ensure() {
                 log::error!("state: cannot create data directories: {error}");
             }
+            applog::attach_file(&paths.logs());
+            // no data path: it holds the user's account name, and logs get shared
+            log::info!("state: ytdlpd {version} starting");
             let file = paths.db_file();
             let store = Store::spawn(&io, async move { Db::open(&file, version).await });
             let backend: Arc<dyn Backend> = args
@@ -391,13 +422,20 @@ pub fn init(args: InitArgs, cx: &mut App) -> Result<AppState> {
         cookies.prune(&s.get().cookies.sets);
     });
     let logs = cx.new(|_| Logs::default());
+    // app log lines (every `log::` call) join the Logs screen
+    if let Some(mut lines) = applog::take_screen() {
+        let logs = logs.clone();
+        cx.spawn(async move |cx| {
+            use futures::StreamExt as _;
+            while let Some((level, message)) = lines.next().await {
+                logs.update(cx, |l, cx| l.push(None, &level, &message, cx));
+            }
+        })
+        .detach();
+    }
     let toasts = cx.new(|_| Toasts::default());
     let intake = cx.new(|_| Intake::default());
-    let probes = cx.new(|_| {
-        Probes::new(backend.clone())
-            .with_cookies(cookies.clone())
-            .with_logs(logs.clone())
-    });
+    let probes = cx.new(|_| Probes::new(backend.clone()).with_cookies(cookies.clone()));
     let args = cx.new(|_| CustomArgs::new(backend.clone()));
     // saved lines are checked once at start; until yt-dlp answers they count as fine
     let saved = settings.read(cx).get().clone();

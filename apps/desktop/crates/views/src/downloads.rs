@@ -191,7 +191,7 @@ impl Downloads {
                 .clearable()
         });
         let search = cx.new(|cx| {
-            Input::new(t!("dl-search-hint"), cx)
+            Input::new("dl-search-hint", cx)
                 .name("dl-search-name")
                 .icon("icons/search.svg")
                 .shortcut("/")

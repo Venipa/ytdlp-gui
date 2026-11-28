@@ -13,6 +13,7 @@ domain = { path = "../domain" }
 sqlx.workspace = true
 tokio = { workspace = true, features = ["fs"] }
 anyhow.workspace = true
+log.workspace = true
 dirs.workspace = true
 serde_json.workspace = true
 

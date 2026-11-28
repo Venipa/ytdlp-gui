@@ -10,10 +10,12 @@ use domain::{ClipAction, Fix, MatchKind, Preset, Settings, SiteRule, check_patte
 use gpui::prelude::*;
 use gpui::{AnyElement, Context, Entity, SharedString, Task, Window, div, px};
 use i18n::t;
-use ui::{ActiveTheme as _, Button, Chip, Input, MONO, Switch, Text};
+use ui::{ActiveTheme as _, Button, Chip, Input, MONO, Stepper, Switch, Text};
 
 use super::SettingsView;
+use super::fields::percent;
 use super::layout::{section, stacked};
+use super::pages::HEIGHTS;
 use crate::format;
 
 /// The rule being edited; `at` is its place in the list, `None` for a new rule, and `fallback`
@@ -25,6 +27,10 @@ pub(super) struct RuleEditor {
     pattern: Entity<Input>,
     test: Entity<Input>,
     outtmpl: Entity<Input>,
+    /// The Smaller file quality field, and the text it last showed from here rather than typed.
+    quality: Entity<Input>,
+    quality_shown: String,
+    quality_bad: bool,
     example: Option<Result<String, String>>,
     example_wait: Option<Task<()>>,
     example_task: Option<Task<()>>,
@@ -93,8 +99,8 @@ fn summary(rule: &SiteRule) -> SharedString {
     if rule.outtmpl.is_some() {
         parts.push(t!("rule-sum-name").to_string());
     }
-    if let Some(fix) = rule.fix {
-        parts.push(t!("rule-sum-fix", fix = format::fix_name(fix)).to_string());
+    if !rule.fix.is_empty() {
+        parts.push(t!("rule-sum-fix", fix = format::chain_name(rule.fix)).to_string());
     }
     match parts.is_empty() {
         true => t!("rule-sum-nothing"),
@@ -104,10 +110,10 @@ fn summary(rule: &SiteRule) -> SharedString {
 
 /// The real defaults, spelled out for the "Everything else" row.
 fn fallback_summary(s: &Settings) -> SharedString {
-    let fix = s
-        .default_fix
-        .map(|fix| t!("rule-sum-fix", fix = format::fix_name(fix)).to_string())
-        .unwrap_or_else(|| t!("rule-sum-no-fix").to_string());
+    let fix = match s.default_fix.is_empty() {
+        false => t!("rule-sum-fix", fix = format::chain_name(s.default_fix)).to_string(),
+        true => t!("rule-sum-no-fix").to_string(),
+    };
     [
         clip_summary(fallback_clip(s)),
         preset_summary(default_preset(s)),
@@ -166,6 +172,37 @@ impl SettingsView {
             input.set_text(draft.outtmpl.clone().unwrap_or_default(), cx);
             input
         });
+        let quality_shown = draft
+            .smaller_quality
+            .unwrap_or(s.smaller_quality)
+            .to_string();
+        let quality = cx.new(|cx| {
+            let mut input = Input::new("", cx)
+                .joined()
+                .align_center()
+                .suffix("set-unit-percent");
+            input.set_text(quality_shown.clone(), cx);
+            input
+        });
+        cx.observe(&quality, |this, input, cx| {
+            let text = input.read(cx).text().trim().to_owned();
+            let Some(editor) = &mut this.rule_editor else {
+                return;
+            };
+            // text put there by a chip or a step is not the user's pick
+            if text == editor.quality_shown {
+                return;
+            }
+            editor.quality_shown.clone_from(&text);
+            let value = percent(&text);
+            editor.quality_bad = value.is_err();
+            if let Ok(value) = value {
+                editor.draft.smaller_quality = Some(value);
+            }
+            input.update(cx, |input, cx| input.set_invalid(value.is_err(), cx));
+            cx.notify();
+        })
+        .detach();
         cx.observe(&pattern, |this, input, cx| {
             let text = input.read(cx).text().to_owned();
             if let Some(editor) = &mut this.rule_editor {
@@ -192,6 +229,9 @@ impl SettingsView {
             pattern,
             test,
             outtmpl,
+            quality,
+            quality_shown,
+            quality_bad: false,
             example: None,
             example_wait: None,
             example_task: None,
@@ -205,6 +245,40 @@ impl SettingsView {
             edit(&mut editor.draft);
         }
         cx.notify();
+    }
+
+    /// Puts `value` in the quality field without making it the draft's own pick.
+    fn show_rule_quality(&mut self, value: u8, cx: &mut Context<Self>) {
+        let Some(editor) = &mut self.rule_editor else {
+            return;
+        };
+        editor.quality_shown = value.to_string();
+        editor.quality_bad = false;
+        let text = editor.quality_shown.clone();
+        editor.quality.update(cx, |input, cx| {
+            input.set_text(text, cx);
+            input.set_invalid(false, cx);
+        });
+    }
+
+    /// The Default chip of Smaller file quality: the setting decides again.
+    fn reset_rule_quality(&mut self, cx: &mut Context<Self>) {
+        let value = self.settings().read(cx).get().smaller_quality;
+        self.draft(|d| d.smaller_quality = None, cx);
+        self.show_rule_quality(value, cx);
+    }
+
+    /// The minus and plus of Smaller file quality: 5% a click, kept inside 50 to 100.
+    fn step_rule_quality(&mut self, delta: i32, cx: &mut Context<Self>) {
+        let default = self.settings().read(cx).get().smaller_quality;
+        let now = self
+            .rule_editor
+            .as_ref()
+            .map_or(default, |e| e.draft.smaller_quality.unwrap_or(default));
+        let next =
+            (i32::from(now) + delta * 5).clamp(i32::from(domain::fixes::MIN_QUALITY), 100) as u8;
+        self.draft(|d| d.smaller_quality = Some(next), cx);
+        self.show_rule_quality(next, cx);
     }
 
     /// Previews the drafted file name once typing pauses; the newest request wins.
@@ -792,34 +866,118 @@ impl SettingsView {
                 cx,
             ));
         }
-        let fixes = std::iter::once(None).chain(Fix::ALL.into_iter().map(Some));
-        let fix_desc = draft.fix.map(|fix| {
-            i18n::lookup(
-                &format!(
-                    "{}-desc",
-                    match fix {
-                        Fix::Compatible => "fix-compatible",
-                        Fix::EditFriendly => "fix-edit-friendly",
-                        Fix::Repair => "fix-repair",
-                        Fix::Normalize => "fix-normalize",
-                        Fix::Smaller => "fix-smaller",
-                    }
-                ),
-                None,
-            )
-        });
+        let fix_desc = match draft.fix.is_empty() {
+            true => t!("rule-fix-desc"),
+            false => t!("rule-fix-runs", fixes = format::chain_name(draft.fix)),
+        };
+        // one chip row per kind: Keep, then that kind's fixes (the video ones replace each other)
+        let fix_row = |kind: &'static str, label: SharedString, picks: Vec<(Option<Fix>, bool)>| {
+            let keep = picks.iter().all(|(_, on)| !on);
+            let all = std::iter::once((None, keep)).chain(picks);
+            div()
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .child(div().w(px(96.)).child(small(label)))
+                .child(chips().children(all.map(|(fix, on)| {
+                    let label =
+                        fix.map_or_else(|| t!("rule-fix-keep"), |f| format::fix_name(f).into());
+                    let id = format!(
+                        "rule-fix-{kind}-{}",
+                        fix.map_or_else(|| "keep".into(), |f| format!("{f:?}"))
+                    );
+                    chip(id, label, on).on_click(cx.listener(move |this, _, _, cx| {
+                        this.draft(
+                            |d| match (kind, fix) {
+                                ("video", _) => d.fix.set_video(fix),
+                                ("audio", f) => d.fix.normalize = f.is_some(),
+                                (_, f) => d.fix.repair = f.is_some(),
+                            },
+                            cx,
+                        )
+                    }))
+                })))
+        };
+        let video = [Fix::Compatible, Fix::EditFriendly, Fix::Smaller]
+            .map(|f| (Some(f), draft.fix.video == Some(f)));
         downloads.push(stacked(
             t!("rule-fix"),
-            Some(fix_desc.unwrap_or_else(|| t!("rule-fix-desc"))),
-            chips().children(fixes.map(|fix| {
-                let label = fix
-                    .map(|f| SharedString::from(format::fix_name(f)))
-                    .unwrap_or_else(|| t!("rule-fix-none"));
-                chip(format!("rule-fix-{fix:?}"), label, draft.fix == fix)
-                    .on_click(cx.listener(move |this, _, _, cx| this.draft(|d| d.fix = fix, cx)))
-            })),
+            Some(fix_desc),
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(8.))
+                .child(fix_row("video", t!("rule-fix-video"), video.into()))
+                .child(fix_row(
+                    "audio",
+                    t!("rule-fix-audio"),
+                    vec![(Some(Fix::Normalize), draft.fix.normalize)],
+                ))
+                .child(fix_row(
+                    "timestamps",
+                    t!("rule-fix-timestamps"),
+                    vec![(Some(Fix::Repair), draft.fix.repair)],
+                )),
             cx,
         ));
+        if !fallback && draft.fix.video == Some(Fix::Smaller) {
+            let this = cx.entity();
+            let keep = t!("rule-smaller-keep-lower");
+            let default_size = match HEIGHTS.iter().find(|(h, _)| *h == s.smaller_height) {
+                Some((h, key)) if *h > 0 => i18n::lookup(key, None),
+                _ => keep,
+            };
+            downloads.push(stacked(
+                t!("rule-smaller-quality"),
+                Some(t!("rule-smaller-site-desc")),
+                chips()
+                    .items_center()
+                    .child(
+                        chip(
+                            "rule-smq-default".into(),
+                            t!("rule-default-is", value = format!("{}%", s.smaller_quality)),
+                            draft.smaller_quality.is_none(),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| this.reset_rule_quality(cx))),
+                    )
+                    .child(
+                        Stepper::new("rule-smq-step", &editor.quality, px(64.))
+                            .invalid(editor.quality_bad)
+                            .on_step(move |delta, _, cx| {
+                                this.update(cx, |this, cx| this.step_rule_quality(delta, cx))
+                            }),
+                    ),
+                cx,
+            ));
+            downloads.push(stacked(
+                t!("rule-smaller-height"),
+                Some(t!("rule-smaller-site-desc")),
+                chips()
+                    .child(
+                        chip(
+                            "rule-smh-default".into(),
+                            t!("rule-default-is", value = default_size.to_string()),
+                            draft.smaller_height.is_none(),
+                        )
+                        .on_click(
+                            cx.listener(|this, _, _, cx| {
+                                this.draft(|d| d.smaller_height = None, cx)
+                            }),
+                        ),
+                    )
+                    .children(HEIGHTS.map(|(height, key)| {
+                        chip(
+                            format!("rule-smh-{height}"),
+                            i18n::lookup(key, None),
+                            draft.smaller_height == Some(height),
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.draft(|d| d.smaller_height = Some(height), cx)
+                        }))
+                    })),
+                cx,
+            ));
+        }
         page.push(section(Some(t!("rule-grp-download")), downloads, cx));
 
         let can_save = fallback || check.is_ok();
@@ -880,7 +1038,7 @@ mod tests {
         let rule = SiteRule {
             output_dir: Some("D:/Streams".into()),
             outtmpl: Some("%(id)s.%(ext)s".into()),
-            fix: Some(Fix::EditFriendly),
+            fix: Fix::EditFriendly.into(),
             ..Default::default()
         };
         let text = summary(&rule).to_string();

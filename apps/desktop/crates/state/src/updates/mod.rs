@@ -327,7 +327,10 @@ impl Updates {
             (found, staged)
         });
         self.task = Some(cx.spawn(async move |this, cx| {
-            let (found, staged) = work.await.unwrap_or((Err(UpdateError::Check), None));
+            let (found, staged) = work.await.unwrap_or_else(|e| {
+                log::warn!("updates: check task failed: {e}");
+                (Err(UpdateError::Check), None)
+            });
             this.update(cx, |this, cx| this.checked(found, staged, cx))
                 .ok();
         }));
@@ -345,8 +348,14 @@ impl Updates {
         self.store
             .write(move |db| async move { db.state_set(LAST_CHECKED, &now.to_string()).await });
         match found {
-            Err(error) => self.set(failed(error, None), cx),
-            Ok(None) => self.set(UpdateState::Idle, cx),
+            Err(error) => {
+                log::warn!("updates: check failed: {error:?}");
+                self.set(failed(error, None), cx)
+            }
+            Ok(None) => {
+                log::info!("updates: up to date");
+                self.set(UpdateState::Idle, cx)
+            }
             Ok(Some(release)) => {
                 log::info!("updates: {} is available", release.version);
                 match staged {
@@ -382,6 +391,7 @@ impl Updates {
             // fail closed: no checksums, no install
             return self.set(failed(UpdateError::Checksum, Some(release)), cx);
         };
+        log::info!("updates: downloading {} ({})", release.version, asset.name);
         self.set(
             UpdateState::Downloading {
                 release: release.clone(),
@@ -417,12 +427,18 @@ impl Updates {
                 }
             };
             ticks.await;
-            let result = work.await.unwrap_or(Err(UpdateError::Download { at: 0 }));
+            let result = work.await.unwrap_or_else(|e| {
+                log::warn!("updates: download task failed: {e}");
+                Err(UpdateError::Download { at: 0 })
+            });
             this.update(cx, |this, cx| {
                 this.task = None;
                 match result {
                     Ok(path) => this.stage(release, path, cx),
-                    Err(error) => this.set(failed(error, Some(release)), cx),
+                    Err(error) => {
+                        log::warn!("updates: download of {} failed: {error:?}", release.version);
+                        this.set(failed(error, Some(release)), cx)
+                    }
                 }
             })
             .ok();
@@ -430,7 +446,11 @@ impl Updates {
     }
 
     fn stage(&mut self, release: Release, path: PathBuf, cx: &mut Context<Self>) {
-        log::info!("updates: {} is ready ({})", release.version, path.display());
+        log::info!(
+            "updates: {} is ready ({})",
+            release.version,
+            path.file_name().unwrap_or_default().to_string_lossy()
+        );
         self.staged = Some(path);
         self.set(UpdateState::Ready(release), cx);
     }

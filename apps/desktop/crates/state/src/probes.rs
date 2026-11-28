@@ -8,7 +8,6 @@ use futures::FutureExt as _;
 use gpui::{Context, Task};
 
 use crate::cookies::CookieFiles;
-use crate::logs::Logs;
 
 /// Parallel probes.
 const PARALLEL: usize = 3;
@@ -35,8 +34,6 @@ pub struct Probes {
     timeout: Duration,
     /// Set by [`Probes::with_cookies`]: the sets in `opts.cookies` are matched per link.
     cookie_files: Option<CookieFiles>,
-    /// Set by [`Probes::with_logs`]: failed probes show on the Logs screen.
-    logs: Option<gpui::Entity<Logs>>,
     runs: u64,
 }
 
@@ -51,7 +48,6 @@ impl Probes {
             abandoned: 0,
             timeout: PROBE_TIMEOUT,
             cookie_files: None,
-            logs: None,
             runs: 0,
         }
     }
@@ -59,12 +55,6 @@ impl Probes {
     /// Probes with only the cookies the sets in `ProbeOpts::cookies` have for each link.
     pub fn with_cookies(mut self, files: CookieFiles) -> Self {
         self.cookie_files = Some(files);
-        self
-    }
-
-    /// Writes failed probes to the Logs screen.
-    pub fn with_logs(mut self, logs: gpui::Entity<Logs>) -> Self {
-        self.logs = Some(logs);
         self
     }
 
@@ -176,10 +166,6 @@ impl Probes {
                 ))
             }
         };
-        if let (ProbeState::Failed(error), Some(logs)) = (&state, &self.logs) {
-            let line = format!("probes: {url}: {} {}", error.code, error.message);
-            logs.update(cx, |logs, cx| logs.push(None, "error", &line, cx));
-        }
         self.states.insert(url.to_string(), state);
         self.pump(cx);
         cx.notify();
